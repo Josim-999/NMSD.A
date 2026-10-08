@@ -1,0 +1,4 @@
+tis.db
+reports/
+__pycache__/
+*.pyc
