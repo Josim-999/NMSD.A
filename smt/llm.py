@@ -17,7 +17,30 @@ import re
 
 MODEL = os.environ.get("SMT_MODEL", "claude-opus-5-5")
 
-WRITER_SYSTEM = """You are the copywriter for {name}, a one-person business offering {offer} to {audience}.
+# The owner's master prompt (edit the file to change the agent's role). It is
+# the first part of every copywriting call; the deployment notes and brand
+# section below are appended to it.
+MASTER_PROMPT_PATH = os.environ.get("SMT_MASTER_PROMPT",
+                                    os.path.join(os.path.dirname(__file__), "prompts", "master_prompt.md"))
+
+DEPLOYMENT_NOTES = """## How this deployment works
+- You draft; code publishes. Everything you write goes into the approval queue as PENDING, and only the owner's explicit approval in Telegram (or on the server's command line) releases it. You have no tool that publishes, schedules or approves anything.
+- Comment and DM replies are drafts too. "Automatically reply to standard queries" means: draft the reply so the owner can approve it in one tap. Rule 1 (zero autonomous publishing) wins over Module 3.
+- Research comes from official APIs (YouTube Data API, Brave Search) and the owner's swipe file, not scraping.
+- Video platforms need a real video: your script becomes a filming brief for the owner.
+- In this call you are doing one task, given in the user message. Answer only that task."""
+
+
+def load_master_prompt(path=None):
+    path = path or MASTER_PROMPT_PATH
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+WRITER_SYSTEM = """## Brand
+You are writing as the copywriter for {name}, a one-person business offering {offer} to {audience}.
 Voice: {tone}. Do: {do}. Never use these words or phrases: {avoid}.
 Write punchy, specific, high-retention copy. One idea per piece. No emojis unless the platform is TikTok or Instagram, and then at most two.
 Adapt the idea, never the wording, of any source hook you are shown: write a new sentence that uses the same psychological trigger.
@@ -57,8 +80,9 @@ class ClaudeWriter:
         self.anthropic = anthropic
         self.client = client or anthropic.Anthropic(max_retries=4)   # SDK retries 429/5xx with backoff
         v = brand["voice"]
-        self.system = WRITER_SYSTEM.format(name=brand["name"], offer=brand["offer"], audience=brand["audience"],
-                                           tone=v["tone"], do="; ".join(v["do"]), avoid=", ".join(v["avoid"]))
+        brand_section = WRITER_SYSTEM.format(name=brand["name"], offer=brand["offer"], audience=brand["audience"],
+                                             tone=v["tone"], do="; ".join(v["do"]), avoid=", ".join(v["avoid"]))
+        self.system = "\n\n".join(p for p in (load_master_prompt(), DEPLOYMENT_NOTES, brand_section) if p)
         self.name = f"Claude ({MODEL})"
         self.last_error = None
 

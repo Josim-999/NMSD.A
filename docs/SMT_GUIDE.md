@@ -8,6 +8,10 @@ morning briefing, run from a Telegram bot.
 - **Claude is optional.** Set `ANTHROPIC_API_KEY` (and `pip install anthropic`) to have Claude
   (`claude-opus-5-5`) write the copy and classify inbound messages. Without it, deterministic
   templates and rules do the same jobs.
+- **Your master prompt drives the model.** `smt/prompts/master_prompt.md` is the start of every
+  Claude copywriting call, followed by short deployment notes (approval wins over auto-replies,
+  official APIs, filming briefs) and your brand section. Edit the file, or point
+  `SMT_MASTER_PROMPT` at your own copy.
 - **Nothing goes live without you.** The approval gate is code (`smt/gate.py`), not a sentence in a prompt.
 - **All demo data is synthetic.** The brand ("Ledger Lane", bookkeeping for freelancers), competitors,
   hooks, comments and sales are invented.

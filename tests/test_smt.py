@@ -431,6 +431,15 @@ class TestClaudeWriter(unittest.TestCase):
         draft = {"body": {"text": "a"}, "caption": "b"}
         self.assertEqual(ClaudeWriter(BRAND, client).polish({}, draft), draft)
 
+    def test_master_prompt_is_the_system_prompt(self):
+        client, calls = fake_client('{"body": {"text": "new"}, "caption": "c"}')
+        ClaudeWriter(BRAND, client).polish({}, {"body": {"text": "a"}, "caption": "b"})
+        system = calls[0]["system"]
+        self.assertTrue(system.startswith("# SYSTEM ROLE: Autonomous Chief Marketing Officer"))
+        self.assertIn("Zero Autonomous Publishing", system)
+        self.assertIn("Rule 1 (zero autonomous publishing) wins over Module 3", system)
+        self.assertIn(BRAND["name"], system)
+
     def test_mask(self):
         self.assertEqual(mask("call +1 555 123 4567 or a@b.co, @sam"), "call [PHONE] or [EMAIL], @[USER]")
 
