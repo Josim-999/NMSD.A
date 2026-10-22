@@ -1,0 +1,25 @@
+{
+  "_note": "SYNTHETIC research data for the demo. Handles, numbers and videos are invented.",
+  "trends": [
+    {"topic": "quarterly taxes", "text": "Estimated tax deadline in January catches freelancers off guard", "metric": 9},
+    {"topic": "quarterly taxes", "text": "Rising searches: 'how much to set aside for taxes freelance'", "metric": 7},
+    {"topic": "late invoices", "text": "Freelancers report clients paying 60+ days late", "metric": 8},
+    {"topic": "late invoices", "text": "Late fee clauses trending in freelancer forums", "metric": 5},
+    {"topic": "business expenses", "text": "Home office deduction confusion after remote-work changes", "metric": 6},
+    {"topic": "freelance pricing", "text": "Day-rate vs project pricing debate goes viral", "metric": 6},
+    {"topic": "receipts", "text": "Apps that photograph receipts gaining popularity", "metric": 3}
+  ],
+  "questions": [
+    {"topic": "quarterly taxes", "text": "How much of each invoice should I put aside for tax?", "metric": 4},
+    {"topic": "business expenses", "text": "Can I deduct my laptop if I also use it for Netflix?", "metric": 3},
+    {"topic": "late invoices", "text": "Is it rude to charge a late fee to a long-term client?", "metric": 3}
+  ],
+  "hooks": [
+    {"source": "@taxtok_tina", "text": "Nobody tells freelancers this about quarterly taxes", "views": 1840000},
+    {"source": "@numbersnerd", "text": "Stop making this invoice mistake, it is costing you thousands", "views": 920000},
+    {"source": "@freelancefinance", "text": "5 things I wish I knew before going freelance", "views": 760000},
+    {"source": "@numbersnerd", "text": "As an accountant, I would never do this with my business account", "views": 610000},
+    {"source": "@taxtok_tina", "text": "Unpopular opinion: you don't need an LLC yet", "views": 540000},
+    {"source": "@freelancefinance", "text": "My client went from $0 saved to a full tax pot in 6 months", "views": 330000}
+  ]
+}

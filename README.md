@@ -12,6 +12,11 @@ plan and answers procedure questions from company SOPs. Every change goes throug
 
 The critical review of the original proposal is in **[docs/ANALYSIS.md](docs/ANALYSIS.md)**.
 
+> **Also in this repo:** an example **AI social media team** for a one-person business
+> (`smt/`): research, content generation, a Telegram approval queue, publishing, lead triage,
+> revenue attribution and a 07:00 briefing. Run `python3 -m smt demo`. Guide:
+> **[docs/SMT_GUIDE.md](docs/SMT_GUIDE.md)**. Review of the spec: **[docs/SMT_ANALYSIS.md](docs/SMT_ANALYSIS.md)**.
+
 ## Quick start
 
 ```bash
@@ -24,7 +29,7 @@ python3 -m tis report morning                        # -> reports/morning_report
 python3 -m tis approvals                             # pending approval requests
 python3 -m tis approve 1 --user sara --role supervisor
 python3 -m tis audit                                 # who asked / approved what
-python3 -m unittest discover -s tests                # 18 tests
+python3 -m unittest discover -s tests                # 18 TIS tests (+35 for smt/)
 ```
 
 The simulation is frozen at **2026-10-08 13:30** so results are reproducible. `python3 -m tis init`

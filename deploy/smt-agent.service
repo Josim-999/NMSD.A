@@ -1,0 +1,22 @@
+# systemd alternative to PM2:  sudo cp deploy/smt-*.service /etc/systemd/system/
+#                               sudo systemctl daemon-reload && sudo systemctl enable --now smt-agent smt-bot
+[Unit]
+Description=SMT social media agent loop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=smt
+WorkingDirectory=/opt/smt
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Europe/London
+ExecStart=/opt/smt/.venv/bin/python -m smt run
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/smt
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

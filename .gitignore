@@ -2,3 +2,8 @@ tis.db
 reports/
 __pycache__/
 *.pyc
+smt.db
+smt_demo.db
+outbox/
+inbox/
+.env
