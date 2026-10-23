@@ -92,19 +92,13 @@ def confirm_ownership(url: str) -> bool:
         eprint(reason)
         return False
 
-    print()
-    print("=" * 70)
-    print("  OWNERSHIP CONFIRMATION")
-    print("=" * 70)
-    print(f"  Target: {url}")
-    print(f"  Host:   {host}")
-    print()
-    print("  Only run this against a site you own or are explicitly authorized")
-    print("  to test. Running load against others' systems is a crime.")
-    print()
-    answer = input(f'  Type the host name "{host}" to confirm you own it: ').strip().lower()
-    if answer != host.lower():
-        eprint("  Host name did not match. Aborting.")
+    # One-keypress confirm: a single affirmative step, not a silent bypass.
+    # For fully unattended runs, pass --yes on the command line instead.
+    print(f"  Target host: {host}")
+    print("  Only run against a site you own or are authorized to test.")
+    answer = input("  Press Enter to start, or type 'n' to cancel: ").strip().lower()
+    if answer in ("n", "no"):
+        eprint("  Cancelled.")
         return False
     return True
 

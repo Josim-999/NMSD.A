@@ -37,8 +37,21 @@ if not exist "%~dp0site_health_check.py" (
     exit /b 1
 )
 
+REM --- Optional: set a default site to run hands-off on double-click. ---
+REM  Leave SITE_URL blank to be prompted for the URL interactively.
+REM  If set, the script runs with no prompts (--yes) against this URL.
+set "SITE_URL=https://orthoautomate.online"
+
 REM --- Run it. Any extra args you pass to the .bat are forwarded. ----
-%PY% "%~dp0site_health_check.py" %*
+if "%~1"=="" (
+    if defined SITE_URL (
+        %PY% "%~dp0site_health_check.py" --url "%SITE_URL%" --yes
+    ) else (
+        %PY% "%~dp0site_health_check.py"
+    )
+) else (
+    %PY% "%~dp0site_health_check.py" %*
+)
 
 echo.
 echo ===================================================================
