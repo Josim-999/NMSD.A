@@ -102,8 +102,8 @@ def confirm_ownership(url: str) -> bool:
     print("  Only run this against a site you own or are explicitly authorized")
     print("  to test. Running load against others' systems is a crime.")
     print()
-    answer = input(f'  Type the host name "{host}" to confirm you own it: ').strip()
-    if answer != host:
+    answer = input(f'  Type the host name "{host}" to confirm you own it: ').strip().lower()
+    if answer != host.lower():
         eprint("  Host name did not match. Aborting.")
         return False
     return True
