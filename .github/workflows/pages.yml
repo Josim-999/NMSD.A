@@ -1,19 +1,23 @@
-name: Publish control tower to GitHub Pages
+name: Publish control tower
 
 on:
   push:
     branches:
       - claude/transport-intelligence-system-pdiaiz
       - claude/sandbox-link-explanation-259y34
+    paths-ignore:
+      - 'docs/**'
+  schedule:
+    - cron: '41 5 * * 1'
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
 concurrency:
-  group: pages
+  group: publish-control-tower
   cancel-in-progress: true
 
 jobs:
@@ -22,13 +26,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show Python version
-        run: python3 --version
-
       - name: Run the test suite
         run: python3 -m unittest discover -s tests -v
 
-      - name: Build the database and the control tower page
+      - name: Render the control tower and the reports
         run: |
           python3 -m tis init
           python3 -m tis dashboard
@@ -36,28 +37,41 @@ jobs:
           python3 -m tis report midday
           python3 -m tis report evening
 
-      - name: Assemble the site
+      - name: Assemble docs/
         run: |
-          mkdir -p site
-          cp reports/control_tower.html site/index.html
-          cp reports/*.md site/ 2>/dev/null || true
-          ls -la site
+          mkdir -p docs
+          cp reports/control_tower.html docs/index.html
+          cp reports/*.md docs/
+          touch docs/.nojekyll
+          ls -la docs
 
-      - name: Configure Pages (enables it on first run)
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      # Committing the rendered page makes it reachable straight away over a
+      # raw-file CDN, without GitHub Pages having to be switched on first.
+      - name: Commit the rendered page
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f docs
+          if git diff --cached --quiet; then
+            echo "Nothing changed."
+          else
+            git commit -m "Render control tower [skip ci]"
+            git push origin HEAD:${GITHUB_REF_NAME}
+          fi
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: docs
 
+  # Runs only once Pages is switched on; never fails the build before that.
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
