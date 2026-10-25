@@ -1,0 +1,63 @@
+name: Publish control tower to GitHub Pages
+
+on:
+  push:
+    branches:
+      - claude/transport-intelligence-system-pdiaiz
+      - claude/sandbox-link-explanation-259y34
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Python version
+        run: python3 --version
+
+      - name: Run the test suite
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Build the database and the control tower page
+        run: |
+          python3 -m tis init
+          python3 -m tis dashboard
+          python3 -m tis report morning
+          python3 -m tis report midday
+          python3 -m tis report evening
+
+      - name: Assemble the site
+        run: |
+          mkdir -p site
+          cp reports/control_tower.html site/index.html
+          cp reports/*.md site/ 2>/dev/null || true
+          ls -la site
+
+      - name: Configure Pages (enables it on first run)
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
