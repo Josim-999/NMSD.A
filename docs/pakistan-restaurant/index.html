@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Bilingual ordering site for Pakistan Restaurant, Aziziyah, Jeddah.">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>Pakistan Restaurant Jeddah</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rozha+One&family=Lalezar&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: Arabic-first RTL page built on logical properties. Truck-art fringe strips separate the acts; menu is a priced two-column list, never a photo grid, so it works before the photography exists. */
+:root{
+  --bg:#F4F2EC; --surface:#FFFFFF; --slab:#EAE6DC;
+  --ink:#11211C; --muted:#67706A; --line:#DCD6C9;
+  --teal:#0E4A3F; --marigold:#C57F06; --chili:#AE382C;
+  --on-dark:#F2EFE6;
+  --f-dis-en:"Rozha One",Georgia,"Times New Roman",serif;
+  --f-dis-ar:"Lalezar","Tajawal",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --lh:1.78;
+  direction:rtl;
+}
+:root[data-lang="en"]{direction:ltr;--lh:1.6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E1412; --surface:#17201C; --slab:#1E2823;
+  --ink:#EDEBE2; --muted:#9BA298; --line:#28342E;
+  --teal:#4FBFA4; --marigold:#E7AC49; --chili:#E08073;
+  --on-dark:#F2EFE6;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0E1412; --surface:#17201C; --slab:#1E2823;
+  --ink:#EDEBE2; --muted:#9BA298; --line:#28342E;
+  --teal:#4FBFA4; --marigold:#E7AC49; --chili:#E08073;
+  --on-dark:#F2EFE6;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16.5px;line-height:var(--lh);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--teal);z-index:60}
+.wrap{max-width:1040px;margin-inline:auto;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px))}
+:root[data-lang="en"] .ar{display:none!important}
+:root:not([data-lang="en"]) .en{display:none!important}
+h1,h2,h3{margin:0;line-height:1.14;text-wrap:balance}
+.dis{font-family:var(--f-dis-en)}
+.ar .dis,.dis.ar{font-family:var(--f-dis-ar);line-height:1.3}
+p{margin:0 0 12px}
+a{color:var(--teal)}
+ul{margin:0;padding:0;list-style:none}
+.fringe{height:16px;
+ background-image:
+  linear-gradient(45deg,var(--bg) 8px,transparent 0),
+  linear-gradient(-45deg,var(--bg) 8px,transparent 0),
+  repeating-linear-gradient(90deg,var(--marigold) 0 26px,var(--chili) 26px 52px,var(--teal) 52px 78px);
+ background-size:16px 16px,16px 16px,auto auto;
+ background-position:0 100%,0 100%,0 0;
+ background-repeat:repeat-x,repeat-x,repeat}
+/* draft bar — REMOVE THIS ELEMENT BEFORE GOING LIVE */
+#draft{background:var(--chili);color:#fff;font-size:13px;text-align:center;padding:7px 14px}
+#draft b{font-weight:700}
+/* header */
+header.site{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:var(--teal);color:var(--on-dark)}
+header.site .bar{display:flex;align-items:center;gap:12px;padding-block:11px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:9px;margin-inline-end:auto;min-width:0}
+.brand .mark{font-family:var(--f-dis-ar);font-size:23px;color:var(--marigold);line-height:1}
+.brand .nm{font-size:15px;font-weight:600;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{display:inline-flex;align-items:center;gap:7px;font-family:var(--f-body);font-size:14.5px;font-weight:600;padding:9px 15px;border:1.5px solid transparent;cursor:pointer;text-decoration:none;background:none;line-height:1.2}
+.btn-wa{background:var(--marigold);color:#1A1205;border-color:var(--marigold)}
+.btn-wa:hover{filter:brightness(1.08)}
+.btn-ghost{border-color:rgba(242,239,230,.45);color:var(--on-dark);background:transparent}
+.btn-ghost:hover{border-color:var(--on-dark)}
+.btn-solid{background:var(--teal);color:var(--on-dark);border-color:var(--teal)}
+.btn-line{border-color:var(--ink);color:var(--ink)}
+#lang{font-family:var(--f-data);font-size:12.5px;letter-spacing:.06em;padding:8px 11px}
+/* hero */
+.hero{background:var(--teal);color:var(--on-dark);padding-block:clamp(30px,6vw,58px) clamp(34px,7vw,64px);position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;inset-block:0;inset-inline-end:-80px;width:340px;
+ background:repeating-linear-gradient(135deg,rgba(197,127,6,.16) 0 14px,transparent 14px 28px);pointer-events:none}
+.hero .inner{position:relative;z-index:1;max-width:780px}
+.kicker{font-family:var(--f-data);font-size:11.5px;letter-spacing:.17em;text-transform:uppercase;color:var(--marigold);margin-bottom:14px}
+.hero h1{font-size:clamp(38px,9vw,78px);color:#fff}
+.hero h1 .ar.dis{letter-spacing:0}
+.hero .tag{font-size:clamp(16px,2.4vw,20px);color:rgba(242,239,230,.88);margin-top:14px;max-width:46ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.chip{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;padding:6px 12px;border:1px solid rgba(242,239,230,.35);color:var(--on-dark)}
+.chip.live{border-color:var(--marigold);color:var(--marigold)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.cta .btn{padding:13px 22px;font-size:16px}
+/* value strip */
+.values{background:var(--slab);border-block:1px solid var(--line)}
+.values ul{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:18px;padding-block:22px}
+.values li{min-width:0}
+.values b{display:block;font-size:15px;margin-bottom:2px}
+.values span{font-size:13.5px;color:var(--muted);line-height:1.5;display:block}
+/* sections */
+section{padding-block:clamp(34px,6vw,58px)}
+.shead{margin-bottom:22px}
+.shead .eye{font-family:var(--f-data);font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--chili);margin-bottom:8px}
+.shead h2{font-size:clamp(27px,5vw,42px)}
+.shead p{color:var(--muted);max-width:60ch;margin-top:10px;margin-bottom:0}
+/* signature tiles */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px}
+/* To use a real photo on a tile: add background-image:url('seekh.jpg');background-size:cover;background-position:center; and keep the ::before scrim. */
+.tile{position:relative;min-height:190px;display:flex;flex-direction:column;justify-content:flex-end;padding:18px;color:#fff;overflow:hidden;min-width:0}
+.tile::before{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.55),rgba(0,0,0,.08))}
+.tile>*{position:relative;z-index:1}
+.t1{background:var(--chili)}
+.t2{background:var(--teal)}
+.t3{background:var(--marigold)}
+.tile .nm{font-size:23px;font-family:var(--f-dis-en);line-height:1.1}
+.ar .tile .nm,.tile .nm.ar{font-family:var(--f-dis-ar)}
+.tile .ds{font-size:13.5px;line-height:1.55;color:rgba(255,255,255,.9);margin-top:6px}
+.tile .pr{font-family:var(--f-data);font-size:13px;margin-top:9px;color:#fff}
+/* menu */
+.tabs{display:flex;gap:7px;overflow-x:auto;padding-bottom:10px;margin-bottom:6px;scrollbar-width:thin}
+.tab{flex:none;font-size:14px;font-weight:600;padding:8px 14px;border:1.5px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;font-family:var(--f-body)}
+.tab[aria-selected="true"]{background:var(--teal);border-color:var(--teal);color:var(--on-dark)}
+.cat{border-top:1px solid var(--line);padding-block:20px}
+.cat h3{font-size:21px;margin-bottom:3px}
+.cat .ct{font-size:13.5px;color:var(--muted);margin-bottom:14px}
+.items{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:4px 32px}
+.item{display:flex;align-items:baseline;gap:10px;padding-block:9px;border-bottom:1px dotted var(--line);min-width:0}
+.item .nm{font-weight:600;font-size:15.5px;min-width:0}
+.item .nm small{display:block;font-weight:400;font-size:13px;color:var(--muted);line-height:1.5;margin-top:1px}
+.item .ln{flex:1 1 auto;min-width:10px}
+.item .pr{font-family:var(--f-data);font-size:14.5px;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--chili)}
+.sar{font-size:11px;color:var(--muted);margin-inline-start:3px}
+.badge{display:inline-block;font-family:var(--f-data);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--marigold);color:var(--marigold);padding:1px 5px;margin-inline-start:6px;vertical-align:middle}
+/* catering */
+.cater{background:var(--teal);color:var(--on-dark)}
+.cater .shead .eye{color:var(--marigold)}
+.cater .shead p{color:rgba(242,239,230,.82)}
+.cater .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1px;background:rgba(242,239,230,.22);border:1px solid rgba(242,239,230,.22);margin-top:4px}
+.cater .cell{background:var(--teal);padding:18px;min-width:0}
+.cater .cell b{display:block;font-size:17px;margin-bottom:5px}
+.cater .cell span{font-size:14px;color:rgba(242,239,230,.78);display:block;line-height:1.6}
+.cater .cell .pr{font-family:var(--f-data);font-size:14px;color:var(--marigold);margin-top:10px;display:block}
+/* partners */
+.partners{display:flex;flex-wrap:wrap;gap:10px;margin-top:4px}
+.partner{flex:1 1 180px;border:1.5px solid var(--line);background:var(--surface);padding:14px 16px;text-decoration:none;color:var(--ink);min-width:0}
+.partner b{display:block;font-size:15.5px}
+.partner span{font-size:12.5px;color:var(--muted)}
+/* find us */
+.find{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:26px}
+.kv{border-top:2px solid var(--ink);padding-top:14px}
+.kv dt{font-family:var(--f-data);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.kv dd{margin:0 0 15px;font-size:16px}
+.copyrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.num{font-family:var(--f-data);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:embed}
+.mini{font-size:12.5px;padding:5px 10px;border:1.5px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;font-family:var(--f-body)}
+.hours-tbl{width:100%;border-collapse:collapse;font-size:14.5px}
+.hours-tbl td{padding:7px 0;border-bottom:1px solid var(--line)}
+.hours-tbl td:last-child{text-align:end;font-family:var(--f-data);font-size:13.5px;direction:ltr;unicode-bidi:embed}
+/* review */
+.review{background:var(--slab);border-block:1px solid var(--line)}
+.review .in{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+.stars{color:var(--marigold);font-size:21px;letter-spacing:2px}
+/* footer */
+footer.site{background:var(--ink);color:var(--on-dark);padding-block:30px}
+footer.site a{color:var(--marigold)}
+footer.site .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:22px}
+footer.site h4{font-size:13px;font-family:var(--f-data);letter-spacing:.12em;text-transform:uppercase;color:rgba(242,239,230,.55);margin:0 0 9px;font-weight:500}
+footer.site li{font-size:14.5px;margin-bottom:5px}
+footer.site .fine{margin-top:24px;padding-top:16px;border-top:1px solid rgba(242,239,230,.18);font-size:12.5px;color:rgba(242,239,230,.55)}
+/* sticky mobile order bar */
+#sticky{position:fixed;inset-inline:0;bottom:0;z-index:55;display:none;
+  padding:10px max(14px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px));
+  background:color-mix(in srgb,var(--bg) 92%,transparent);border-top:1px solid var(--line);backdrop-filter:blur(8px)}
+#sticky .btn{width:100%;justify-content:center;padding:14px}
+@media (max-width:720px){#sticky{display:block} body{padding-bottom:74px}}
+:focus-visible{outline:2.5px solid var(--marigold);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:420px){
+  .hero .cta .btn{flex:1 1 100%;justify-content:center}
+  .items{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+
+<!-- REMOVE THIS BAR BEFORE GOING LIVE -->
+<div id="draft">
+  <span class="ar"><b>مسودة للمراجعة.</b> يجب تأكيد جميع الأصناف والأسعار مع المطعم قبل النشر.</span>
+  <span class="en"><b>Draft for review.</b> All menu items and prices must be confirmed with the restaurant before this goes live.</span>
+</div>
+
+<header class="site">
+  <div class="wrap bar">
+    <div class="brand">
+      <span class="mark">م</span>
+      <span class="nm ar">مطعم باكستان &mdash; العزيزية، جدة</span>
+      <span class="nm en">Pakistan Restaurant &mdash; Aziziyah, Jeddah</span>
+    </div>
+    <button id="lang" class="btn btn-ghost" type="button"><span class="ar">EN</span><span class="en">عربي</span></button>
+    <a class="btn btn-wa" id="hdr-order" href="https://wa.me/966593752163">
+      <span class="ar">اطلب عبر واتساب</span><span class="en">Order on WhatsApp</span>
+    </a>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="wrap inner">
+    <p class="kicker"><span class="ar">مأكولات باكستانية أصيلة &middot; جدة</span><span class="en">Authentic Pakistani Kitchen &middot; Jeddah</span></p>
+    <h1><span class="ar dis">مطعم باكستان</span><span class="en dis">Pakistan Restaurant</span></h1>
+    <p class="tag">
+      <span class="ar">برياني، كراهي، وسيخ كباب على الفحم &mdash; نفتح من أذان الفجر حتى منتصف الليل في حي العزيزية.</span>
+      <span class="en">Biryani, karahi and charcoal seekh kebab &mdash; open from before sunrise until midnight in Aziziyah.</span>
+    </p>
+    <div class="chips">
+      <span class="chip live" id="openchip"><span class="dot"></span><span id="openlbl"></span></span>
+      <span class="chip"><span class="ar">يفتح 5:30 صباحاً للإفطار</span><span class="en">Breakfast from 5:30 AM</span></span>
+      <span class="chip"><span class="ar">حلال 100%</span><span class="en">100% Halal</span></span>
+      <span class="chip"><span class="ar">توصيل داخل العزيزية</span><span class="en">Delivery across Aziziyah</span></span>
+    </div>
+    <div class="cta">
+      <a class="btn btn-wa" id="hero-order" href="https://wa.me/966593752163">
+        <span class="ar">اطلب الآن عبر واتساب</span><span class="en">Order now on WhatsApp</span>
+      </a>
+      <a class="btn btn-ghost" href="#menu"><span class="ar">تصفّح المنيو</span><span class="en">See the menu</span></a>
+    </div>
+  </div>
+</div>
+<div class="fringe"></div>
+
+<div class="values">
+  <div class="wrap">
+    <ul>
+      <li><b><span class="ar">الإفطار من 5:30 ص</span><span class="en">Open at 5:30 AM</span></b><span class="ar">حلوة بوري، براتا وشاي كرك قبل الدوام.</span><span class="en">Halwa puri, paratha and karak chai before your shift.</span></li>
+      <li><b><span class="ar">يُطبخ عند الطلب</span><span class="en">Cooked to order</span></b><span class="ar">الكراهي والمشويات تُحضّر طازجة، لا تُسخّن.</span><span class="en">Karahi and grills made fresh, never reheated.</span></li>
+      <li><b><span class="ar">صواني ودِيغ للعائلات</span><span class="en">Family trays &amp; deg</span></b><span class="ar">تكفي من 10 إلى 12 شخصاً، بطلب مسبق.</span><span class="en">Serves 10&ndash;12, ordered a day ahead.</span></li>
+      <li><b><span class="ar">تموين وعقود يومية</span><span class="en">Daily catering contracts</span></b><span class="ar">للسكنات والمكاتب والمناسبات.</span><span class="en">For accommodations, offices and events.</span></li>
+    </ul>
+  </div>
+</div>
+
+<section class="wrap">
+  <div class="shead">
+    <p class="eye"><span class="ar">الأشهر عندنا</span><span class="en">What we are known for</span></p>
+    <h2><span class="ar dis">ثلاثة أطباق تستحق الزيارة</span><span class="en dis">Three reasons people come back</span></h2>
+  </div>
+  <div class="tiles">
+    <div class="tile t1">
+      <span class="nm ar">سيخ كباب</span><span class="nm en">Seekh Kebab</span>
+      <span class="ds ar">لحم مفروم متبّل يدوياً ومشوي على الفحم. طبقنا المميّز.</span>
+      <span class="ds en">Hand-spiced minced meat, charcoal grilled. Our signature.</span>
+      <span class="pr">20 SAR</span>
+    </div>
+    <div class="tile t2">
+      <span class="nm ar">برياني لحم</span><span class="nm en">Mutton Biryani</span>
+      <span class="ds ar">أرز بسمتي مطبوخ بالدم على نار هادئة مع لحم الغنم.</span>
+      <span class="ds en">Basmati sealed and slow-cooked over mutton on the bone.</span>
+      <span class="pr">25 SAR</span>
+    </div>
+    <div class="tile t3">
+      <span class="nm ar">كراهي دجاج</span><span class="nm en">Chicken Karahi</span>
+      <span class="ds ar">طماطم وزنجبيل وفلفل أخضر، يُطهى أمامك في الكراهي.</span>
+      <span class="ds en">Tomato, ginger and green chilli, finished in the karahi.</span>
+      <span class="pr">35 / 60 SAR</span>
+    </div>
+  </div>
+</section>
+
+<div class="fringe"></div>
+
+<section class="wrap" id="menu">
+  <div class="shead">
+    <p class="eye"><span class="ar">المنيو</span><span class="en">The menu</span></p>
+    <h2><span class="ar dis">المنيو والأسعار</span><span class="en dis">Menu &amp; prices</span></h2>
+    <p><span class="ar">جميع الأسعار بالريال السعودي وتشمل الضريبة. الإفطار متاح من 5:30 ص حتى 11:00 ص.</span><span class="en">All prices in Saudi riyals, VAT included. Breakfast is served 5:30 AM to 11:00 AM.</span></p>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-cat="all"><span class="ar">الكل</span><span class="en">All</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-cat="brk"><span class="ar">الإفطار</span><span class="en">Breakfast</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-cat="bir"><span class="ar">برياني وأرز</span><span class="en">Biryani &amp; Rice</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-cat="grl"><span class="ar">كراهي ومشويات</span><span class="en">Karahi &amp; Grill</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-cat="cur"><span class="ar">كاري</span><span class="en">Curries</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-cat="brd"><span class="ar">خبز</span><span class="en">Breads</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-cat="drk"><span class="ar">مشروبات وحلويات</span><span class="en">Drinks &amp; Sweets</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-cat="deg"><span class="ar">صواني العائلة</span><span class="en">Family Trays</span></button>
+  </div>
+
+  <div class="cat" data-cat="brk">
+    <h3><span class="ar dis">الإفطار</span><span class="en dis">Breakfast</span></h3>
+    <p class="ct"><span class="ar">من 5:30 صباحاً حتى 11:00 صباحاً</span><span class="en">Served 5:30 AM &ndash; 11:00 AM</span></p>
+    <div class="items">
+      <div class="item"><span class="nm"><span class="ar">حلوة بوري</span><span class="en">Halwa Puri</span><small><span class="ar">مع الحمص والحلوى</span><span class="en">With chana and sweet halwa</span></small></span><span class="ln"></span><span class="pr">12<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">براتا مع أومليت</span><span class="en">Paratha &amp; Omelette</span></span><span class="ln"></span><span class="pr">10<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">حمص مصالح</span><span class="en">Chana Masala</span></span><span class="ln"></span><span class="pr">10<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">نيهاري الصباح</span><span class="en">Morning Nihari</span><small><span class="ar">يوم الجمعة فقط</span><span class="en">Fridays only</span></small></span><span class="ln"></span><span class="pr">22<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">شاي كرك</span><span class="en">Karak Chai</span></span><span class="ln"></span><span class="pr">3<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">دودھ پتی</span><span class="en">Doodh Patti</span></span><span class="ln"></span><span class="pr">4<span class="sar">SAR</span></span></div>
+    </div>
+  </div>
+
+  <div class="cat" data-cat="bir">
+    <h3><span class="ar dis">برياني وأرز</span><span class="en dis">Biryani &amp; Rice</span></h3>
+    <p class="ct"><span class="ar">يُطهى على دفعات طوال اليوم</span><span class="en">Cooked in batches through the day</span></p>
+    <div class="items">
+      <div class="item"><span class="nm"><span class="ar">برياني دجاج</span><span class="en">Chicken Biryani</span></span><span class="ln"></span><span class="pr">15<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">برياني لحم غنم</span><span class="en">Mutton Biryani</span><span class="badge">top</span></span><span class="ln"></span><span class="pr">25<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">برياني لحم بقر</span><span class="en">Beef Biryani</span></span><span class="ln"></span><span class="pr">18<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">مندي دجاج</span><span class="en">Chicken Mandi</span></span><span class="ln"></span><span class="pr">20<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">كابلي بلاو</span><span class="en">Kabuli Pulao</span><small><span class="ar">مع الجزر والزبيب</span><span class="en">With carrot and raisin</span></small></span><span class="ln"></span><span class="pr">22<span class="sar">SAR</span></span></div>
+    </div>
+  </div>
+
+  <div class="cat" data-cat="grl">
+    <h3><span class="ar dis">كراهي ومشويات</span><span class="en dis">Karahi &amp; Grill</span></h3>
+    <p class="ct"><span class="ar">الكراهي بنصف كيلو أو كيلو كامل</span><span class="en">Karahi by half or full kilo</span></p>
+    <div class="items">
+      <div class="item"><span class="nm"><span class="ar">كراهي دجاج</span><span class="en">Chicken Karahi</span><small><span class="ar">نصف / كامل</span><span class="en">Half / Full</span></small></span><span class="ln"></span><span class="pr">35 / 60<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">كراهي لحم غنم</span><span class="en">Mutton Karahi</span><small><span class="ar">نصف / كامل</span><span class="en">Half / Full</span></small></span><span class="ln"></span><span class="pr">50 / 90<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">سيخ كباب</span><span class="en">Seekh Kebab</span><span class="badge">signature</span><small><span class="ar">طبق من 4 أسياخ</span><span class="en">Plate of four skewers</span></small></span><span class="ln"></span><span class="pr">20<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">تكا دجاج</span><span class="en">Chicken Tikka</span></span><span class="ln"></span><span class="pr">14<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">ملائي بوتي</span><span class="en">Malai Boti</span></span><span class="ln"></span><span class="pr">16<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">چپلی کباب</span><span class="en">Chapli Kebab</span></span><span class="ln"></span><span class="pr">12<span class="sar">SAR</span></span></div>
+    </div>
+  </div>
+
+  <div class="cat" data-cat="cur">
+    <h3><span class="ar dis">كاري</span><span class="en dis">Curries</span></h3>
+    <p class="ct"><span class="ar">تُقدّم مع الأرز أو الخبز</span><span class="en">Served with rice or bread</span></p>
+    <div class="items">
+      <div class="item"><span class="nm"><span class="ar">نيهاري</span><span class="en">Nihari</span></span><span class="ln"></span><span class="pr">22<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">هريس (حليم)</span><span class="en">Haleem</span></span><span class="ln"></span><span class="pr">15<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">دال فراي</span><span class="en">Daal Fry</span></span><span class="ln"></span><span class="pr">10<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">سبانخ باللحم</span><span class="en">Palak Gosht</span></span><span class="ln"></span><span class="pr">25<span class="sar">SAR</span></span></div>
+    </div>
+  </div>
+
+  <div class="cat" data-cat="brd">
+    <h3><span class="ar dis">الخبز</span><span class="en dis">Breads</span></h3>
+    <p class="ct"><span class="ar">من التنور مباشرة</span><span class="en">Straight from the tandoor</span></p>
+    <div class="items">
+      <div class="item"><span class="nm"><span class="ar">روتي تنوري</span><span class="en">Tandoori Roti</span></span><span class="ln"></span><span class="pr">1.5<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">نان</span><span class="en">Naan</span></span><span class="ln"></span><span class="pr">2<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">نان بالثوم</span><span class="en">Garlic Naan</span></span><span class="ln"></span><span class="pr">4<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">براتا</span><span class="en">Paratha</span></span><span class="ln"></span><span class="pr">4<span class="sar">SAR</span></span></div>
+    </div>
+  </div>
+
+  <div class="cat" data-cat="drk">
+    <h3><span class="ar dis">مشروبات وحلويات</span><span class="en dis">Drinks &amp; Sweets</span></h3>
+    <p class="ct"><span class="ar">طازجة يومياً</span><span class="en">Made fresh daily</span></p>
+    <div class="items">
+      <div class="item"><span class="nm"><span class="ar">لسي مانجو</span><span class="en">Mango Lassi</span></span><span class="ln"></span><span class="pr">8<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">لسي حلو</span><span class="en">Sweet Lassi</span></span><span class="ln"></span><span class="pr">7<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">ليمون نعناع</span><span class="en">Nimbu Pani</span></span><span class="ln"></span><span class="pr">6<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">شاهي توكرا</span><span class="en">Shahi Tukray</span></span><span class="ln"></span><span class="pr">8<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">كھیر</span><span class="en">Kheer</span></span><span class="ln"></span><span class="pr">7<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">جلاب جامن</span><span class="en">Gulab Jamun</span></span><span class="ln"></span><span class="pr">6<span class="sar">SAR</span></span></div>
+    </div>
+  </div>
+
+  <div class="cat" data-cat="deg">
+    <h3><span class="ar dis">صواني العائلة والدِيغ</span><span class="en dis">Family Trays &amp; Deg</span></h3>
+    <p class="ct"><span class="ar">يُطلب قبل يوم واحد على الأقل</span><span class="en">Order at least one day ahead</span></p>
+    <div class="items">
+      <div class="item"><span class="nm"><span class="ar">دِيغ برياني دجاج</span><span class="en">Chicken Biryani Deg</span><small><span class="ar">يكفي 10&ndash;12 شخص</span><span class="en">Serves 10&ndash;12</span></small></span><span class="ln"></span><span class="pr">180<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">دِيغ برياني لحم</span><span class="en">Mutton Biryani Deg</span><small><span class="ar">يكفي 10&ndash;12 شخص</span><span class="en">Serves 10&ndash;12</span></small></span><span class="ln"></span><span class="pr">320<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">صينية كراهي عائلية</span><span class="en">Family Karahi Platter</span><small><span class="ar">مع الخبز والسلطة</span><span class="en">With bread and salad</span></small></span><span class="ln"></span><span class="pr">150<span class="sar">SAR</span></span></div>
+      <div class="item"><span class="nm"><span class="ar">صينية مشاوي مشكّلة</span><span class="en">Mixed Grill Platter</span><small><span class="ar">سيخ كباب، تكا، ملائي بوتي</span><span class="en">Seekh kebab, tikka, malai boti</span></small></span><span class="ln"></span><span class="pr">130<span class="sar">SAR</span></span></div>
+    </div>
+  </div>
+</section>
+
+<div class="cater">
+  <section class="wrap">
+    <div class="shead">
+      <p class="eye"><span class="ar">للشركات والسكنات</span><span class="en">For business</span></p>
+      <h2><span class="ar dis">تموين يومي بعقد شهري</span><span class="en dis">Daily catering, on contract</span></h2>
+      <p><span class="ar">نوفّر وجبات يومية لسكنات العمال والمكاتب والمناسبات في جدة، بأسعار ثابتة وتسليم في الموعد. أرسل لنا عدد الأفراد وسنرسل عرض السعر خلال ساعة.</span><span class="en">Fixed-price daily meals for worker accommodations, offices and events across Jeddah, delivered on schedule. Send us a headcount and we will quote within the hour.</span></p>
+    </div>
+    <div class="grid">
+      <div class="cell"><b><span class="ar">سكنات العمال</span><span class="en">Worker accommodation</span></b><span class="ar">وجبتان يومياً، قائمة متغيّرة أسبوعياً، توصيل ثابت.</span><span class="en">Two meals daily, menu rotated weekly, fixed delivery window.</span><span class="pr"><span class="ar">من 12 ريال للفرد/الوجبة</span><span class="en">From 12 SAR per head, per meal</span></span></div>
+      <div class="cell"><b><span class="ar">وجبات المكاتب</span><span class="en">Office lunch boxes</span></b><span class="ar">علب مغلّفة بأسماء، توصيل قبل الواحدة ظهراً.</span><span class="en">Sealed, labelled boxes delivered before 1 PM.</span><span class="pr"><span class="ar">من 18 ريال للعلبة</span><span class="en">From 18 SAR per box</span></span></div>
+      <div class="cell"><b><span class="ar">المناسبات والأعراس</span><span class="en">Weddings &amp; events</span></b><span class="ar">دِيغ برياني ومشاوي، مع طاقم تقديم عند الطلب.</span><span class="en">Biryani deg and grills, with serving staff on request.</span><span class="pr"><span class="ar">عرض سعر حسب الطلب</span><span class="en">Quoted per event</span></span></div>
+      <div class="cell"><b><span class="ar">مجموعات العمرة</span><span class="en">Umrah groups</span></b><span class="ar">وجبات باكستانية تُسلّم إلى الفندق في جدة.</span><span class="en">Pakistani meals delivered to your hotel in Jeddah.</span><span class="pr"><span class="ar">عرض سعر للمجموعة</span><span class="en">Quoted per group</span></span></div>
+    </div>
+    <div class="cta">
+      <a class="btn btn-wa" id="cater-cta" href="https://wa.me/966593752163">
+        <span class="ar">اطلب عرض سعر للتموين</span><span class="en">Request a catering quote</span>
+      </a>
+    </div>
+  </section>
+</div>
+
+<section class="wrap">
+  <div class="shead">
+    <p class="eye"><span class="ar">تطبيقات التوصيل</span><span class="en">Delivery apps</span></p>
+    <h2><span class="ar dis">نحن على التطبيقات أيضاً</span><span class="en dis">Also on the apps</span></h2>
+    <p><span class="ar">الطلب المباشر عبر واتساب أسرع ويوفّر على المطعم عمولة التطبيقات &mdash; لكن اطلب من حيث يناسبك.</span><span class="en">Ordering direct on WhatsApp is faster and saves the kitchen the platform commission &mdash; but order wherever suits you.</span></p>
+  </div>
+  <div class="partners">
+    <!-- Replace each href with the restaurant's real store link once the listings are live. -->
+    <a class="partner" href="https://hungerstation.com/sa-en"><b>HungerStation</b><span class="ar">هنقرستيشن</span><span class="en">Order on HungerStation</span></a>
+    <a class="partner" href="https://www.jahez.net/"><b>Jahez</b><span class="ar">جاهز</span><span class="en">Order on Jahez</span></a>
+    <a class="partner" href="https://keeta.com/"><b>Keeta</b><span class="ar">كيتا</span><span class="en">Order on Keeta</span></a>
+  </div>
+</section>
+
+<div class="fringe"></div>
+
+<section class="wrap">
+  <div class="shead">
+    <p class="eye"><span class="ar">الموقع والأوقات</span><span class="en">Find us</span></p>
+    <h2><span class="ar dis">تجدنا في العزيزية</span><span class="en dis">We are in Aziziyah</span></h2>
+  </div>
+  <div class="find">
+    <dl class="kv">
+      <dt><span class="ar">العنوان</span><span class="en">Address</span></dt>
+      <dd>
+        <span class="ar">شارع الأمير محمد بن عبدالعزيز، حي العزيزية، جدة، المملكة العربية السعودية</span>
+        <span class="en">Prince Mohammed bin Abdulaziz Street, Al Aziziyah, Jeddah, Saudi Arabia</span>
+        <div style="margin-top:10px"><a class="btn btn-line" href="https://www.google.com/maps/search/?api=1&amp;query=Pakistan%20Restaurant%20Prince%20Mohammed%20bin%20Abdulaziz%20Street%20Al%20Aziziyah%20Jeddah"><span class="ar">افتح في خرائط جوجل</span><span class="en">Open in Google Maps</span></a></div>
+      </dd>
+      <dt><span class="ar">الهاتف وواتساب</span><span class="en">Phone &amp; WhatsApp</span></dt>
+      <dd>
+        <div class="copyrow">
+          <span class="num" id="phone">+966 59 375 2163</span>
+          <button class="mini" id="copybtn" type="button"><span class="ar">نسخ</span><span class="en">Copy</span></button>
+        </div>
+        <div style="margin-top:10px"><a class="btn btn-solid" id="find-order" href="https://wa.me/966593752163"><span class="ar">راسلنا على واتساب</span><span class="en">Message us on WhatsApp</span></a></div>
+      </dd>
+    </dl>
+    <div class="kv">
+      <dt><span class="ar">أوقات العمل</span><span class="en">Opening hours</span></dt>
+      <table class="hours-tbl">
+        <tbody>
+          <tr><td><span class="ar">السبت &ndash; الخميس</span><span class="en">Saturday &ndash; Thursday</span></td><td>5:30 AM &ndash; 11:59 PM</td></tr>
+          <tr><td><span class="ar">الجمعة</span><span class="en">Friday</span></td><td>5:30 AM &ndash; 11:59 PM</td></tr>
+          <tr><td><span class="ar">الإفطار</span><span class="en">Breakfast service</span></td><td>5:30 AM &ndash; 11:00 AM</td></tr>
+          <tr><td><span class="ar">آخر طلب توصيل</span><span class="en">Last delivery order</span></td><td>11:30 PM</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:14px;font-size:14px;color:var(--muted)">
+        <span class="ar">في رمضان تتغيّر الأوقات &mdash; تابع حالتنا على واتساب.</span>
+        <span class="en">Hours change during Ramadan &mdash; check our WhatsApp status.</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<div class="review">
+  <section class="wrap in">
+    <div>
+      <div class="stars">&#9733;&#9733;&#9733;&#9733;&#9733;</div>
+      <h2 style="font-size:clamp(21px,3.4vw,28px);margin-top:6px"><span class="ar dis">أعجبك الأكل؟ اكتب لنا تقييماً</span><span class="en dis">Enjoyed the food? Leave us a review</span></h2>
+      <p style="color:var(--muted);margin:8px 0 0;font-size:15px"><span class="ar">تقييم واحد منك يساعد عائلة أخرى على إيجادنا.</span><span class="en">One review from you helps another family find us.</span></p>
+    </div>
+    <a class="btn btn-solid" href="https://www.google.com/maps/search/?api=1&amp;query=Pakistan%20Restaurant%20Al%20Aziziyah%20Jeddah"><span class="ar">قيّمنا على جوجل</span><span class="en">Review us on Google</span></a>
+  </section>
+</div>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <h4><span class="ar">مطعم باكستان</span><span class="en">Pakistan Restaurant</span></h4>
+        <p style="font-size:14.5px;color:rgba(242,239,230,.78);margin:0">
+          <span class="ar">مأكولات باكستانية أصيلة في قلب جدة منذ سنوات. حلال 100%.</span>
+          <span class="en">Authentic Pakistani cooking in the heart of Jeddah. 100% halal.</span>
+        </p>
+      </div>
+      <div>
+        <h4><span class="ar">تواصل</span><span class="en">Contact</span></h4>
+        <ul>
+          <li class="num">+966 59 375 2163</li>
+          <li><a href="https://wa.me/966593752163"><span class="ar">واتساب</span><span class="en">WhatsApp</span></a></li>
+          <li><a href="https://www.facebook.com/matampakistan/">Facebook</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4><span class="ar">الموقع</span><span class="en">Location</span></h4>
+        <ul>
+          <li><span class="ar">شارع الأمير محمد بن عبدالعزيز</span><span class="en">Prince Mohammed bin Abdulaziz St</span></li>
+          <li><span class="ar">حي العزيزية، جدة</span><span class="en">Al Aziziyah, Jeddah</span></li>
+          <li><span class="ar">5:30 ص &ndash; 11:59 م يومياً</span><span class="en">5:30 AM &ndash; 11:59 PM daily</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="fine"><span class="ar">&copy; مطعم باكستان، جدة. جميع الأسعار بالريال السعودي شاملة ضريبة القيمة المضافة.</span><span class="en">&copy; Pakistan Restaurant, Jeddah. All prices in Saudi riyals, VAT included.</span></p>
+  </div>
+</footer>
+
+<div id="sticky">
+  <a class="btn btn-wa" id="sticky-order" href="https://wa.me/966593752163">
+    <span class="ar">اطلب الآن عبر واتساب</span><span class="en">Order now on WhatsApp</span>
+  </a>
+</div>
+
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Restaurant","name":"Pakistan Restaurant","alternateName":"مطعم باكستان","servesCuisine":["Pakistani","Indian","Halal"],"priceRange":"$","telephone":"+966593752163","address":{"@type":"PostalAddress","streetAddress":"Prince Mohammed bin Abdulaziz Street","addressLocality":"Jeddah","addressRegion":"Makkah Province","addressCountry":"SA"},"openingHoursSpecification":[{"@type":"OpeningHoursSpecification","dayOfWeek":["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],"opens":"05:30","closes":"23:59"}],"sameAs":["https://www.facebook.com/matampakistan/"]}
+</script>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  // ---- language ----
+  function setLang(l){
+    root.setAttribute('data-lang',l);
+    root.setAttribute('dir', l==='en'?'ltr':'rtl');
+    root.setAttribute('lang', l==='en'?'en':'ar');
+    try{localStorage.setItem('pr_lang',l);}catch(e){}
+    wire();
+  }
+  var saved=null; try{saved=localStorage.getItem('pr_lang');}catch(e){}
+  setLang(saved==='en'?'en':'ar');
+  document.getElementById('lang').addEventListener('click',function(){
+    setLang(root.getAttribute('data-lang')==='en'?'ar':'en');
+  });
+
+  // ---- prefilled WhatsApp messages ----
+  var MSG={
+    ar:{order:'السلام عليكم، أريد أن أطلب من مطعم باكستان:\n\nالطلب:\n\nالعنوان:\n\nالوقت المطلوب:',
+        cater:'السلام عليكم، أريد عرض سعر للتموين من مطعم باكستان:\n\nعدد الأفراد:\n\nعدد الوجبات يومياً:\n\nالموقع:\n\nتاريخ البداية:'},
+    en:{order:'Hello, I would like to order from Pakistan Restaurant:\n\nOrder:\n\nAddress:\n\nTime needed:',
+        cater:'Hello, I would like a catering quote from Pakistan Restaurant:\n\nHeadcount:\n\nMeals per day:\n\nLocation:\n\nStart date:'}
+  };
+  function wire(){
+    var l=root.getAttribute('data-lang')==='en'?'en':'ar';
+    var base='https://wa.me/966593752163?text=';
+    ['hdr-order','hero-order','sticky-order','find-order'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.href=base+encodeURIComponent(MSG[l].order);
+    });
+    var c=document.getElementById('cater-cta'); if(c) c.href=base+encodeURIComponent(MSG[l].cater);
+  }
+
+  // ---- open / closed badge, Saudi time (UTC+3) ----
+  function tick(){
+    var d=new Date();
+    var sa=new Date(d.getTime()+d.getTimezoneOffset()*60000+3*3600000);
+    var mins=sa.getHours()*60+sa.getMinutes();
+    var open=mins>=330;
+    var lbl=document.getElementById('openlbl'), chip=document.getElementById('openchip');
+    var ar=root.getAttribute('data-lang')!=='en';
+    if(open){
+      lbl.textContent = ar?'مفتوح الآن':'Open now';
+      chip.classList.add('live');
+    }else{
+      lbl.textContent = ar?'مغلق — نفتح 5:30 ص':'Closed — opens 5:30 AM';
+      chip.classList.remove('live');
+    }
+  }
+  tick(); setInterval(tick,60000);
+  document.getElementById('lang').addEventListener('click',tick);
+
+  // ---- menu tabs ----
+  var tabs=document.querySelectorAll('.tab'), cats=document.querySelectorAll('.cat');
+  tabs.forEach(function(t){
+    t.addEventListener('click',function(){
+      tabs.forEach(function(x){x.setAttribute('aria-selected', x===t?'true':'false');});
+      var c=t.getAttribute('data-cat');
+      cats.forEach(function(s){ s.hidden = !(c==='all'||s.getAttribute('data-cat')===c); });
+    });
+  });
+
+  // ---- copy phone ----
+  var cb=document.getElementById('copybtn');
+  cb.addEventListener('click',function(){
+    var txt='+966593752163';
+    var done=function(){
+      var ar=root.getAttribute('data-lang')!=='en';
+      cb.textContent = ar?'تم النسخ':'Copied';
+      setTimeout(function(){
+        var a=root.getAttribute('data-lang')!=='en';
+        cb.innerHTML = a?'<span class="ar">نسخ</span>':'<span class="en">Copy</span>';
+      },1600);
+    };
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(done).catch(function(){select();});
+    }else{select();}
+    function select(){
+      var r=document.createRange(); r.selectNodeContents(document.getElementById('phone'));
+      var s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

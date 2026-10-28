@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Sample bilingual site for a Saudi personal training business.">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>Fitness Guide KSA</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Tajawal:wght@400;500;700;800&family=Hanken+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: Arabic-first RTL. Clinical-performance look — bone ground, one electric blue, numbers set in mono because a coach sells measurement. Tape-measure rules divide the sections. */
+:root{
+  --bg:#F2F2EF; --surface:#FFFFFF; --slab:#E7E7E2;
+  --ink:#121316; --muted:#63656D; --line:#D6D6CF;
+  --volt:#1B3FE0; --coral:#D8462380; --coral-s:#D84623; --ok:#0F7B5C;
+  --on-dark:#F4F4F1;
+  --f-dis:"Syne","Hanken Grotesk",system-ui,sans-serif;
+  --f-dis-ar:"Tajawal",system-ui,sans-serif;
+  --f-body:"Hanken Grotesk","Tajawal",system-ui,-apple-system,sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --lh:1.75;
+  direction:rtl;
+}
+:root[data-lang="en"]{direction:ltr;--lh:1.58}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0D0E11; --surface:#15171C; --slab:#1B1E25;
+  --ink:#ECEDF0; --muted:#8F93A1; --line:#262A33;
+  --volt:#7190FF; --coral-s:#FF7F5E; --ok:#45C69E;
+  --on-dark:#F4F4F1;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0D0E11; --surface:#15171C; --slab:#1B1E25;
+  --ink:#ECEDF0; --muted:#8F93A1; --line:#262A33;
+  --volt:#7190FF; --coral-s:#FF7F5E; --ok:#45C69E;
+  --on-dark:#F4F4F1;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16.5px;line-height:var(--lh);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--ink);z-index:60}
+.wrap{max-width:1060px;margin-inline:auto;padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px))}
+:root[data-lang="en"] .ar{display:none!important}
+:root:not([data-lang="en"]) .en{display:none!important}
+h1,h2,h3{margin:0;line-height:1.1;text-wrap:balance;font-family:var(--f-dis);letter-spacing:-0.02em}
+.ar h1,.ar h2,.ar h3,h1 .ar,h2 .ar,h3 .ar,.dar{font-family:var(--f-dis-ar);letter-spacing:0;line-height:1.3;font-weight:800}
+p{margin:0 0 12px}
+a{color:var(--volt)}
+ul{margin:0;padding:0;list-style:none}
+.ticks{height:12px;
+ background-image:
+  repeating-linear-gradient(90deg,var(--ink) 0 1.5px,transparent 1.5px 60px),
+  repeating-linear-gradient(90deg,var(--line) 0 1px,transparent 1px 12px);
+ background-size:auto 11px,auto 5px;background-position:0 100%,0 100%;background-repeat:repeat-x,repeat-x;
+ border-bottom:1px solid var(--line)}
+/* sample bar — DELETE BEFORE ANY REAL USE */
+#sample{background:var(--coral-s);color:#fff;font-size:13px;text-align:center;padding:7px 14px;line-height:1.45}
+#sample b{font-weight:700}
+/* header */
+header.site{position:sticky;top:env(safe-area-inset-top,0px);z-index:50;background:var(--ink);color:var(--on-dark)}
+header.site .bar{display:flex;align-items:center;gap:10px;padding-block:11px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;margin-inline-end:auto;min-width:0}
+.logo{width:26px;height:26px;flex:none;background:var(--volt);display:grid;place-items:center;font-family:var(--f-data);font-size:12px;color:#fff}
+.brand .nm{font-family:var(--f-dis);font-weight:800;font-size:16px;letter-spacing:-0.01em;white-space:nowrap}
+.ar .brand .nm,.brand .nm.ar{font-family:var(--f-dis-ar)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-family:var(--f-body);font-size:14.5px;font-weight:700;padding:10px 16px;border:2px solid transparent;cursor:pointer;text-decoration:none;line-height:1.2}
+.btn-wa{background:var(--volt);color:#fff;border-color:var(--volt)}
+.btn-wa:hover{filter:brightness(1.1)}
+.btn-ghost{border-color:rgba(244,244,241,.4);color:var(--on-dark);background:transparent}
+.btn-ghost:hover{border-color:var(--on-dark)}
+.btn-line{border-color:var(--ink);color:var(--ink);background:transparent}
+.btn-line:hover{background:var(--ink);color:var(--bg)}
+#lang{font-family:var(--f-data);font-size:12px;letter-spacing:.07em;padding:9px 11px}
+/* hero */
+.hero{padding-block:clamp(32px,6vw,62px) clamp(30px,5vw,50px)}
+.kick{font-family:var(--f-data);font-size:11.5px;letter-spacing:.17em;text-transform:uppercase;color:var(--volt);margin-bottom:14px}
+.hero h1{font-size:clamp(40px,9vw,80px);max-width:16ch}
+.hero .tag{font-size:clamp(17px,2.4vw,21px);color:var(--muted);max-width:48ch;margin-top:16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.chip{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;padding:6px 12px;border:1.5px solid var(--line);color:var(--muted);background:var(--surface)}
+.chip.on{border-color:var(--ok);color:var(--ok)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.cta .btn{padding:14px 24px;font-size:16px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-top:34px}
+.fact{background:var(--surface);padding:16px 14px;min-width:0}
+.fact b{display:block;font-family:var(--f-data);font-size:clamp(24px,4.5vw,32px);line-height:1;color:var(--volt);font-variant-numeric:tabular-nums}
+.fact span{display:block;font-size:13px;color:var(--muted);margin-top:7px;line-height:1.45}
+/* sections */
+section{padding-block:clamp(36px,6vw,60px)}
+.shead{margin-bottom:24px}
+.shead .eye{font-family:var(--f-data);font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--coral-s);margin-bottom:9px}
+.shead h2{font-size:clamp(28px,5vw,44px)}
+.shead p{color:var(--muted);max-width:58ch;margin-top:11px;margin-bottom:0}
+/* plans */
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:14px}
+.plan{border:2px solid var(--line);background:var(--surface);padding:20px;display:flex;flex-direction:column;min-width:0}
+.plan.hot{border-color:var(--volt)}
+.plan .lbl{font-family:var(--f-data);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.plan.hot .lbl{color:var(--volt)}
+.plan h3{font-size:22px;margin-bottom:10px}
+.plan .price{font-family:var(--f-data);font-size:30px;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1;direction:ltr;unicode-bidi:embed}
+.plan .per{font-size:13px;color:var(--muted);margin:5px 0 15px}
+.plan ul{display:grid;gap:8px;margin-bottom:18px}
+.plan li{font-size:14.5px;padding-inline-start:20px;position:relative;line-height:1.5}
+.plan li::before{content:"";position:absolute;inset-inline-start:0;top:.6em;width:9px;height:2px;background:var(--volt)}
+.plan .btn{margin-top:auto;width:100%}
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.step{background:var(--surface);padding:20px;min-width:0}
+.step .n{font-family:var(--f-data);font-size:12px;color:var(--volt);margin-bottom:10px}
+.step b{display:block;font-size:17px;font-family:var(--f-dis);margin-bottom:5px}
+.ar .step b,.step b.ar{font-family:var(--f-dis-ar)}
+.step span{font-size:14.5px;color:var(--muted);line-height:1.55;display:block}
+/* measured */
+.measured{background:var(--ink);color:var(--on-dark)}
+.measured .shead .eye{color:var(--volt)}
+.measured .shead p{color:rgba(244,244,241,.68)}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1px;background:rgba(244,244,241,.16);border:1px solid rgba(244,244,241,.16)}
+.m{background:var(--ink);padding:17px;min-width:0}
+.m .u{font-family:var(--f-data);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--volt);margin-bottom:6px}
+.m b{display:block;font-size:16px;margin-bottom:3px}
+.m span{font-size:13.5px;color:rgba(244,244,241,.62);line-height:1.5;display:block}
+/* two col */
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:28px}
+.panel{border-top:3px solid var(--ink);padding-top:16px;min-width:0}
+.panel h3{font-size:21px;margin-bottom:10px}
+.panel p{color:var(--muted);font-size:15.5px}
+.tagset{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.tagset span{font-family:var(--f-data);font-size:11px;letter-spacing:.06em;border:1.5px solid var(--line);padding:4px 9px;color:var(--muted)}
+/* faq */
+details{border-bottom:1px solid var(--line);padding-block:14px}
+summary{cursor:pointer;font-weight:700;font-size:16.5px;list-style:none;display:flex;gap:10px;align-items:flex-start}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"+";font-family:var(--f-data);color:var(--volt);flex:none;line-height:1.4}
+details[open] summary::before{content:"\2212"}
+details p{margin:10px 0 0;padding-inline-start:22px;color:var(--muted);font-size:15.5px}
+/* lead */
+.lead{background:var(--slab);border-block:1px solid var(--line)}
+.lead .in{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between}
+/* contact */
+.kv dt{font-family:var(--f-data);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.kv dd{margin:0 0 16px;font-size:16.5px}
+.num{font-family:var(--f-data);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:embed}
+.copyrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mini{font-size:12.5px;padding:6px 11px;border:1.5px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer;font-family:var(--f-body)}
+/* footer */
+footer.site{background:var(--ink);color:var(--on-dark);padding-block:30px}
+footer.site a{color:var(--volt)}
+footer.site .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:22px}
+footer.site h4{font-size:12.5px;font-family:var(--f-data);letter-spacing:.12em;text-transform:uppercase;color:rgba(244,244,241,.5);margin:0 0 9px;font-weight:500}
+footer.site li{font-size:14.5px;margin-bottom:5px;color:rgba(244,244,241,.8)}
+footer.site .fine{margin-top:24px;padding-top:15px;border-top:1px solid rgba(244,244,241,.16);font-size:12.5px;color:rgba(244,244,241,.5)}
+/* sticky */
+#sticky{position:fixed;inset-inline:0;bottom:0;z-index:55;display:none;
+ padding:10px max(14px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px));
+ background:var(--bg);border-top:1px solid var(--line)}
+#sticky .btn{width:100%;padding:14px}
+@media (max-width:720px){#sticky{display:block} body{padding-bottom:74px}}
+:focus-visible{outline:3px solid var(--volt);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:420px){.cta .btn{flex:1 1 100%}}
+</style>
+</head>
+<body>
+
+
+<!-- SAMPLE BAR — DELETE THIS ELEMENT BEFORE ANY REAL USE -->
+<div id="sample">
+  <span class="ar"><b>نموذج توضيحي.</b> الاسم والأسعار والشهادات والخدمات كلها بيانات افتراضية ويجب استبدالها بالمعلومات الحقيقية.</span>
+  <span class="en"><b>Sample site.</b> Brand name, prices, credentials and services are placeholders and must be replaced with real details.</span>
+</div>
+
+<header class="site">
+  <div class="wrap bar">
+    <div class="brand">
+      <span class="logo">FG</span>
+      <span class="nm ar">دليل اللياقة</span>
+      <span class="nm en">Fitness Guide</span>
+    </div>
+    <button id="lang" class="btn btn-ghost" type="button"><span class="ar">EN</span><span class="en">عربي</span></button>
+    <a class="btn btn-wa" id="hdr-cta" href="https://wa.me/966561170222">
+      <span class="ar">استشارة مجانية</span><span class="en">Free consult</span>
+    </a>
+  </div>
+</header>
+
+<section class="wrap hero">
+  <p class="kick"><span class="ar">تدريب شخصي &middot; أونلاين وحضوري &middot; السعودية</span><span class="en">Personal coaching &middot; Online &amp; in person &middot; Saudi Arabia</span></p>
+  <h1><span class="ar dar">برنامج مبني على أرقامك أنت</span><span class="en">A plan built on your numbers, not someone else&rsquo;s</span></h1>
+  <p class="tag">
+    <span class="ar">قياس، خطة تدريب، أهداف تغذية، ومتابعة أسبوعية. بالعربية أو بالإنجليزية، في النادي أو في البيت.</span>
+    <span class="en">Assessment, training plan, nutrition targets and a weekly check-in. In Arabic or English, at the gym or at home.</span>
+  </p>
+  <div class="chips">
+    <span class="chip on"><span class="dot"></span><span class="ar">نستقبل متدربين جدد</span><span class="en">Accepting new clients</span></span>
+    <span class="chip"><span class="ar">برامج 12 أسبوعاً</span><span class="en">12-week programmes</span></span>
+    <span class="chip"><span class="ar">متابعة أسبوعية</span><span class="en">Weekly check-ins</span></span>
+    <span class="chip"><span class="ar">عربي / إنجليزي</span><span class="en">Arabic / English</span></span>
+  </div>
+  <div class="cta">
+    <a class="btn btn-wa" id="hero-cta" href="https://wa.me/966561170222">
+      <span class="ar">احجز استشارة 15 دقيقة مجاناً</span><span class="en">Book a free 15-minute consult</span>
+    </a>
+    <a class="btn btn-line" href="#plans"><span class="ar">شاهد الباقات</span><span class="en">See the programmes</span></a>
+  </div>
+  <div class="facts">
+    <div class="fact"><b>15</b><span class="ar">دقيقة استشارة مجانية قبل أي التزام</span><span class="en">Free minutes before you commit to anything</span></div>
+    <div class="fact"><b>48h</b><span class="ar">تستلم خطتك خلال 48 ساعة من التقييم</span><span class="en">Your plan lands within 48 hours of assessment</span></div>
+    <div class="fact"><b>7</b><span class="ar">مؤشرات نقيسها كل أسبوع</span><span class="en">Metrics tracked every single week</span></div>
+    <div class="fact"><b>0</b><span class="ar">مكمّلات مطلوبة للبدء</span><span class="en">Supplements required to start</span></div>
+  </div>
+</section>
+
+<div class="ticks"></div>
+
+<section class="wrap" id="plans">
+  <div class="shead">
+    <p class="eye"><span class="ar">الباقات</span><span class="en">Programmes</span></p>
+    <h2><span class="ar dar">اختر طريقة المتابعة</span><span class="en">Pick how much coaching you want</span></h2>
+    <p><span class="ar">كل الباقات تشمل خطة تدريب مخصصة وأهداف تغذية. الفرق هو مقدار المتابعة المباشرة.</span><span class="en">Every programme includes a custom training plan and nutrition targets. The difference is how much direct coaching you get.</span></p>
+  </div>
+  <div class="plans">
+    <div class="plan">
+      <span class="lbl"><span class="ar">البداية</span><span class="en">Starter</span></span>
+      <h3><span class="ar dar">أونلاين</span><span class="en">Online plan</span></h3>
+      <div class="price">399</div>
+      <p class="per"><span class="ar">ريال / شهرياً</span><span class="en">SAR per month</span></p>
+      <ul>
+        <li><span class="ar">خطة تدريب مخصصة</span><span class="en">Custom training plan</span></li>
+        <li><span class="ar">أهداف سعرات وبروتين</span><span class="en">Calorie and protein targets</span></li>
+        <li><span class="ar">تحديث شهري للخطة</span><span class="en">Monthly plan update</span></li>
+        <li><span class="ar">دعم عبر واتساب</span><span class="en">WhatsApp support</span></li>
+      </ul>
+      <a class="btn btn-line plan-cta" data-plan="starter" href="https://wa.me/966561170222"><span class="ar">ابدأ</span><span class="en">Start</span></a>
+    </div>
+    <div class="plan hot">
+      <span class="lbl"><span class="ar">الأكثر طلباً</span><span class="en">Most chosen</span></span>
+      <h3><span class="ar dar">متابعة أسبوعية</span><span class="en">Coached</span></h3>
+      <div class="price">799</div>
+      <p class="per"><span class="ar">ريال / شهرياً</span><span class="en">SAR per month</span></p>
+      <ul>
+        <li><span class="ar">كل ما في باقة البداية</span><span class="en">Everything in Starter</span></li>
+        <li><span class="ar">مراجعة أسبوعية بالفيديو</span><span class="en">Weekly video check-in</span></li>
+        <li><span class="ar">تصحيح الأداء من مقاطعك</span><span class="en">Form review from your clips</span></li>
+        <li><span class="ar">تعديل الخطة كل أسبوع</span><span class="en">Plan adjusted every week</span></li>
+      </ul>
+      <a class="btn btn-wa plan-cta" data-plan="coached" href="https://wa.me/966561170222"><span class="ar">ابدأ</span><span class="en">Start</span></a>
+    </div>
+    <div class="plan">
+      <span class="lbl"><span class="ar">حضوري</span><span class="en">In person</span></span>
+      <h3><span class="ar dar">تدريب شخصي</span><span class="en">One to one</span></h3>
+      <div class="price">1,800</div>
+      <p class="per"><span class="ar">ريال / شهرياً &mdash; 8 حصص</span><span class="en">SAR per month &mdash; 8 sessions</span></p>
+      <ul>
+        <li><span class="ar">8 حصص حضورية</span><span class="en">8 in-person sessions</span></li>
+        <li><span class="ar">خطة أونلاين لبقية الأيام</span><span class="en">Online plan for the other days</span></li>
+        <li><span class="ar">في النادي أو في بيتك</span><span class="en">At your gym or at home</span></li>
+        <li><span class="ar">متابعة أسبوعية</span><span class="en">Weekly check-in</span></li>
+      </ul>
+      <a class="btn btn-line plan-cta" data-plan="1to1" href="https://wa.me/966561170222"><span class="ar">ابدأ</span><span class="en">Start</span></a>
+    </div>
+    <div class="plan">
+      <span class="lbl"><span class="ar">12 أسبوعاً</span><span class="en">12 weeks</span></span>
+      <h3><span class="ar dar">برنامج التحوّل</span><span class="en">Transformation</span></h3>
+      <div class="price">3,500</div>
+      <p class="per"><span class="ar">ريال / البرنامج كاملاً</span><span class="en">SAR for the full block</span></p>
+      <ul>
+        <li><span class="ar">تقييم كامل في البداية والنهاية</span><span class="en">Full assessment at start and end</span></li>
+        <li><span class="ar">خطة تدريب وتغذية متكاملة</span><span class="en">Training and nutrition together</span></li>
+        <li><span class="ar">متابعة أسبوعية طوال 12 أسبوعاً</span><span class="en">Weekly coaching for 12 weeks</span></li>
+        <li><span class="ar">تقرير نهائي بالأرقام</span><span class="en">Final report with your numbers</span></li>
+      </ul>
+      <a class="btn btn-line plan-cta" data-plan="transformation" href="https://wa.me/966561170222"><span class="ar">ابدأ</span><span class="en">Start</span></a>
+    </div>
+  </div>
+</section>
+
+<section class="wrap">
+  <div class="shead">
+    <p class="eye"><span class="ar">كيف تبدأ</span><span class="en">How it works</span></p>
+    <h2><span class="ar dar">أربع خطوات، بدون التزام في البداية</span><span class="en">Four steps, and nothing to commit to up front</span></h2>
+  </div>
+  <div class="steps">
+    <div class="step"><span class="n">01</span><b><span class="ar">استشارة مجانية</span><span class="en">Free consult</span></b><span class="ar">15 دقيقة على واتساب. هدفك، وقتك، وأي إصابات سابقة.</span><span class="en">Fifteen minutes on WhatsApp. Your goal, your schedule, any old injuries.</span></div>
+    <div class="step"><span class="n">02</span><b><span class="ar">التقييم</span><span class="en">Assessment</span></b><span class="ar">قياسات، صور، وأرقامك الحالية في التمارين الأساسية.</span><span class="en">Measurements, photos, and where you currently stand on the main lifts.</span></div>
+    <div class="step"><span class="n">03</span><b><span class="ar">خطتك خلال 48 ساعة</span><span class="en">Your plan in 48 hours</span></b><span class="ar">تدريب أسبوعي واضح وأهداف تغذية قابلة للتطبيق.</span><span class="en">A clear weekly training split and nutrition targets you can actually hit.</span></div>
+    <div class="step"><span class="n">04</span><b><span class="ar">متابعة وتعديل</span><span class="en">Check in and adjust</span></b><span class="ar">كل أسبوع نراجع الأرقام ونعدّل. لا يوجد برنامج ثابت لمدة ثلاثة أشهر.</span><span class="en">Numbers reviewed weekly and the plan changes. Nothing stays fixed for three months.</span></div>
+  </div>
+</section>
+
+<div class="measured">
+  <section class="wrap">
+    <div class="shead">
+      <p class="eye"><span class="ar">ما الذي نقيسه</span><span class="en">What gets measured</span></p>
+      <h2><span class="ar dar">النتيجة رقم، وليست إحساساً</span><span class="en">Progress is a number, not a feeling</span></h2>
+      <p><span class="ar">هذه المؤشرات السبعة تُسجَّل كل أسبوع، وتصلك في تقرير واضح. إن لم تتحرّك، نغيّر الخطة.</span><span class="en">These seven are logged every week and come back to you in a plain report. If they are not moving, the plan changes.</span></p>
+    </div>
+    <div class="mgrid">
+      <div class="m"><span class="u">kg</span><b><span class="ar">الوزن</span><span class="en">Body weight</span></b><span class="ar">متوسط أسبوعي، لا قراءة يومية.</span><span class="en">Weekly average, never a single daily reading.</span></div>
+      <div class="m"><span class="u">%</span><b><span class="ar">نسبة الدهون</span><span class="en">Body fat</span></b><span class="ar">بنفس الجهاز وفي نفس التوقيت كل مرة.</span><span class="en">Same device, same time of day, every time.</span></div>
+      <div class="m"><span class="u">cm</span><b><span class="ar">محيط الخصر والصدر</span><span class="en">Waist &amp; chest</span></b><span class="ar">المقياس الذي يتحرك قبل الميزان.</span><span class="en">The tape moves before the scale does.</span></div>
+      <div class="m"><span class="u">kg &times; reps</span><b><span class="ar">أرقام التمارين الأساسية</span><span class="en">Main lift numbers</span></b><span class="ar">سكوات، ديدليفت، بنش، سحب.</span><span class="en">Squat, deadlift, press, pull.</span></div>
+      <div class="m"><span class="u">bpm</span><b><span class="ar">نبض الراحة</span><span class="en">Resting heart rate</span></b><span class="ar">أوضح مؤشر مبكر على تحسّن اللياقة.</span><span class="en">The earliest honest signal that conditioning is improving.</span></div>
+      <div class="m"><span class="u">%</span><b><span class="ar">الالتزام</span><span class="en">Adherence</span></b><span class="ar">كم حصة وكم يوم تغذية أُنجزت فعلاً.</span><span class="en">How many sessions and nutrition days actually happened.</span></div>
+      <div class="m"><span class="u">hrs / steps</span><b><span class="ar">النوم والخطوات</span><span class="en">Sleep &amp; steps</span></b><span class="ar">السببان الأول والثاني لتوقّف التقدّم.</span><span class="en">The first and second reasons progress stalls.</span></div>
+    </div>
+  </section>
+</div>
+
+<section class="wrap">
+  <div class="two">
+    <div class="panel">
+      <h3><span class="ar dar">تدريب السيدات</span><span class="en">Coaching for women</span></h3>
+      <p><span class="ar">برامج مخصصة للسيدات مع مدرّبة، في النوادي النسائية أو أونلاين بالكامل مع خصوصية تامة. الحصص الحضورية حسب التوفّر.</span><span class="en">Dedicated programmes with a female coach, in women-only clubs or fully online with complete privacy. In-person availability depends on location.</span></p>
+      <div class="tagset">
+        <span><span class="ar">مدرّبة معتمدة</span><span class="en">Female coach</span></span>
+        <span><span class="ar">نوادي نسائية</span><span class="en">Women-only clubs</span></span>
+        <span><span class="ar">أونلاين بالكامل</span><span class="en">Fully online</span></span>
+        <span><span class="ar">خطط ما بعد الولادة</span><span class="en">Postnatal plans</span></span>
+      </div>
+    </div>
+    <div class="panel">
+      <h3><span class="ar dar">الاعتمادات والخبرة</span><span class="en">Credentials</span></h3>
+      <p><span class="ar">استبدل هذه الشهادات بالاعتمادات الحقيقية قبل النشر. العميل السعودي يسأل عن الشهادة قبل السعر.</span><span class="en">Replace these with the real certifications before this goes live. Saudi clients ask about credentials before they ask about price.</span></p>
+      <div class="tagset">
+        <span>NASM CPT</span><span>ACE</span><span>ACSM</span>
+        <span><span class="ar">تغذية رياضية</span><span class="en">Sports nutrition</span></span>
+        <span><span class="ar">إسعافات أولية</span><span class="en">First aid</span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="lead">
+  <section class="wrap in">
+    <div style="min-width:0">
+      <h2 style="font-size:clamp(22px,3.6vw,30px)"><span class="ar dar">دليل البداية: 7 أيام مجاناً</span><span class="en">The 7-day starter guide, free</span></h2>
+      <p style="color:var(--muted);margin:9px 0 0;font-size:15.5px;max-width:52ch">
+        <span class="ar">خطة أسبوع كاملة للمبتدئين: تمارين، أهداف تغذية بسيطة، وقائمة تسوّق. تصلك على واتساب فوراً.</span>
+        <span class="en">A full week for beginners: the sessions, simple nutrition targets and a shopping list. Sent to you on WhatsApp straight away.</span>
+      </p>
+    </div>
+    <a class="btn btn-wa" id="lead-cta" href="https://wa.me/966561170222"><span class="ar">أرسل لي الدليل</span><span class="en">Send me the guide</span></a>
+  </section>
+</div>
+
+<section class="wrap">
+  <div class="shead">
+    <p class="eye"><span class="ar">أسئلة شائعة</span><span class="en">Questions</span></p>
+    <h2><span class="ar dar">الأسئلة التي تصلنا كل يوم</span><span class="en">What people ask before starting</span></h2>
+  </div>
+  <div>
+    <details open><summary><span class="ar">هل أحتاج اشتراك نادي؟</span><span class="en">Do I need a gym membership?</span></summary>
+      <p><span class="ar">لا. نبني الخطة على ما هو متاح لديك &mdash; نادي كامل، أو أثقال بسيطة في البيت، أو وزن الجسم فقط.</span><span class="en">No. The plan is built around what you actually have — a full gym, a few dumbbells at home, or bodyweight only.</span></p></details>
+    <details><summary><span class="ar">ما الفرق بين الأونلاين والحضوري؟</span><span class="en">Online or in person?</span></summary>
+      <p><span class="ar">الأونلاين يناسب من يعرف أساسيات الأداء ويحتاج خطة ومتابعة. الحضوري يناسب المبتدئ تماماً أو من يريد تصحيح الأداء مباشرة.</span><span class="en">Online suits you if you know the basic movements and need structure and accountability. In person suits a complete beginner, or anyone who wants technique corrected on the spot.</span></p></details>
+    <details><summary><span class="ar">بأي لغة تكون المتابعة؟</span><span class="en">Which language is the coaching in?</span></summary>
+      <p><span class="ar">بالعربية أو الإنجليزية، كما تفضّل. الخطة نفسها تصلك باللغتين.</span><span class="en">Arabic or English, whichever you prefer. The written plan comes in both.</span></p></details>
+    <details><summary><span class="ar">كيف أدفع؟</span><span class="en">How do I pay?</span></summary>
+      <p><span class="ar">مدى، آبل باي، أو تحويل بنكي. الدفع شهري ويمكن إيقافه في أي وقت.</span><span class="en">mada, Apple Pay or bank transfer. Billed monthly and you can stop at any time.</span></p></details>
+    <details><summary><span class="ar">كم أحتاج حتى أرى نتيجة؟</span><span class="en">How long until I see something?</span></summary>
+      <p><span class="ar">الأرقام تبدأ بالتحرّك خلال أسبوعين إلى أربعة إذا التزمت. أي شخص يعدك بأسرع من ذلك يبيعك وهماً.</span><span class="en">With consistent adherence the numbers start moving in two to four weeks. Anyone promising faster than that is selling you something else.</span></p></details>
+  </div>
+</section>
+
+<div class="ticks"></div>
+
+<section class="wrap">
+  <div class="shead">
+    <p class="eye"><span class="ar">تواصل</span><span class="en">Get in touch</span></p>
+    <h2><span class="ar dar">ابدأ برسالة واحدة</span><span class="en">It starts with one message</span></h2>
+  </div>
+  <div class="two">
+    <dl class="kv">
+      <dt><span class="ar">واتساب والهاتف</span><span class="en">WhatsApp &amp; phone</span></dt>
+      <dd>
+        <div class="copyrow">
+          <span class="num" id="phone">+966 56 117 0222</span>
+          <button class="mini" id="copybtn" type="button"><span class="ar">نسخ</span><span class="en">Copy</span></button>
+        </div>
+        <div style="margin-top:12px"><a class="btn btn-wa" id="contact-cta" href="https://wa.me/966561170222"><span class="ar">راسلنا على واتساب</span><span class="en">Message on WhatsApp</span></a></div>
+      </dd>
+      <dt><span class="ar">أوقات الرد</span><span class="en">Reply hours</span></dt>
+      <dd><span class="ar">يومياً 8:00 ص &ndash; 10:00 م بتوقيت السعودية</span><span class="en">Daily 8:00 AM &ndash; 10:00 PM Saudi time</span></dd>
+    </dl>
+    <dl class="kv">
+      <dt><span class="ar">نطاق الخدمة</span><span class="en">Where we work</span></dt>
+      <dd><span class="ar">حضورياً: [أضف المدينة والأحياء] &mdash; أونلاين: جميع مناطق المملكة ودول الخليج</span><span class="en">In person: [add city and districts] &mdash; Online: anywhere in Saudi Arabia and the GCC</span></dd>
+      <dt><span class="ar">تابعنا</span><span class="en">Follow</span></dt>
+      <dd><span class="ar">[رابط إنستقرام] &middot; [رابط تيك توك] &middot; [رابط سناب شات]</span><span class="en">[Instagram link] &middot; [TikTok link] &middot; [Snapchat link]</span></dd>
+    </dl>
+  </div>
+</section>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="cols">
+      <div>
+        <h4><span class="ar">دليل اللياقة</span><span class="en">Fitness Guide</span></h4>
+        <p style="font-size:14.5px;color:rgba(244,244,241,.78);margin:0">
+          <span class="ar">تدريب شخصي أونلاين وحضوري في السعودية. خطط مبنية على القياس والمتابعة.</span>
+          <span class="en">Online and in-person personal coaching in Saudi Arabia. Plans built on measurement and follow-up.</span>
+        </p>
+      </div>
+      <div>
+        <h4><span class="ar">روابط</span><span class="en">Links</span></h4>
+        <ul>
+          <li><a href="#plans"><span class="ar">الباقات</span><span class="en">Programmes</span></a></li>
+          <li><a href="https://wa.me/966561170222"><span class="ar">استشارة مجانية</span><span class="en">Free consult</span></a></li>
+          <li class="num">+966 56 117 0222</li>
+        </ul>
+      </div>
+      <div>
+        <h4><span class="ar">تنويه</span><span class="en">Disclaimer</span></h4>
+        <p style="font-size:13.5px;color:rgba(244,244,241,.68);margin:0">
+          <span class="ar">التدريب واﻹرشاد الغذائي ليسا بديلاً عن الاستشارة الطبية. راجع طبيبك قبل بدء أي برنامج إذا كانت لديك حالة صحية.</span>
+          <span class="en">Coaching and nutrition guidance are not medical advice. Speak to your doctor before starting any programme if you have a health condition.</span>
+        </p>
+      </div>
+    </div>
+    <p class="fine"><span class="ar">&copy; دليل اللياقة. جميع الأسعار بالريال السعودي.</span><span class="en">&copy; Fitness Guide. All prices in Saudi riyals.</span></p>
+  </div>
+</footer>
+
+<div id="sticky">
+  <a class="btn btn-wa" id="sticky-cta" href="https://wa.me/966561170222">
+    <span class="ar">احجز استشارة مجانية</span><span class="en">Book a free consult</span>
+  </a>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  var MSG={
+    ar:{consult:'السلام عليكم، أريد حجز استشارة مجانية 15 دقيقة.\n\nالاسم:\n\nالهدف (نزول وزن / بناء عضل / لياقة):\n\nعدد أيام التمرين المتاحة أسبوعياً:\n\nالمدينة:',
+        lead:'السلام عليكم، أرجو إرسال دليل البداية المجاني لمدة 7 أيام.',
+        plan:'السلام عليكم، أريد الاشتراك في باقة: '},
+    en:{consult:'Hello, I would like to book the free 15-minute consult.\n\nName:\n\nGoal (fat loss / muscle / general fitness):\n\nTraining days available per week:\n\nCity:',
+        lead:'Hello, please send me the free 7-day starter guide.',
+        plan:'Hello, I would like to join the programme: '}
+  };
+  var PLAN={
+    starter:{ar:'أونلاين — 399 ريال/شهر',en:'Online plan — 399 SAR/month'},
+    coached:{ar:'متابعة أسبوعية — 799 ريال/شهر',en:'Coached — 799 SAR/month'},
+    '1to1':{ar:'تدريب شخصي حضوري — 1800 ريال/شهر',en:'One to one — 1,800 SAR/month'},
+    transformation:{ar:'برنامج التحوّل 12 أسبوعاً — 3500 ريال',en:'Transformation, 12 weeks — 3,500 SAR'}
+  };
+  function wire(){
+    var l=root.getAttribute('data-lang')==='en'?'en':'ar';
+    var base='https://wa.me/966561170222?text=';
+    ['hdr-cta','hero-cta','sticky-cta','contact-cta'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.href=base+encodeURIComponent(MSG[l].consult);
+    });
+    var ld=document.getElementById('lead-cta'); if(ld) ld.href=base+encodeURIComponent(MSG[l].lead);
+    document.querySelectorAll('.plan-cta').forEach(function(a){
+      var p=PLAN[a.getAttribute('data-plan')];
+      a.href=base+encodeURIComponent(MSG[l].plan+(p?p[l]:''));
+    });
+  }
+  function setLang(l){
+    root.setAttribute('data-lang',l);
+    root.setAttribute('dir', l==='en'?'ltr':'rtl');
+    root.setAttribute('lang', l==='en'?'en':'ar');
+    try{localStorage.setItem('fg_lang',l);}catch(e){}
+    wire();
+  }
+  var saved=null; try{saved=localStorage.getItem('fg_lang');}catch(e){}
+  setLang(saved==='en'?'en':'ar');
+  document.getElementById('lang').addEventListener('click',function(){
+    setLang(root.getAttribute('data-lang')==='en'?'ar':'en');
+  });
+
+  var cb=document.getElementById('copybtn');
+  cb.addEventListener('click',function(){
+    var txt='+966561170222';
+    function done(){
+      var ar=root.getAttribute('data-lang')!=='en';
+      cb.textContent = ar?'تم النسخ':'Copied';
+      setTimeout(function(){
+        var a=root.getAttribute('data-lang')!=='en';
+        cb.innerHTML = a?'<span class="ar">نسخ</span>':'<span class="en">Copy</span>';
+      },1600);
+    }
+    function sel(){
+      var r=document.createRange(); r.selectNodeContents(document.getElementById('phone'));
+      var s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    }
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(done).catch(sel);
+    } else { sel(); }
+  });
+})();
+</script>
+
+</body>
+</html>
