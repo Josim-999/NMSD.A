@@ -12,6 +12,54 @@ plan and answers procedure questions from company SOPs. Every change goes throug
 
 The critical review of the original proposal is in **[docs/ANALYSIS.md](docs/ANALYSIS.md)**.
 
+---
+
+# WhatsApp Business MCP
+
+This repository also contains **`wamcp`**: a standard
+[Model Context Protocol](https://modelcontextprotocol.io) server that connects a WhatsApp
+Business number to any AI client — Claude Code, Claude Desktop, Cursor, VS Code, Windsurf,
+Zed, or anything else that speaks MCP. Same philosophy as the rest of the repo: pure Python
+standard library, no `pip install`, your data stays on your machine.
+
+```bash
+python3 -m wamcp setup      # paste three values from Meta's API Setup page
+python3 -m wamcp doctor     # check the whole chain, with the fix for anything missing
+python3 -m wamcp install    # register with Claude Code (or Desktop, Cursor, VS Code...)
+```
+
+Then ask your assistant: *"any new WhatsApp messages?"*, *"reply to Josim that the order is
+ready"*, *"which chats are waiting on us?"*
+
+It uses Meta's official **WhatsApp Business Cloud API**, so nothing here risks your number.
+24 tools cover sending (text, templates, media, buttons, menus, link buttons, locations,
+contact cards, reactions, read receipts), the inbox (list and read chats, search, delivery
+status, media up and down), contacts and consent, templates, and the business profile.
+
+Inbound messages arrive by webhook, which `python3 -m wamcp webhook` receives — signature
+verified — into a local SQLite inbox.
+
+Sending is gated, because an AI with a WhatsApp number can reach real people:
+
+- `STOP` opts a person out the moment it arrives, and no tool can override it
+- WhatsApp's 24-hour free-form window is enforced locally, with "send a template instead"
+  in the error rather than a silent failure
+- optional allow-list, hourly send cap and a dry-run mode that sends nothing
+- every send, refusal and dry run is in `python3 -m wamcp audit`
+
+Full guide, including what to copy from Meta and how to fix each error:
+**[docs/WHATSAPP_MCP.md](docs/WHATSAPP_MCP.md)**.
+
+```text
+wamcp/   config, phones, graph, messages, store, policy, tools, mcp, webhook, install, CLI
+```
+
+```bash
+python3 -m wamcp selftest    # 110 tests, no network: a fake Cloud API runs on localhost
+```
+
+---
+
 ## Quick start
 
 ```bash
@@ -128,7 +176,9 @@ Then replace `knowledge/sops/*.md` with your real SOPs, and adjust the threshold
 
 ```
 tis/            config, geo, db, sim, twin, exceptions, kpi, optimizer, knowledge, llm, agents, dashboard, CLI
+wamcp/          WhatsApp Business MCP server (see docs/WHATSAPP_MCP.md)
 knowledge/sops/ sample SOPs (markdown with access-level front matter)
-tests/          unit tests (scenarios, optimiser vs brute force, RAG, RBAC, approval gate, data boundary)
-docs/           ANALYSIS.md
+tests/          unit tests (scenarios, optimiser vs brute force, RAG, RBAC, approval gate, data boundary,
+                plus the WhatsApp MCP suite in test_wamcp.py)
+docs/           ANALYSIS.md, WHATSAPP_MCP.md
 ```
