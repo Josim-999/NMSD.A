@@ -17,7 +17,8 @@ import sys
 import time
 
 from . import PROTOCOL_VERSION, SERVER_NAME, __version__, config as config_mod
-from . import graph, install as install_mod, mcp, messages, phones, policy, store as store_mod, tools
+from . import graph, install as install_mod, mcp, messages, paste, phones, policy
+from . import store as store_mod, tools
 
 
 def out(*parts):
@@ -30,22 +31,32 @@ def err(*parts):
 
 # --- setup ------------------------------------------------------------------
 INTRO = """
-WhatsApp Business MCP - setup
------------------------------
-This connects a WhatsApp Business number to any AI client that speaks MCP.
+==================================================================
+ WhatsApp Business MCP - setup
+==================================================================
 
-You need a Meta app with the WhatsApp product added (free):
+This connects your WhatsApp Business number to any AI that speaks MCP
+(Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Zed).
 
-  1. developers.facebook.com -> My Apps -> Create App -> Business
-  2. Add the WhatsApp product
-  3. Open WhatsApp -> API Setup and copy the three values below
+You need one page open in your browser:
 
-The token on that page lasts 24 hours. For something permanent, create a
-System User in Business Settings with whatsapp_business_messaging and
-whatsapp_business_management, and generate a token with no expiry.
+   https://developers.facebook.com/apps
 
-Nothing is sent anywhere during setup. Values are saved to
-{path} with permissions 0600.
+   -> your app  ->  WhatsApp  ->  API Setup
+
+   (No app yet? Create App -> Business -> add the WhatsApp product.
+    It is free and takes about two minutes.)
+
+On that page there is a grey box of example code starting with "curl".
+COPY THE WHOLE BOX. It already contains your access token and your
+phone number ID, so that is the only thing you need to copy.
+""".strip()
+
+PASTE_PROMPT = """
+Paste it below. Anything works: the curl box, a .env file, or just your
+access token on its own.
+
+Paste, then press Enter on an empty line:
 """.strip()
 
 
@@ -59,59 +70,212 @@ def ask(prompt, default="", secret=False):
     except (EOFError, KeyboardInterrupt):
         out("")
         raise SystemExit("setup cancelled")
-    value = value.strip()
-    return value or default
+    return value.strip() or default
+
+
+def confirm(prompt, default=True):
+    suffix = "[Y/n]" if default else "[y/N]"
+    answer = ask(f"{prompt} {suffix}").strip().lower()
+    if not answer:
+        return default
+    return answer.startswith("y")
+
+
+def read_paste():
+    """Read a multi-line paste, ending at a blank line or end of input."""
+    lines = []
+    while True:
+        try:
+            line = input()
+        except (EOFError, KeyboardInterrupt):
+            break
+        if not line.strip():
+            if lines:
+                break
+            continue           # ignore leading blank lines from the paste
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _choose_number(numbers):
+    """Which WhatsApp number to send from, when the account has several."""
+    if len(numbers) == 1:
+        return numbers[0]
+    out("")
+    out("This account has several WhatsApp numbers:")
+    for index, number in enumerate(numbers, 1):
+        label = " ".join(x for x in (number.get("display_phone_number"),
+                                     number.get("verified_name")) if x)
+        out(f"  [{index}] {label or number['id']}")
+    while True:
+        answer = ask("Which one should the AI send from? (number)", "1")
+        if answer.isdigit() and 1 <= int(answer) <= len(numbers):
+            return numbers[int(answer) - 1]
+        out(f"Enter a number between 1 and {len(numbers)}.")
 
 
 def cmd_setup(args):
     existing = config_mod.load(args.config)
-    out(INTRO.format(path=args.config or config_mod.CONFIG_PATH))
-    out("")
     if not sys.stdin.isatty():
-        err("setup needs an interactive terminal. Set the WHATSAPP_* environment "
-            "variables instead, or run it in a terminal.")
+        err("Setup needs an interactive terminal. Either run it in a terminal, or set the "
+            "WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID environment variables.")
         return 2
 
-    token = ask("Access token", existing.access_token, secret=True)
-    phone_id = ask("Phone number ID", existing.phone_number_id)
-    waba = ask("WhatsApp Business Account ID (for templates, optional)", existing.business_account_id)
+    out(INTRO)
     out("")
-    out("Optional, for receiving replies. Press enter to skip and add later:")
-    app_secret = ask("App secret (Meta app -> Settings -> Basic)", existing.app_secret, secret=True)
-    verify = existing.verify_token or secrets.token_urlsafe(18)
-    verify = ask("Webhook verify token (any string; one is generated for you)", verify)
-    country = ask("Default country calling code for local numbers, e.g. 966 (optional)",
-                  existing.default_country)
+    out(PASTE_PROMPT)
+    found = paste.parse(read_paste())
+    if found:
+        out(f"Got it - found your {paste.describe(found)}.")
+    elif existing.access_token:
+        out("Nothing recognised in that paste; keeping what is already saved.")
+    else:
+        out("I could not find an access token in that. Let's do it by hand.")
+
+    token = found.get("access_token") or existing.access_token
+    if not token:
+        token = ask("Access token (paste it)", secret=True)
+    if not token:
+        err("No access token, so there is nothing to connect. Run setup again when you have one.")
+        return 2
 
     values = existing.as_dict()
-    values.update({
-        "access_token": token, "phone_number_id": phone_id, "business_account_id": waba,
-        "app_secret": app_secret, "verify_token": verify, "default_country": country,
-    })
-    path = config_mod.save(config_mod.Config(**values), args.config)
+    values.update({k: v for k, v in found.items() if v})
+    values["access_token"] = token
+    config = config_mod.Config(**values)
+
+    # Ask Meta what this token can reach, rather than asking the user.
     out("")
-    out(f"Saved to {path} (0600).")
+    out("Checking the token with Meta and looking up your account...")
+    client = graph.GraphClient(config)
+    try:
+        assets = client.discover()
+    except Exception as e:                                      # noqa: BLE001
+        err(f"could not reach the WhatsApp API: {e}")
+        assets = {"phone_numbers": [], "business_account_id": "", "notes": []}
+
+    if assets["phone_numbers"]:
+        chosen = _choose_number(assets["phone_numbers"])
+        values["phone_number_id"] = chosen["id"]
+        label = " ".join(x for x in (chosen.get("verified_name"),
+                                     chosen.get("display_phone_number")) if x)
+        out(f"  number:  {label or chosen['id']}")
+    elif not values.get("phone_number_id"):
+        out("  I could not find a phone number with this token.")
+        out("  It is the 15-digit 'Phone number ID' on the API Setup page.")
+        values["phone_number_id"] = ask("Phone number ID")
+
+    if assets["business_account_id"] and not values.get("business_account_id"):
+        values["business_account_id"] = assets["business_account_id"]
+        out(f"  account: {assets['business_account_name'] or assets['business_account_id']}")
+    if not values.get("business_account_id"):
+        out("  No business account ID found; template tools will be off until it is set.")
+        out("  It is the 'WhatsApp Business Account ID' on the same page - optional for now.")
+        values["business_account_id"] = ask("WhatsApp Business Account ID (or Enter to skip)")
+
+    # A verify token is only used to receive messages, and any string will do,
+    # so generate one rather than asking.
+    values["verify_token"] = values.get("verify_token") or secrets.token_urlsafe(18)
+    config = config_mod.Config(**values)
+    path = config_mod.save(config, args.config)
     out("")
+    out(f"Saved to {path} (only you can read it).")
 
     ctx = tools.Context(config_mod.load(args.config))
-    _print_report(tools.diagnose(ctx))
+    report = tools.diagnose(ctx)
+    out("")
+    _print_report(report)
+
+    _offer_install(ctx.config)
+    if report["ready"]:
+        _offer_test_message(args, ctx)
 
     out("")
-    out("Now add this server to your AI client. For Claude Code, run:")
+    out("=" * 66)
+    out("Done. Two things worth knowing:")
     out("")
-    out("  " + install_mod.claude_code_command())
+    out("  * To RECEIVE messages, run this as well (it explains itself):")
+    out("        python3 -m wamcp webhook --public-url https://your-host")
     out("")
-    answer = ask("Write it into a client config for you now? (claude-code/claude-desktop/"
-                 "cursor/vscode/windsurf/zed/no)", "claude-code")
-    if answer.lower() not in ("no", "n", ""):
-        try:
-            target, action = install_mod.install(answer.lower(), ctx.config)
-            out(f"{action} {target}")
-            out("Restart the client and ask it: \"check my WhatsApp connection\".")
-        except (KeyError, ValueError, OSError) as e:
-            err(f"could not write the config: {e}")
-            out("Use the command printed above instead.")
+    out("  * The token from the API Setup page expires in 24 hours. For one that")
+    out("    does not: Business Settings -> System Users -> Add, give it your app")
+    out("    with whatsapp_business_messaging and whatsapp_business_management,")
+    out("    then Generate token with expiry Never. Re-run setup and paste it.")
+    out("")
+    out("Anything wrong later:  python3 -m wamcp doctor")
+    out("=" * 66)
     return 0
+
+
+def _offer_install(config):
+    """Put the server into whichever AI clients are on this machine."""
+    detected = install_mod.detect()
+    out("")
+    if not detected:
+        out("No AI client detected on this machine. Paste this into whichever you use:")
+        out("")
+        out(json.dumps(install_mod.config_document(config), indent=2))
+        return
+    labels = [install_mod.CLIENTS[c]["label"] for c in detected]
+    out("Found on this machine: " + ", ".join(labels))
+    if not confirm("Add WhatsApp to " + ("it" if len(detected) == 1 else "them") + " now?"):
+        out("Skipped. You can do it later with `python3 -m wamcp install`.")
+        return
+    for client in detected:
+        try:
+            target, action = install_mod.install(client, config)
+            out(f"  {action:9} {target}")
+        except (KeyError, ValueError, OSError) as e:
+            err(f"  failed for {client}: {e}")
+    out("")
+    out("Restart the client, then say to it:  \"check my WhatsApp connection\"")
+
+
+def _offer_test_message(args, ctx):
+    """Send the user a message on their own phone, to prove it works."""
+    out("")
+    out("Want to prove it works? I can send a message to your own phone.")
+    out("(It has to be a template, because you have not written to the business yet.")
+    out(" Every new account has one called hello_world.)")
+    number = ""
+    for _ in range(2):
+        answer = ask("Your WhatsApp number in international form, e.g. +966501234567 "
+                     "(Enter to skip)")
+        if not answer:
+            return
+        try:
+            number = phones.pretty(phones.normalise(answer, ctx.config.default_country))
+            break
+        except phones.PhoneError as e:
+            out(f"  {e}")
+    if not number:
+        out("Skipping the test message. Try later with:")
+        out("  python3 -m wamcp send --to +<your number> --template hello_world")
+        return
+
+    result = tools.call(ctx, "whatsapp_send_template",
+                        {"to": number, "template": "hello_world", "language": "en_US"})
+    out("")
+    for item in result.get("content", []):
+        out(item.get("text", ""))
+    if not result.get("isError"):
+        out("")
+        out("Check your phone. Reply to that message and the 24-hour window opens,")
+        out("so your AI can then send ordinary text to you.")
+        return
+
+    out("")
+    detail = result.get("structuredContent") or {}
+    if detail.get("code") == 131030:
+        out("That number has to be allowed first: on the API Setup page, under 'To',")
+        out("add your own number. Then run:")
+    elif detail.get("code") in (132001, 132000):
+        out("This account has no hello_world template. See what it does have:")
+        out("  python3 -m wamcp templates")
+        out("then send one of those:")
+    else:
+        out("Not fatal - the connection itself is fine. To try again:")
+    out(f"  python3 -m wamcp send --to {number} --template hello_world")
 
 
 # --- doctor -----------------------------------------------------------------
@@ -169,7 +333,7 @@ def cmd_install(args):
 # --- serve ------------------------------------------------------------------
 def cmd_serve(args):
     config = config_mod.load(args.config)
-    ctx = tools.Context(config)
+    ctx = tools.Context(config, config_path=args.config)
     if args.http:
         mcp.serve_http_forever(ctx, host=args.host, port=args.port,
                                auth_token=args.token or os.environ.get("WAMCP_HTTP_TOKEN", ""),
@@ -235,7 +399,7 @@ def cmd_webhook(args):
 
 # --- send / inbox -----------------------------------------------------------
 def _run_tool(args, name, arguments):
-    ctx = tools.Context(config_mod.load(args.config))
+    ctx = tools.Context(config_mod.load(args.config), config_path=args.config)
     result = tools.call(ctx, name, arguments)
     if getattr(args, "json", False):
         out(json.dumps(result.get("structuredContent", {}), indent=2, ensure_ascii=False))
@@ -324,8 +488,9 @@ def build_parser():
     parser.add_argument("--version", action="version", version=f"wamcp {__version__}")
     subs = parser.add_subparsers(dest="command")
 
-    p = subs.add_parser("setup", help="interactive one-time setup")
-    p.set_defaults(func=cmd_setup)
+    for name in ("setup", "connect"):
+        p = subs.add_parser(name, help="interactive one-time setup (paste and go)")
+        p.set_defaults(func=cmd_setup)
 
     p = subs.add_parser("doctor", help="check credentials, API access and the inbox")
     p.add_argument("--json", action="store_true")
@@ -410,8 +575,11 @@ def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
-        # Bare `python3 -m wamcp` is what an MCP client runs.
-        args = parser.parse_args(["serve"])
+        # A client launching the server has a pipe on stdin; a person running
+        # it by hand has a terminal and almost certainly wants to set it up.
+        unconfigured = bool(config_mod.load(getattr(args, "config", None)).missing_for_sending())
+        interactive = sys.stdin.isatty() and sys.stdout.isatty()
+        args = parser.parse_args(["setup" if (unconfigured and interactive) else "serve"])
     try:
         return args.func(args)
     except config_mod.ConfigError as e:

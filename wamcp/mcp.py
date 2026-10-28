@@ -39,6 +39,11 @@ Two WhatsApp rules shape everything:
 
 Practical notes:
 
+* Not connected yet? Call whatsapp_setup with no arguments; it returns the
+  instructions to show the user. When they paste the `curl` box from Meta's
+  API Setup page, call whatsapp_setup again with that text as `paste` and it
+  configures itself, discovering the number and business account from the
+  token. No restart is needed afterwards.
 * Inbound messages arrive by webhook, not by polling, and are stored locally.
   If whatsapp_list_chats is empty, the webhook receiver is not running: tell
   the user to run `python3 -m wamcp webhook --public-url https://their-host`.
@@ -99,19 +104,26 @@ PROMPTS = [
 SETUP_GUIDE = """
 # Connect a WhatsApp Business number
 
-You need a Meta app with WhatsApp added. Fifteen minutes, no cost to start.
+You need a Meta app with WhatsApp added. Ten minutes, no cost to start.
+
+**The short way:** call `whatsapp_setup` with no arguments, show the user what
+it says, and pass whatever they paste back as `paste`. Everything below is
+what that tool automates, for anyone who would rather do it by hand.
 
 1. **Create the app** - developers.facebook.com -> My Apps -> Create App ->
    choose *Business* -> add the **WhatsApp** product.
-2. **Copy three values** from WhatsApp -> *API Setup*:
+2. **Copy the grey `curl` box** from WhatsApp -> *API Setup*. It already holds
+   the access token and the phone number ID, and `whatsapp_setup` (or
+   `python3 -m wamcp setup`) reads both straight out of it. The individual
+   values, if you want them:
    - the temporary **access token** (24 hours; swap it for a permanent System
      User token later: Business Settings -> System Users -> Generate token with
      `whatsapp_business_messaging` and `whatsapp_business_management`),
    - the **Phone number ID** of the test or production number,
    - the **WhatsApp Business Account ID** (needed for templates).
-3. **Tell this server** - run `python3 -m wamcp setup` and paste them, or set
-   `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` and
-   `WHATSAPP_BUSINESS_ACCOUNT_ID`.
+3. **Tell this server** - paste it to `whatsapp_setup`, or run
+   `python3 -m wamcp setup` and paste it there, or set
+   `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID` yourself.
 4. **Check it** - `python3 -m wamcp doctor`, or call the `whatsapp_status`
    tool. It names anything still missing.
 5. **Add your own phone as a test recipient** - on the same API Setup page,
@@ -249,9 +261,11 @@ class Session:
         args = params.get("arguments") or {}
         if name == "whatsapp_connect":
             text = ("Help me connect my WhatsApp Business number to you. Call whatsapp_status "
-                    "first, then walk me through whatever is missing, one step at a time, using "
-                    "the whatsapp://setup guide. Finish by sending a test message to my own "
-                    "number once I give it to you.")
+                    "to see what is missing, then whatsapp_setup with no arguments and show me "
+                    "exactly what it says. When I paste something back, pass it to "
+                    "whatsapp_setup as `paste`. Walk me through anything still missing one step "
+                    "at a time, and finish by sending a test message to my own number once I "
+                    "give it to you.")
         elif name == "whatsapp_triage":
             limit = args.get("limit") or 10
             text = (f"Call whatsapp_list_chats with unanswered_only=true and limit={limit}. For "

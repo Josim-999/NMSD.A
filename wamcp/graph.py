@@ -236,6 +236,85 @@ class GraphClient:
             fbtrace_id=err.get("fbtrace_id") or "",
         )
 
+    # --- discovery ---------------------------------------------------------
+    def discover(self):
+        """Work out what WhatsApp assets this token can reach.
+
+        Setup asks for an access token and then calls this, so a user who has
+        pasted only a token (or only a curl command) does not have to go back
+        to the dashboard for the phone number id and the WABA id.
+
+        Every step is best effort: a token with narrow permissions simply
+        yields less. Nothing here raises - the caller shows what was found and
+        asks for the rest.
+        """
+        found = {"phone_numbers": [], "business_account_id": "",
+                 "business_account_name": "", "notes": []}
+
+        def attempt(label, fn):
+            try:
+                return fn()
+            except WhatsAppError as e:
+                found["notes"].append(f"{label}: {e.message}")
+            except Exception as e:                              # noqa: BLE001
+                found["notes"].append(f"{label}: {type(e).__name__}: {e}")
+            return None
+
+        # 1. A phone number id we already hold tells us the most, in one call.
+        if self.config.phone_number_id:
+            number = attempt("phone number", lambda: self.request(
+                "GET", self.config.phone_number_id,
+                params={"fields": "id,display_phone_number,verified_name,quality_rating"}))
+            if number:
+                found["phone_numbers"].append({
+                    "id": number.get("id") or self.config.phone_number_id,
+                    "display_phone_number": number.get("display_phone_number", ""),
+                    "verified_name": number.get("verified_name", ""),
+                })
+
+        # 2. The business account, which is what template calls need.
+        if not self.config.business_account_id and self.config.phone_number_id:
+            # Not every API version exposes the parent account on a phone
+            # number, so a failure here is expected rather than a problem.
+            linked = attempt("linked account", lambda: self.request(
+                "GET", self.config.phone_number_id,
+                params={"fields": "whatsapp_business_account{id,name}"}))
+            account = (linked or {}).get("whatsapp_business_account") or {}
+            if account.get("id"):
+                found["business_account_id"] = account["id"]
+                found["business_account_name"] = account.get("name", "")
+
+        if not found["business_account_id"] and not self.config.business_account_id:
+            # Walk the businesses this token can see.
+            businesses = attempt("businesses", lambda: self.request(
+                "GET", "me/businesses", params={"fields": "id,name", "limit": 25}))
+            for business in (businesses or {}).get("data") or []:
+                for edge in ("owned_whatsapp_business_accounts",
+                             "client_whatsapp_business_accounts"):
+                    accounts = attempt(edge, lambda e=edge, b=business: self.request(
+                        "GET", f"{b['id']}/{e}", params={"fields": "id,name", "limit": 25}))
+                    data = (accounts or {}).get("data") or []
+                    if data:
+                        found["business_account_id"] = data[0]["id"]
+                        found["business_account_name"] = data[0].get("name", "")
+                        break
+                if found["business_account_id"]:
+                    break
+
+        # 3. The numbers on that account, if we still have none.
+        waba = found["business_account_id"] or self.config.business_account_id
+        if waba and not found["phone_numbers"]:
+            numbers = attempt("phone numbers", lambda: self.request(
+                "GET", f"{waba}/phone_numbers",
+                params={"fields": "id,display_phone_number,verified_name", "limit": 25}))
+            for number in (numbers or {}).get("data") or []:
+                found["phone_numbers"].append({
+                    "id": number.get("id", ""),
+                    "display_phone_number": number.get("display_phone_number", ""),
+                    "verified_name": number.get("verified_name", ""),
+                })
+        return found
+
     # --- messages ----------------------------------------------------------
     def send(self, payload):
         """POST a built message payload to /{phone_number_id}/messages."""

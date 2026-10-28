@@ -21,9 +21,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from wamcp import config as config_mod                                  # noqa: E402
-from wamcp import graph, install, mcp, messages, phones, policy, store, tools, webhook  # noqa: E402
+from wamcp import graph, install, mcp, messages, paste, phones, policy  # noqa: E402
+from wamcp import store, tools, webhook  # noqa: E402
 
-TOKEN = "EAAtest-token-value"
+TOKEN = "EAAtest0token0value0as0long0as0a0real0one0is"
 PHONE_ID = "100000000000001"
 WABA_ID = "200000000000002"
 APP_SECRET = "app-secret-value"
@@ -62,7 +63,18 @@ class FakeGraphHandler(BaseHTTPRequestHandler):
         if forced := state.get("force_error"):
             self._json(forced[0], {"error": forced[1]})
             return
-        if f"/{PHONE_ID}/whatsapp_business_profile" in self.path:
+        if "/me/businesses" in self.path:
+            self._json(200, {"data": [{"id": "BIZ-1", "name": "Test Holdings"}]})
+        elif "owned_whatsapp_business_accounts" in self.path:
+            self._json(200, {"data": [{"id": WABA_ID, "name": "Test Pharmacy WABA"}]})
+        elif f"/{WABA_ID}/phone_numbers" in self.path:
+            self._json(200, {"data": [
+                {"id": PHONE_ID, "display_phone_number": "+1 555 000 0001",
+                 "verified_name": "Test Pharmacy"},
+                {"id": "100000000000009", "display_phone_number": "+1 555 000 0009",
+                 "verified_name": "Test Pharmacy Support"},
+            ]})
+        elif f"/{PHONE_ID}/whatsapp_business_profile" in self.path:
             self._json(200, {"data": [{"about": "We deliver medicine", "vertical": "HEALTH"}]})
         elif f"/{WABA_ID}/message_templates" in self.path:
             self._json(200, {"data": [
@@ -1169,6 +1181,230 @@ class TestInstall(unittest.TestCase):
         command = install.claude_code_command()
         self.assertIn("claude mcp add whatsapp-business", command)
         self.assertIn("-m wamcp serve", command)
+
+
+# --------------------------------------------------------------------------- #
+#  Pasted credentials
+# --------------------------------------------------------------------------- #
+class TestPaste(unittest.TestCase):
+    CURL = """curl -i -X POST \\
+  https://graph.facebook.com/v24.0/713504158376402/messages \\
+  -H 'Authorization: Bearer EAAPZVfake0token0value0that0is0long0enough0here' \\
+  -H 'Content-Type: application/json' \\
+  -d '{ "messaging_product": "whatsapp", "to": "15551234567", "type": "template" }'"""
+
+    def test_the_curl_box_from_meta_gives_token_and_number(self):
+        found = paste.parse(self.CURL)
+        self.assertEqual(found["access_token"],
+                         "EAAPZVfake0token0value0that0is0long0enough0here")
+        self.assertEqual(found["phone_number_id"], "713504158376402")
+
+    def test_the_sample_recipient_is_not_taken_for_an_id(self):
+        self.assertNotEqual(paste.parse(self.CURL)["phone_number_id"], "15551234567")
+
+    def test_an_env_file_is_read(self):
+        found = paste.parse(
+            "WHATSAPP_ACCESS_TOKEN=EAAG0123456789abcdefghij\n"
+            "WHATSAPP_PHONE_NUMBER_ID=100000000000001\n"
+            "WHATSAPP_BUSINESS_ACCOUNT_ID=200000000000002\n"
+            "WHATSAPP_APP_SECRET=0123456789abcdef0123456789abcdef\n"
+            "WHATSAPP_VERIFY_TOKEN=my-verify-string\n")
+        self.assertEqual(found["phone_number_id"], "100000000000001")
+        self.assertEqual(found["business_account_id"], "200000000000002")
+        self.assertEqual(found["app_secret"], "0123456789abcdef0123456789abcdef")
+        self.assertEqual(found["verify_token"], "my-verify-string")
+
+    def test_json_config_is_read(self):
+        found = paste.parse('{"access_token": "EAAjson0token0value0long0enough", '
+                            '"phone_number_id": "100000000000001"}')
+        self.assertEqual(found["phone_number_id"], "100000000000001")
+        self.assertTrue(found["access_token"].startswith("EAAjson"))
+
+    def test_dashboard_labels_with_values_on_the_next_line(self):
+        found = paste.parse("Phone number ID\n713504158376402\n"
+                            "WhatsApp Business Account ID\n102290129340398\n"
+                            "Temporary access token\n"
+                            "EAAtemp0token0value0long0enough0to0be0matched0here\n")
+        self.assertEqual(found["phone_number_id"], "713504158376402")
+        self.assertEqual(found["business_account_id"], "102290129340398")
+        self.assertTrue(found["access_token"].startswith("EAAtemp"))
+
+    def test_a_token_on_its_own_is_recognised(self):
+        token = "EAAbare0token0value0long0enough0to0be0matched"
+        self.assertEqual(paste.parse(token)["access_token"], token)
+
+    def test_a_short_unlabelled_string_is_not_a_token(self):
+        self.assertEqual(paste.parse("hello"), {})
+        self.assertEqual(paste.parse("EAAshort"), {})
+
+    def test_prose_yields_nothing(self):
+        self.assertEqual(paste.parse("Please connect my WhatsApp for me, thanks"), {})
+        self.assertEqual(paste.parse(""), {})
+        self.assertEqual(paste.parse(None), {})
+
+    def test_placeholders_in_meta_samples_are_ignored(self):
+        self.assertEqual(paste.parse("ACCESS_TOKEN=<access_token>"), {})
+        self.assertEqual(paste.parse("ACCESS_TOKEN=YOUR_ACCESS_TOKEN"), {})
+        self.assertEqual(paste.parse("PHONE_NUMBER_ID=${PHONE_ID}"), {})
+
+    def test_ids_must_be_numeric(self):
+        self.assertNotIn("phone_number_id", paste.parse("PHONE_NUMBER_ID=not-a-number"))
+
+    def test_describe_names_what_was_found(self):
+        self.assertEqual(paste.describe(paste.parse(self.CURL)),
+                         "access token, phone number ID")
+        self.assertEqual(paste.describe({}), "nothing")
+
+    def test_a_messages_url_on_any_host_is_understood(self):
+        found = paste.parse("POST http://127.0.0.1:8080/v24.0/100000000000001/messages")
+        self.assertEqual(found["phone_number_id"], "100000000000001")
+
+
+# --------------------------------------------------------------------------- #
+#  Discovery and client detection
+# --------------------------------------------------------------------------- #
+class TestDiscovery(Base):
+    def test_a_phone_number_id_resolves_to_a_named_number(self):
+        found = self.client.discover()
+        self.assertEqual(found["phone_numbers"][0]["id"], PHONE_ID)
+        self.assertEqual(found["phone_numbers"][0]["verified_name"], "Test Pharmacy")
+
+    def test_a_token_alone_finds_the_account_and_its_numbers(self):
+        config = config_mod.Config(**dict(self.config.as_dict(), phone_number_id="",
+                                          business_account_id=""))
+        client = graph.GraphClient(config, opener=local_opener(), sleep=lambda s: None)
+        found = client.discover()
+        self.assertEqual(found["business_account_id"], WABA_ID)
+        self.assertEqual(found["business_account_name"], "Test Pharmacy WABA")
+        self.assertEqual([n["id"] for n in found["phone_numbers"]],
+                         [PHONE_ID, "100000000000009"])
+
+    def test_discovery_never_raises_on_a_bad_token(self):
+        config = config_mod.Config(**dict(self.config.as_dict(), access_token="wrong",
+                                          phone_number_id="", business_account_id=""))
+        client = graph.GraphClient(config, opener=local_opener(), sleep=lambda s: None)
+        found = client.discover()
+        self.assertEqual(found["phone_numbers"], [])
+        self.assertTrue(found["notes"])
+
+    def test_discovery_survives_an_unreachable_api(self):
+        config = config_mod.Config(**dict(self.config.as_dict(),
+                                          api_base="http://127.0.0.1:1", timeout=1))
+        client = graph.GraphClient(config, opener=local_opener(), sleep=lambda s: None)
+        found = client.discover()
+        self.assertEqual(found["phone_numbers"], [])
+
+
+class TestDetect(unittest.TestCase):
+    def test_detection_only_returns_supported_clients(self):
+        for client in install.detect():
+            self.assertIn(client, install.CLIENTS)
+
+    def test_every_fingerprint_names_a_real_client(self):
+        for client in install.FINGERPRINTS:
+            self.assertIn(client, install.CLIENTS)
+
+    def test_a_client_is_detected_from_its_config_directory(self):
+        home = tempfile.mkdtemp(prefix="wamcp-home-")
+        self.addCleanup(shutil.rmtree, home, True)
+        os.makedirs(os.path.join(home, ".cursor"))
+        original = os.path.expanduser
+        self.addCleanup(setattr, os.path, "expanduser", original)
+        os.path.expanduser = lambda p: p.replace("~", home, 1) if p.startswith("~") else p
+        self.assertIn("cursor", install.detect())
+
+
+# --------------------------------------------------------------------------- #
+#  Conversational setup, through the whatsapp_setup tool
+# --------------------------------------------------------------------------- #
+class TestSetupTool(Base):
+    def setUp(self):
+        super().setUp()
+        self.config_path = os.path.join(self.dir, "config.json")
+        # Start from nothing: this is what a first-time user's server sees.
+        blank = config_mod.Config(api_base=self.api.base, db_path=self.config.db_path,
+                                  media_dir=self.config.media_dir)
+        self.ctx = tools.Context(blank, store_=self.store, config_path=self.config_path)
+        self.ctx._client = None
+        self.ctx._fixed_client = False
+        self._patch_opener()
+
+    def _patch_opener(self):
+        """Point every GraphClient this flow builds at the fake API."""
+        original = graph.GraphClient.__init__
+
+        def patched(client, config, opener=None, sleep=lambda s: None):
+            original(client, config, opener=opener or local_opener(), sleep=sleep)
+
+        graph.GraphClient.__init__ = patched
+        self.addCleanup(setattr, graph.GraphClient, "__init__", original)
+
+    def curl(self, phone_id=PHONE_ID):
+        return (f"curl -i -X POST \\\n  {self.api.base}/v24.0/{phone_id}/messages \\\n"
+                f"  -H 'Authorization: Bearer {TOKEN}' \\\n"
+                f"  -d '{{\"messaging_product\": \"whatsapp\", \"to\": \"15551234567\"}}'")
+
+    def test_with_no_arguments_it_returns_the_instructions(self):
+        result = tools.call(self.ctx, "whatsapp_setup", {})
+        self.assertFalse(result["isError"])
+        self.assertIn("developers.facebook.com", self.text_of(result))
+        self.assertFalse(result["structuredContent"]["configured"])
+
+    def test_pasting_the_curl_box_connects_everything(self):
+        result = tools.call(self.ctx, "whatsapp_setup", {"paste": self.curl()})
+        self.assertFalse(result["isError"], self.text_of(result))
+        data = result["structuredContent"]
+        self.assertTrue(data["saved"])
+        self.assertTrue(data["ready"], data["report"])
+        saved = config_mod.load(self.config_path)
+        self.assertEqual(saved.access_token, TOKEN)
+        self.assertEqual(saved.phone_number_id, PHONE_ID)
+        # Discovered, not pasted.
+        self.assertEqual(saved.business_account_id, WABA_ID)
+        self.assertTrue(saved.verify_token)
+
+    def test_the_running_server_can_send_straight_afterwards(self):
+        tools.call(self.ctx, "whatsapp_setup", {"paste": self.curl()})
+        self.open_window()
+        result = tools.call(self.ctx, "whatsapp_send_message",
+                            {"to": CUSTOMER, "text": "connected"})
+        self.assertFalse(result["isError"], self.text_of(result))
+        self.assertEqual(self.api.state["sent"][-1]["text"]["body"], "connected")
+
+    def test_a_bare_token_is_enough_because_the_rest_is_discovered(self):
+        result = tools.call(self.ctx, "whatsapp_setup", {"paste": TOKEN})
+        self.assertFalse(result["isError"], self.text_of(result))
+        # The fake account has two numbers, so it must ask which one.
+        self.assertEqual(len(result["structuredContent"]["phone_numbers"]), 2)
+        self.assertIn("several", self.text_of(result))
+
+    def test_choosing_a_number_finishes_the_setup(self):
+        tools.call(self.ctx, "whatsapp_setup", {"paste": TOKEN})
+        result = tools.call(self.ctx, "whatsapp_setup",
+                            {"paste": TOKEN, "phone_number_id": "100000000000009"})
+        self.assertTrue(result["structuredContent"]["saved"])
+        self.assertEqual(config_mod.load(self.config_path).phone_number_id, "100000000000009")
+
+    def test_an_unreadable_paste_is_refused_with_advice(self):
+        result = tools.call(self.ctx, "whatsapp_setup",
+                            {"paste": "here you go, thanks for helping"})
+        self.assertTrue(result["isError"])
+        self.assertEqual(result["structuredContent"]["kind"], "nothing_found")
+        self.assertFalse(os.path.exists(self.config_path))
+
+    def test_values_without_a_token_ask_for_one(self):
+        result = tools.call(self.ctx, "whatsapp_setup",
+                            {"paste": "WHATSAPP_PHONE_NUMBER_ID=100000000000001"})
+        self.assertTrue(result["isError"])
+        self.assertEqual(result["structuredContent"]["kind"], "need_token")
+
+    def test_the_saved_file_is_private(self):
+        tools.call(self.ctx, "whatsapp_setup", {"paste": self.curl()})
+        self.assertEqual(os.stat(self.config_path).st_mode & 0o777, 0o600)
+
+    def test_the_token_is_not_echoed_back_in_the_result(self):
+        result = tools.call(self.ctx, "whatsapp_setup", {"paste": self.curl()})
+        self.assertNotIn(TOKEN, json.dumps(result))
 
 
 if __name__ == "__main__":

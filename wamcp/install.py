@@ -12,6 +12,7 @@ client cannot see that file, for instance when it runs in another container.
 import json
 import os
 import shlex
+import shutil
 import sys
 
 from . import SERVER_NAME, config as config_mod
@@ -66,6 +67,41 @@ CLIENTS = {
 }
 
 SECRET_ENV = tuple(config_mod.ENV[f] for f in config_mod.SECRET_FIELDS)
+
+
+# How to tell whether a client is actually on this machine: a config file or
+# directory it owns, or its command on PATH. Used so setup can offer the right
+# clients instead of asking the user which of seven names they use.
+FINGERPRINTS = {
+    "claude-code": {"files": ["~/.claude.json", "~/.claude"], "commands": ["claude"]},
+    "claude-desktop": {
+        "files": [
+            "~/Library/Application Support/Claude",
+            "%APPDATA%/Claude",
+            "~/.config/Claude",
+        ],
+        "commands": [],
+    },
+    "cursor": {"files": ["~/.cursor"], "commands": ["cursor"]},
+    "windsurf": {"files": ["~/.codeium/windsurf"], "commands": ["windsurf"]},
+    "zed": {"files": ["~/.config/zed", "~/Library/Application Support/Zed"],
+            "commands": ["zed"]},
+    "vscode": {"files": ["./.vscode"], "commands": ["code"]},
+}
+
+
+def detect():
+    """Which supported clients look installed here, most likely first."""
+    present = []
+    for client, marks in FINGERPRINTS.items():
+        for candidate in marks["files"]:
+            if os.path.exists(os.path.expanduser(os.path.expandvars(candidate))):
+                present.append(client)
+                break
+        else:
+            if any(shutil.which(command) for command in marks["commands"]):
+                present.append(client)
+    return present
 
 
 def package_root():

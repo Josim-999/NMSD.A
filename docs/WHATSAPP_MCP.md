@@ -16,41 +16,105 @@ Windsurf, Zed, or anything else that speaks MCP.
 
 ## Quick start
 
+Two ways. Both end in the same place.
+
+### Just ask your AI
+
+If the server is already registered with your client, say:
+
+> **connect my WhatsApp**
+
+It calls `whatsapp_setup`, tells you which page to open, and you paste back the
+grey `curl` box that Meta shows you. That box already contains your access token
+and your phone number ID, so it is the only thing you ever copy — the server
+asks Meta for everything else itself.
+
+### Or one command in a terminal
+
 ```bash
-python3 -m wamcp setup      # paste three values from Meta
-python3 -m wamcp doctor     # check the whole chain
-python3 -m wamcp install    # register with your AI client
+python3 -m wamcp
 ```
 
-Then ask your assistant: **"check my WhatsApp connection"**.
+With nothing configured yet, that *is* the setup wizard. It:
+
+1. tells you exactly which page to open and what to copy,
+2. takes one paste — the `curl` box, a `.env` file, or just the token,
+3. asks Meta which number and business account that token can reach, so you
+   do not have to look them up,
+4. detects the AI clients installed on this machine and offers to add itself
+   to them,
+5. checks the whole chain and offers to send a test message to your own phone.
+
+```text
+==================================================================
+ WhatsApp Business MCP - setup
+==================================================================
+...
+On that page there is a grey box of sample code starting with "curl".
+COPY THE WHOLE BOX. It already contains your access token and your
+phone number ID, so that is the only thing you need to copy.
+
+Paste, then press Enter on an empty line:
+<paste>
+
+Got it - found your access token, phone number ID.
+Checking the token with Meta and looking up your account...
+  number:  My Shop +1 555 000 0001
+  account: My Shop WABA
+
+Saved to ~/.wamcp/config.json (only you can read it).
+
+WhatsApp Business MCP 1.0.0 - ready to send, with warnings
+[ ok ] credentials: token EAAP...9xQZ (211 chars), phone_number_id 713504158376402
+[ ok ] cloud api: My Shop on +1 555 000 0001 (quality GREEN)
+
+Found on this machine: Claude Code (CLI, VS Code and JetBrains extensions)
+Add WhatsApp to it now? [Y/n]:
+  created   ~/.claude.json
+
+Restart the client, then say to it:  "check my WhatsApp connection"
+```
 
 ### What you need from Meta (about 10 minutes, free)
 
-1. [developers.facebook.com](https://developers.facebook.com) → **My Apps** → **Create App**
-   → *Business* → add the **WhatsApp** product.
-2. Open **WhatsApp → API Setup** and copy:
-   | Value | Used for |
-   |---|---|
-   | **Access token** | every call. The one on this page lasts 24 hours |
-   | **Phone number ID** | which number you send from |
-   | **WhatsApp Business Account ID** | templates |
-3. Under **To** on the same page, add your own phone number. A test number may only
-   message numbers on that list.
-4. For a token that does not expire: **Business Settings → System Users → Add**, give it the
-   WhatsApp app with `whatsapp_business_messaging` and `whatsapp_business_management`, then
-   **Generate token** with expiry *Never*.
+1. [developers.facebook.com/apps](https://developers.facebook.com/apps) →
+   **Create App** → *Business* → add the **WhatsApp** product.
+2. Open **WhatsApp → API Setup** and copy the grey `curl` box. That is it.
 
-`python3 -m wamcp setup` asks for those values and writes them to `~/.wamcp/config.json`
-with permissions `0600`. Environment variables override the file, so a CI job or a client
-config block can supply them instead.
+Under **To** on the same page, add your own phone number — a test number may
+only message numbers on that list.
+
+If you would rather hand over the values one by one, they are on that page too:
+
+| Value | Used for |
+|---|---|
+| **Access token** | every call. The one on this page lasts 24 hours |
+| **Phone number ID** | which number you send from |
+| **WhatsApp Business Account ID** | templates (discovered automatically) |
+
+For a token that does not expire: **Business Settings → System Users → Add**,
+give it the WhatsApp app with `whatsapp_business_messaging` and
+`whatsapp_business_management`, then **Generate token** with expiry *Never*.
+Re-run setup and paste the new one.
+
+### What a paste can be
+
+Setup accepts anything that contains the values, and ignores the rest:
+
+* the `curl` sample from Meta's API Setup page (token + phone number ID),
+* a `.env` file or `KEY=value` lines,
+* a JSON config,
+* text copied off the dashboard, labels and all,
+* or just the access token on its own.
 
 ### Your first message
 
-Your own number has not written to the business yet, so the 24-hour window is closed and
-WhatsApp will only deliver a template. Every new account has `hello_world`:
+Your own number has not written to the business yet, so the 24-hour window is
+closed and WhatsApp will only deliver a template. Every new account has
+`hello_world` — setup offers to send it for you, or:
 
 ```bash
-python3 -m wamcp send --to +<your number> --template hello_world --language en_US
+python3 -m wamcp send --to +<your number> --template hello_world
 ```
 
 Reply from your phone, and the window opens for 24 hours. Now plain text works:
@@ -59,12 +123,12 @@ Reply from your phone, and the window opens for 24 hours. Now plain text works:
 python3 -m wamcp send --to +<your number> --text "Sent by an AI, through the official API."
 ```
 
----
-
 ## Connecting an AI client
 
-`python3 -m wamcp install <client>` merges the server into that client's config file and
-leaves any other servers you have alone (it also writes a `.wamcp-backup` copy first).
+Setup does this for you, for every client it finds on the machine. To do it by
+hand, `python3 -m wamcp install <client>` merges the server into that client's
+config file and leaves any other servers you have alone (it also writes a
+`.wamcp-backup` copy first).
 
 | Client | Command |
 |---|---|
@@ -155,7 +219,16 @@ read and write at the same time. On a server, a systemd unit or `tmux` is enough
 
 **Templates** — `whatsapp_list_templates`, `whatsapp_create_template`
 
-**Account** — `whatsapp_account_info`, `whatsapp_update_profile`, `whatsapp_status`
+**Account and setup** — `whatsapp_account_info`, `whatsapp_update_profile`,
+`whatsapp_status`, `whatsapp_setup`
+
+`whatsapp_setup` is what makes "connect my WhatsApp" work as a sentence: called
+with no arguments it returns the instructions for the user, and called with
+their paste it saves the credentials, discovers the number and business account
+from the token, and takes effect immediately without a restart. Anything pasted
+into a chat is visible in that conversation, so if you would rather your token
+never appear there, use `python3 -m wamcp setup` in a terminal — it does the
+same work.
 
 Also exposed: resources `whatsapp://status`, `whatsapp://chats`, `whatsapp://setup`, and
 prompts `whatsapp_connect`, `whatsapp_triage`, `whatsapp_reply`.
@@ -241,7 +314,8 @@ configs and process listings.
 ## Commands
 
 ```bash
-python3 -m wamcp setup                      # interactive one-time setup
+python3 -m wamcp                            # with nothing configured: the setup wizard
+python3 -m wamcp setup                      # the same thing, explicitly (alias: connect)
 python3 -m wamcp doctor [--json]            # check credentials, API access, inbox
 python3 -m wamcp install [client] [--list] [--with-secrets] [--dry-run]
 python3 -m wamcp serve [--http --port N --token T]
@@ -252,7 +326,7 @@ python3 -m wamcp inbox [contact] [--unanswered] [--json]
 python3 -m wamcp templates
 python3 -m wamcp consent {check,list,opt_out,opt_in} [number]
 python3 -m wamcp audit
-python3 -m wamcp selftest                   # 110 tests, no network
+python3 -m wamcp selftest                   # 138 tests, no network
 ```
 
 ---
@@ -272,6 +346,8 @@ errors that actually come up:
 | *Message undeliverable* (131026) | The number is not on WhatsApp, or will not accept business messages. |
 | Inbox always empty | The webhook receiver is not running, or Meta is not subscribed to the `messages` field. |
 | Client shows no tools | Check the client's MCP log. The server writes diagnostics to stderr and protocol only to stdout. |
+| Setup found no phone number | The token is probably app-scoped rather than business-scoped. Paste the `curl` box instead of just the token, or give the Phone number ID when asked. |
+| Running `python3 -m wamcp` starts a wizard when you wanted the server | It only does that with nothing configured *and* a terminal attached. Use `python3 -m wamcp serve` to be explicit. |
 
 Every Cloud API error comes back with Meta's code, their `details` and a `what_to_do`
 line, so an assistant can usually fix its own next call.
@@ -307,6 +383,10 @@ line, so an assistant can usually fix its own next call.
   `whatsapp://status`; the store is `0600`; the client config gets no token unless asked.
 * **No polling.** Inbound messages are pushed by Meta, so neither the server nor the model
   burns calls asking "anything new?".
+* **Setup is a tool, not just a script.** The same flow runs from a terminal and
+  from inside a conversation, because the hard part — finding three values in a
+  dashboard — is the same either way. Parsing a paste and asking Meta what the
+  token can reach removes almost all of the typing.
 * **Protocol version negotiation is forgiving.** The server echoes the client's MCP
   revision when it recognises it and otherwise answers with its own, so new clients and
   old ones both work on a transport whose framing has not changed.

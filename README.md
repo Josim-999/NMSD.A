@@ -22,19 +22,30 @@ Business number to any AI client — Claude Code, Claude Desktop, Cursor, VS Cod
 Zed, or anything else that speaks MCP. Same philosophy as the rest of the repo: pure Python
 standard library, no `pip install`, your data stays on your machine.
 
+Setting it up is one paste. Either say to your assistant:
+
+> **connect my WhatsApp**
+
+or run:
+
 ```bash
-python3 -m wamcp setup      # paste three values from Meta's API Setup page
-python3 -m wamcp doctor     # check the whole chain, with the fix for anything missing
-python3 -m wamcp install    # register with Claude Code (or Desktop, Cursor, VS Code...)
+python3 -m wamcp
 ```
+
+Both tell you which Meta page to open, and all you copy is the grey `curl` box it
+shows you — that box already contains your access token and phone number ID. The
+server asks Meta for the rest, finds the AI clients installed on your machine,
+adds itself to them, checks the connection and offers to message your own phone
+to prove it works.
 
 Then ask your assistant: *"any new WhatsApp messages?"*, *"reply to Josim that the order is
 ready"*, *"which chats are waiting on us?"*
 
 It uses Meta's official **WhatsApp Business Cloud API**, so nothing here risks your number.
-24 tools cover sending (text, templates, media, buttons, menus, link buttons, locations,
+25 tools cover sending (text, templates, media, buttons, menus, link buttons, locations,
 contact cards, reactions, read receipts), the inbox (list and read chats, search, delivery
-status, media up and down), contacts and consent, templates, and the business profile.
+status, media up and down), contacts and consent, templates, the business profile, and
+setup itself — so "connect my WhatsApp" works as a sentence.
 
 Inbound messages arrive by webhook, which `python3 -m wamcp webhook` receives — signature
 verified — into a local SQLite inbox.
@@ -51,11 +62,12 @@ Full guide, including what to copy from Meta and how to fix each error:
 **[docs/WHATSAPP_MCP.md](docs/WHATSAPP_MCP.md)**.
 
 ```text
-wamcp/   config, phones, graph, messages, store, policy, tools, mcp, webhook, install, CLI
+wamcp/   config, paste, phones, graph, messages, store, policy, tools, mcp, webhook,
+         install, CLI
 ```
 
 ```bash
-python3 -m wamcp selftest    # 110 tests, no network: a fake Cloud API runs on localhost
+python3 -m wamcp selftest    # 138 tests, no network: a fake Cloud API runs on localhost
 ```
 
 ---

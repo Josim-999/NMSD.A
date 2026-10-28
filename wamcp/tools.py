@@ -7,10 +7,11 @@ summary (`content`) and the raw object (`structuredContent`).
 """
 import json
 import os
+import secrets
 import textwrap
 import time
 
-from . import __version__, config as config_mod, graph, messages, phones, policy, store
+from . import __version__, config as config_mod, graph, messages, paste, phones, policy, store
 
 TOOLS = []
 _HANDLERS = {}
@@ -69,12 +70,19 @@ class ToolError(RuntimeError):
 class Context:
     """Everything the tools need, built on first use."""
 
-    def __init__(self, config=None, client=None, store_=None, now=time.time):
-        self.config = config or config_mod.load()
+    def __init__(self, config=None, client=None, store_=None, now=time.time, config_path=None):
+        # Where credentials are read from and written back to, so a server
+        # started with --config keeps using that file.
+        self.config_path = config_path
+        self.config = config or config_mod.load(config_path)
         self._client = client
         self._store = store_
         self._policy = None
         self.now = now
+        # A client or store handed in by a test or an embedder is kept across
+        # a reload; lazily built ones are rebuilt against the new config.
+        self._fixed_client = client is not None
+        self._fixed_store = store_ is not None
 
     @property
     def store(self):
@@ -93,6 +101,16 @@ class Context:
         if self._policy is None:
             self._policy = policy.Policy(self.config, self.store, now=self.now)
         return self._policy
+
+    def reload(self, config=None):
+        """Pick up credentials saved during this session, without a restart."""
+        self.config = config or config_mod.load(self.config_path)
+        self._policy = None
+        if not self._fixed_client:
+            self._client = None
+        if not self._fixed_store:
+            self._store = None
+        return self.config
 
 
 # --- results ---------------------------------------------------------------
@@ -936,6 +954,141 @@ def create_template(ctx, args):
 # =========================================================================== #
 #  Account and setup
 # =========================================================================== #
+SETUP_STEPS = """
+To connect your WhatsApp Business number, open this page in your browser:
+
+    https://developers.facebook.com/apps
+
+Then:  your app  ->  WhatsApp  ->  API Setup
+
+(No app yet? Create App -> Business -> add the WhatsApp product. Free, ~2 min.)
+
+On that page there is a grey box of sample code beginning with `curl`.
+Copy the whole box and paste it to me - it already contains both values I
+need. Pasting just the access token works too.
+""".strip()
+
+
+@tool(
+    "whatsapp_setup", "Connect a WhatsApp Business number",
+    """
+    Set up or repair this server's WhatsApp credentials, so a user can connect
+    their number by talking to you instead of using a terminal.
+
+    Call it with no arguments to get the instructions to show them: which page
+    to open and what to copy. When they paste, call it again with that text as
+    `paste` - it accepts the `curl` sample from Meta's API Setup page (which
+    carries both the access token and the phone number ID), a .env file, or a
+    bare access token, and then asks Meta which number and business account
+    that token can reach, so nothing else usually has to be typed.
+
+    Credentials are written to ~/.wamcp/config.json, readable only by this
+    user, and take effect immediately - no restart.
+
+    Note for the user: anything they paste into the chat is visible in the
+    conversation. If they would rather their token never appear there, tell
+    them to run `python3 -m wamcp setup` in a terminal instead; it does
+    exactly the same thing.
+    """,
+    _schema({
+        "paste": {"type": "string",
+                  "description": "What the user pasted: the curl box from Meta's API Setup "
+                                 "page, a .env file, a JSON config, or just the access token."},
+        "phone_number_id": {"type": "string",
+                            "description": "Which number to send from, when a previous call "
+                                           "reported that the account has several."},
+        "business_account_id": {"type": "string",
+                               "description": "WhatsApp Business Account id, if it could not "
+                                              "be discovered and the user has it."},
+    }),
+    {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True},
+)
+def setup(ctx, args):
+    blob = str(args.get("paste") or "")
+    found = paste.parse(blob) if blob.strip() else {}
+    for field in ("phone_number_id", "business_account_id"):
+        if args.get(field):
+            found[field] = str(args[field]).strip()
+
+    if not found and not blob.strip():
+        return ok(SETUP_STEPS, {"next_step": "ask the user to paste it",
+                                "configured": not ctx.config.missing_for_sending()})
+    if blob.strip() and not found:
+        raise ToolError(
+            "I could not find any WhatsApp credentials in that",
+            kind="nothing_found",
+            hint="Ask for the whole grey `curl` box from the WhatsApp -> API Setup page, "
+                 "or the access token on its own.",
+        )
+
+    values = ctx.config.as_dict()
+    values.update({k: v for k, v in found.items() if v})
+    if not values.get("access_token"):
+        raise ToolError(
+            "found " + paste.describe(found) + ", but no access token",
+            kind="need_token",
+            hint="Ask the user for the access token from the same API Setup page "
+                 "(a long string beginning EAA...).",
+        )
+
+    config = config_mod.Config(**values)
+    # Ask Meta what this token reaches rather than asking the user for more.
+    assets = graph.GraphClient(config).discover()
+    numbers = assets["phone_numbers"]
+    chosen = ""
+    if values.get("phone_number_id"):
+        chosen = values["phone_number_id"]
+    elif len(numbers) == 1:
+        chosen = numbers[0]["id"]
+    elif len(numbers) > 1:
+        return ok(
+            _lines("This account has several WhatsApp numbers. Ask the user which one to send"
+                   " from, then call whatsapp_setup again with its phone_number_id:",
+                   *[f"  {n['id']}  {n.get('display_phone_number', '')} "
+                     f"{n.get('verified_name', '')}".rstrip() for n in numbers]),
+            {"next_step": "choose a phone_number_id", "phone_numbers": numbers},
+        )
+    values["phone_number_id"] = chosen
+    if assets["business_account_id"] and not values.get("business_account_id"):
+        values["business_account_id"] = assets["business_account_id"]
+    # Any string works as a webhook verify token, so generate rather than ask.
+    values["verify_token"] = values.get("verify_token") or secrets.token_urlsafe(18)
+
+    config = config_mod.Config(**values)
+    path = config_mod.save(config, ctx.config_path)
+    ctx.reload()
+    report = diagnose(ctx)
+
+    lines = [f"Saved your WhatsApp credentials to {path} (only you can read it).",
+             f"Found: {paste.describe(found)}."]
+    if numbers:
+        label = next((f"{n.get('verified_name', '')} {n.get('display_phone_number', '')}".strip()
+                      for n in numbers if n["id"] == chosen), "")
+        if label:
+            lines.append(f"Sending from: {label}")
+    if assets["business_account_id"]:
+        lines.append(f"Business account: {assets['business_account_name'] or assets['business_account_id']}")
+    lines.append("")
+    lines.append(f"Status: {report['summary']}")
+    for check in report["checks"]:
+        if check["state"] != "ok":
+            lines.append(f"  [{check['state']}] {check['name']}: {check['detail']}")
+            if check.get("fix"):
+                lines.append(f"          -> {check['fix']}")
+    if report["ready"]:
+        lines += [
+            "",
+            "It works. One WhatsApp rule to tell the user: you cannot send them plain",
+            "text until they have written to the business, so the first message has to",
+            "be a template. Every new account has `hello_world`:",
+            "  whatsapp_send_template(to=\"+<their number>\", template=\"hello_world\")",
+            "They must also add their own number under `To` on the API Setup page first",
+            "if the number is still unverified. Once they reply, plain text works for 24h.",
+        ]
+    return ok(_lines(*lines), {"saved": True, "config_path": path, "ready": report["ready"],
+                               "report": report, "discovery_notes": assets.get("notes", [])})
+
+
 @tool(
     "whatsapp_account_info", "Show this WhatsApp Business number and profile",
     """
