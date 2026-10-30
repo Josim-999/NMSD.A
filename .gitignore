@@ -2,3 +2,6 @@ tis.db
 reports/
 __pycache__/
 *.pyc
+.claude/skills/phoneme-lipsync/.venv/
+.claude/skills/phoneme-lipsync/models/
+lipsync_work/
