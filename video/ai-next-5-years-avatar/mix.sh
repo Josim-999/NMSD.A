@@ -16,4 +16,4 @@ ffmpeg -y -v error -i build/voice.wav -i build/music.wav -filter_complex \
   -map "[a]" -ar 48000 build/mix.wav
 ffmpeg -y -v error -i build/visual.mp4 -i build/mix.wav \
   -vf "noise=alls=3:allf=t,vignette=PI/5" -c:v libx264 -preset slow -crf 21 -maxrate 6M -bufsize 12M -profile:v high -pix_fmt yuv420p \
-  -c:a aac -b:a 192k -movflags +faststart -shortest ai-next-5-years.mp4
+  -c:a aac -b:a 192k -movflags +faststart -shortest ai-next-5-years-avatar-DRAFT.mp4
