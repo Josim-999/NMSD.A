@@ -1,0 +1,197 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#0a0807}canvas{display:block}</style>
+</head><body><canvas id="c" width="1080" height="1920"></canvas>
+<script>
+const W = 1080, H = 1920, AMBER = '#ffb37a', RED = '#e2553a';
+const ctx = document.getElementById('c').getContext('2d');
+let TL = null;
+
+// Seeded RNG so every frame is reproducible.
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+const ease = x => x < 0 ? 0 : x > 1 ? 1 : x * x * (3 - 2 * x);
+const clamp01 = x => Math.max(0, Math.min(1, x));
+
+// A network that grows over the whole video: more nodes appear each year.
+const NODES = [], EDGES = [];
+(function buildNetwork() {
+  const r = rng(7);
+  for (let i = 0; i < 110; i++) {
+    NODES.push({ x: 60 + r() * 960, y: 1330 + r() * 540, ph: r() * 6.28, rev: i / 110 });
+  }
+  NODES.forEach((a, i) => {
+    NODES.map((b, j) => ({ j, d: Math.hypot(a.x - b.x, a.y - b.y) }))
+      .filter(o => o.j !== i).sort((p, q) => p.d - q.d).slice(0, 3)
+      .forEach(o => { if (i < o.j) EDGES.push([i, o.j, r()]); });
+  });
+})();
+
+function sceneAt(t) {
+  const s = TL.scenes;
+  for (let i = 0; i < s.length; i++) if (t < s[i].end) return i;
+  return s.length - 1;
+}
+
+function background(t) {
+  ctx.fillStyle = '#0a0807'; ctx.fillRect(0, 0, W, H);
+  // Warm key light from upper left, cooler red rim from the right, both drifting slowly.
+  const kx = 260 + Math.sin(t * 0.21) * 60, ky = 520 + Math.cos(t * 0.17) * 50;
+  let g = ctx.createRadialGradient(kx, ky, 0, kx, ky, 1100);
+  g.addColorStop(0, 'rgba(226,120,70,0.30)'); g.addColorStop(0.5, 'rgba(120,40,25,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  g = ctx.createRadialGradient(1040, 1300, 0, 1040, 1300, 800);
+  g.addColorStop(0, 'rgba(226,85,58,0.18)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+}
+
+function network(t, growth, alpha) {
+  const pos = NODES.map(n => ({ x: n.x + Math.sin(t * 0.5 + n.ph) * 8, y: n.y + Math.cos(t * 0.4 + n.ph) * 8,
+                                a: clamp01((growth - n.rev) * 8) }));
+  ctx.lineWidth = 1.4;
+  EDGES.forEach(([i, j, s]) => {
+    const a = Math.min(pos[i].a, pos[j].a) * alpha;
+    if (a <= 0) return;
+    ctx.strokeStyle = `rgba(255,179,122,${0.16 * a})`;
+    ctx.beginPath(); ctx.moveTo(pos[i].x, pos[i].y); ctx.lineTo(pos[j].x, pos[j].y); ctx.stroke();
+    // A pulse of light travelling along the edge.
+    const p = (t * (0.25 + s * 0.35) + s) % 1;
+    ctx.fillStyle = `rgba(255,200,150,${0.75 * a})`;
+    ctx.beginPath(); ctx.arc(pos[i].x + (pos[j].x - pos[i].x) * p, pos[i].y + (pos[j].y - pos[i].y) * p, 2.6, 0, 6.28); ctx.fill();
+  });
+  pos.forEach((p, i) => {
+    if (p.a <= 0) return;
+    const pulse = 0.6 + 0.4 * Math.sin(t * 2 + NODES[i].ph);
+    ctx.fillStyle = `rgba(255,170,120,${0.9 * p.a * alpha * pulse})`;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 3.4, 0, 6.28); ctx.fill();
+  });
+}
+
+function bigYear(text, prog, alpha) {
+  if (!text) return;
+  ctx.save();
+  const s = 1 + 0.07 * ease(prog);           // slow push-in, like the reference clip
+  ctx.translate(W / 2, 1660); ctx.scale(s, s);
+  ctx.globalAlpha = alpha;
+  ctx.font = `800 ${text.length > 2 ? 250 : 300}px "Inter Display", Inter, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const g = ctx.createLinearGradient(0, -170, 0, 170);
+  g.addColorStop(0, 'rgba(255,190,140,0.20)'); g.addColorStop(1, 'rgba(226,85,58,0.04)');
+  ctx.fillStyle = g; ctx.fillText(text, 0, 0);
+  ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,179,122,0.55)'; ctx.strokeText(text, 0, 0);
+  ctx.restore();
+}
+
+function topBar(idx, alpha) {
+  const years = ['2027', '2028', '2029', '2030', '2031'], x0 = 170, x1 = 910, y = 70;
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+  const active = idx - 1;                    // scene 0 is the intro
+  if (active >= 0) {
+    ctx.strokeStyle = AMBER; ctx.beginPath(); ctx.moveTo(x0, y);
+    ctx.lineTo(x0 + (x1 - x0) * active / 4, y); ctx.stroke();
+  }
+  ctx.font = '600 26px Inter, sans-serif'; ctx.textAlign = 'center';
+  years.forEach((yr, i) => {
+    const x = x0 + (x1 - x0) * i / 4, on = i <= active;
+    ctx.fillStyle = on ? AMBER : 'rgba(255,255,255,0.28)';
+    ctx.beginPath(); ctx.arc(x, y, i === active ? 11 : 7, 0, 6.28); ctx.fill();
+    ctx.fillStyle = i === active ? '#fff' : on ? 'rgba(255,179,122,0.8)' : 'rgba(255,255,255,0.35)';
+    ctx.fillText(yr, x, y + 48);
+  });
+  ctx.restore();
+}
+
+function label(text, idx, alpha) {
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.font = '700 30px Inter, sans-serif'; ctx.letterSpacing = '10px'; ctx.textAlign = 'center';
+  ctx.fillStyle = AMBER;
+  const tag = idx === 0 ? text : `0${idx} / ${text}`;
+  ctx.fillText(tag, W / 2 + 5, 192);
+  ctx.restore();
+}
+
+function wrap(words, maxW) {
+  const lines = [[]];
+  words.forEach(w => {
+    const cur = lines[lines.length - 1];
+    if (cur.length && ctx.measureText([...cur, w].join(' ')).width > maxW) lines.push([w]); else cur.push(w);
+  });
+  // Never leave one word alone on the last line.
+  const n = lines.length;
+  if (n > 1 && lines[n - 1].length === 1 && lines[n - 2].length > 2) lines[n - 1].unshift(lines[n - 2].pop());
+  return lines;
+}
+
+function caption(text, appear, emphasis) {
+  ctx.save();
+  const a = ease(appear / 0.18);
+  ctx.globalAlpha = a;
+  const size = emphasis ? 96 : 62;
+  ctx.font = `800 ${size}px Inter, sans-serif`; ctx.textBaseline = 'middle';
+  const lines = wrap(text.split(' '), 900), lh = size * 1.25;
+  const y0 = 1420 - (lines.length - 1) * lh / 2 + (1 - a) * 18;
+  ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 22; ctx.shadowOffsetY = 4;
+  lines.forEach((ws, li) => {
+    const full = ws.join(' ');
+    let x = W / 2 - ctx.measureText(full).width / 2;
+    ws.forEach((w, wi) => {
+      // Years and the closing line are picked out in amber.
+      ctx.fillStyle = /^20\d\d/.test(w) || emphasis ? AMBER : '#ffffff';
+      const piece = wi < ws.length - 1 ? w + ' ' : w;
+      ctx.fillText(piece, x, y0 + li * lh);
+      x += ctx.measureText(piece).width;
+    });
+  });
+  ctx.restore();
+}
+
+
+// The presenter (your avatar) occupies a panel under the top strip and melts into the background.
+const PANEL_Y = 230, PANEL_H = 1070, FRAMES = {};
+function frameImage(i) {
+  const n = Math.max(1, Math.min(TL.panelFrames, i + 1));
+  if (!FRAMES[n]) {
+    FRAMES[n] = new Promise(res => { const im = new Image(); im.onload = () => res(im); im.src = `build/panel/${String(n).padStart(5, '0')}.jpg`; });
+    delete FRAMES[n - 48];                        // keep memory flat
+  }
+  return FRAMES[n];
+}
+async function presenter(t) {
+  const im = await frameImage(Math.round(t * 24));
+  ctx.drawImage(im, 0, PANEL_Y, W, PANEL_H);
+  let g = ctx.createLinearGradient(0, PANEL_Y, 0, PANEL_Y + 90);
+  g.addColorStop(0, 'rgba(10,8,7,1)'); g.addColorStop(1, 'rgba(10,8,7,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, PANEL_Y, W, 90);
+  g = ctx.createLinearGradient(0, PANEL_Y + PANEL_H - 330, 0, PANEL_Y + PANEL_H);
+  g.addColorStop(0, 'rgba(10,8,7,0)'); g.addColorStop(1, 'rgba(10,8,7,1)');
+  ctx.fillStyle = g; ctx.fillRect(0, PANEL_Y + PANEL_H - 330, W, 330);
+  // Warm key light over the footage so all three clips share one grade.
+  g = ctx.createRadialGradient(200, PANEL_Y + 250, 0, 200, PANEL_Y + 250, 900);
+  g.addColorStop(0, 'rgba(226,110,60,0.10)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, PANEL_Y, W, PANEL_H);
+}
+
+window.render = async function (t) {
+  const idx = sceneAt(t), sc = TL.scenes[idx];
+  const prog = (t - sc.start) / (sc.end - sc.start);
+  // Fade scene-specific elements in and out around each boundary.
+  const fade = Math.min(ease((t - sc.start) / 0.45), idx === TL.scenes.length - 1 ? 1 : ease((sc.end - t) / 0.45));
+  background(t);
+  await presenter(t);
+  network(t, 0.12 + 0.88 * (t / TL.duration), 1);
+  bigYear(sc.year || 'AI', prog, fade);
+  topBar(idx, 1);
+  label(sc.label, idx, fade);
+  // Each caption stays up until the next line starts, so the screen is never empty.
+  const all = TL.scenes.flatMap(s => s.lines);
+  let cur = null;
+  all.forEach((l, i) => { if (t >= l.start) cur = { l, last: i === all.length - 1 }; });
+  if (cur) caption(cur.l.text, t - cur.l.start, cur.last);
+};
+window.setup = async function (tl) {
+  TL = tl;
+  await document.fonts.load('800 60px Inter'); await document.fonts.load('800 60px "Inter Display"');
+  await document.fonts.load('600 26px Inter'); await document.fonts.load('700 30px Inter');
+};
+</script></body></html>

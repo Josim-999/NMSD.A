@@ -1,0 +1,25 @@
+{
+  "title": "The Next 5 Years of AI",
+  "voice": "hm_psi",
+  "scenes": [
+    {"year": "", "label": "THE NEXT 5 YEARS", "lines": [
+      "Here is what the next five years of AI could look like.",
+      "And why it matters for you."]},
+    {"year": "2027", "label": "AGENTS", "lines": [
+      "2027. AI agents stop answering questions, and start finishing work.",
+      "Research, code, bookings. Hand it off, then check it."]},
+    {"year": "2028", "label": "CREATION", "lines": [
+      "2028. Video, voice and images become almost instant.",
+      "One person with a phone can make what used to need a studio."]},
+    {"year": "2029", "label": "LEARNING", "lines": [
+      "2029. Every student can have a patient tutor, in their own language.",
+      "Every doctor, an assistant that never gets tired."]},
+    {"year": "2030", "label": "ROBOTS & SCIENCE", "lines": [
+      "2030. Robots start learning real-world work.",
+      "And AI helps scientists test ideas in days, not years."]},
+    {"year": "2031", "label": "THE REAL QUESTION", "lines": [
+      "By 2031, the question is not what AI can do.",
+      "It is who learned to use it first.",
+      "Start now."]}
+  ]
+}
