@@ -7,8 +7,9 @@ plan and answers procedure questions from company SOPs. Every change goes throug
 
 - **Pure Python standard library.** No `pip install`, no internet, no GPU needed.
 - **All data is synthetic.** Trucks, drivers, customers and SOPs are invented for the demo.
-- **The AI model is optional.** Everything runs deterministically. A local LLM can be plugged in
-  for natural-language answers, but it is only ever allowed to talk to a private-network address.
+- **The AI model is optional.** Everything runs deterministically. An LLM can be plugged in for
+  natural-language answers: a local one by default, or Google Gemini if you explicitly allow
+  company facts to leave the network ([docs/GEMINI.md](docs/GEMINI.md)).
 
 The critical review of the original proposal is in **[docs/ANALYSIS.md](docs/ANALYSIS.md)**.
 
@@ -24,7 +25,8 @@ python3 -m tis report morning                        # -> reports/morning_report
 python3 -m tis approvals                             # pending approval requests
 python3 -m tis approve 1 --user sara --role supervisor
 python3 -m tis audit                                 # who asked / approved what
-python3 -m unittest discover -s tests                # 18 tests
+python3 -m unittest discover -s tests                # 26 tests
+python3 -m tis llm-check                             # verify the configured language layer
 ```
 
 The simulation is frozen at **2026-10-08 13:30** so results are reproducible. `python3 -m tis init`
@@ -98,18 +100,33 @@ driver-hours constraints. It explains why one 22-pallet load can't fit any truck
 | `coordinator` | + request dispatch plans (creates approval requests) |
 | `supervisor` | + approve or reject requests (never their own), read restricted documents such as the rate card |
 
-## Plugging in a local model (optional)
+## Plugging in a model (optional)
 
-Any OpenAI-compatible server inside the network works: Ollama, llama.cpp, vLLM or NVIDIA NIM.
+The model never decides anything; it only rewrites the final draft in natural language. It gets
+only the facts computed by the tools, with driver names replaced by `DRIVER_n`, phones by
+`[PHONE]` and ids by `[NATIONAL_ID]`. If the model is down, the deterministic answer is shown.
+
+**Local model (default boundary).** Any OpenAI-compatible server inside the network: Ollama,
+llama.cpp, vLLM, NVIDIA NIM. A URL that resolves to a public IP is refused.
 
 ```bash
 ollama serve & ollama pull qwen2.5:7b
 TIS_LLM_URL=http://127.0.0.1:11434 TIS_LLM_MODEL=qwen2.5:7b python3 -m tis chat
 ```
 
-The model gets only the facts computed by the tools, with driver names replaced by `DRIVER_n`.
-If the URL resolves to a public IP the system refuses to start, and if the model is down it falls
-back to the deterministic answer.
+**Google Gemini (crosses the boundary, opt-in).** Needs an API key from
+[AI Studio](https://aistudio.google.com/apikey) *and* an explicit acknowledgement, because
+operational facts then leave the network. Personal data is still pseudonymised.
+
+```bash
+export TIS_LLM_ALLOW_CLOUD=1
+export TIS_GEMINI_API_KEY='AIza...'
+python3 -m tis llm-check        # dummy facts only
+python3 -m tis chat
+```
+
+See [docs/GEMINI.md](docs/GEMINI.md) for what is sent, what is masked, and the precedence rules.
+Copy `.env.example` to `.env` to keep the key out of your shell history.
 
 ## Moving to real data
 

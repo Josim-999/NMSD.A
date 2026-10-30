@@ -8,6 +8,7 @@
     python -m tis approvals                  list pending approval requests
     python -m tis approve 1 --user sara --role supervisor
     python -m tis init                       regenerate the synthetic database
+    python -m tis llm-check                  verify the configured language layer
 """
 import argparse
 import os
@@ -15,7 +16,7 @@ import sys
 
 from . import db, dashboard, sim
 from .agents import TransportAI, User
-from .llm import from_env
+from .llm import DataBoundaryError, Pseudonymizer, from_env
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPORTS = os.path.join(ROOT, "reports")
@@ -39,6 +40,19 @@ def open_system(path):
     if not os.path.exists(path):
         init(path)
     return TransportAI(db.connect(path), llm=from_env())
+
+
+def llm_check():
+    """Round-trip the configured language layer with dummy facts (no real data)."""
+    llm = from_env()
+    print(f"Language layer: {llm.name}")
+    facts = {"truck": "TRK-001", "status": "delayed", "delay_min": 25, "driver_name": "Test Driver"}
+    out = llm.narrate("Why is TRK-001 late?", "TRK-001 is 25 minutes late.", facts,
+                      Pseudonymizer(["Test Driver"]))
+    print(f"\nModel said:\n{out}")
+    ok = "unavailable:" not in out
+    print("\nOK - the model answered." if ok else "\nFAILED - see the note above; the rule-based answer was used.")
+    return 0 if ok else 1
 
 
 def init(path):
@@ -68,6 +82,7 @@ def main(argv=None):
     _add = sub.add_parser
     sub.add_parser = lambda name, **kw: _add(name, parents=[common], **kw)
     sub.add_parser("init")
+    sub.add_parser("llm-check")
     sub.add_parser("demo")
     sub.add_parser("chat")
     a = sub.add_parser("ask")
@@ -89,7 +104,13 @@ def main(argv=None):
 
     if args.cmd == "init":
         return init(args.db)
-    ai = open_system(args.db)
+    try:
+        if args.cmd == "llm-check":
+            return llm_check()
+        ai = open_system(args.db)
+    except DataBoundaryError as e:                   # misconfigured model -> explain, do not traceback
+        print(f"! {e}", file=sys.stderr)
+        return 1
     print(f"Language layer: {ai.llm.name}\n")
 
     try:

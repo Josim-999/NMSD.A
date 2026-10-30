@@ -4,7 +4,8 @@ import unittest
 from tis import db, exceptions, optimizer, sim, twin
 from tis.agents import TransportAI, User, parse_truck
 from tis.knowledge import KnowledgeBase
-from tis.llm import DataBoundaryError, LocalLLM, Pseudonymizer, assert_private_endpoint
+from tis.llm import (DataBoundaryError, GeminiLLM, LocalLLM, OfflineNarrator, Pseudonymizer,
+                     assert_private_endpoint, from_env)
 
 COORD = User("coord", "coordinator")
 SUPER = User("sara", "supervisor")
@@ -195,6 +196,110 @@ class TestDataBoundary(unittest.TestCase):
             srv.shutdown()
         self.assertNotIn(name, seen[0])               # model got a pseudonym only
         self.assertIn(name, ans.text)                 # answer is re-identified locally
+
+
+class TestGeminiProvider(unittest.TestCase):
+    """Gemini is public, so the switch-on path and the masking are what matter."""
+
+    def setUp(self):
+        import os
+        self.env = {k: os.environ.get(k) for k in
+                    ("TIS_LLM_URL", "TIS_GEMINI_API_KEY", "TIS_GEMINI_MODEL", "TIS_LLM_ALLOW_CLOUD")}
+        for k in self.env:
+            os.environ.pop(k, None)
+
+    def tearDown(self):
+        import os
+        for k, v in self.env.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+
+    def test_no_config_stays_offline(self):
+        self.assertIsInstance(from_env(), OfflineNarrator)
+
+    def test_key_without_acknowledgement_is_refused(self):
+        import os
+        os.environ["TIS_GEMINI_API_KEY"] = "k"
+        with self.assertRaises(DataBoundaryError):
+            from_env()
+
+    def test_key_with_acknowledgement_selects_gemini(self):
+        import os
+        os.environ.update(TIS_GEMINI_API_KEY="k", TIS_LLM_ALLOW_CLOUD="1",
+                          TIS_GEMINI_MODEL="gemini-2.5-pro")
+        llm = from_env()
+        self.assertIsInstance(llm, GeminiLLM)
+        self.assertEqual(llm.model, "gemini-2.5-pro")
+
+    def test_private_endpoint_wins_over_gemini(self):
+        import os
+        os.environ.update(TIS_LLM_URL="http://127.0.0.1:11434",
+                          TIS_GEMINI_API_KEY="k", TIS_LLM_ALLOW_CLOUD="1")
+        self.assertIsInstance(from_env(), LocalLLM)
+
+    def test_empty_key_refused(self):
+        with self.assertRaises(DataBoundaryError):
+            GeminiLLM("   ")
+
+    def test_key_travels_in_header_not_url(self):
+        llm = GeminiLLM("secret-key")
+        self.assertNotIn("secret-key", llm.url)
+        self.assertNotIn("secret-key", llm.name)
+
+    def test_gemini_never_sees_driver_names(self):
+        import json
+        import urllib.request
+        seen = []
+        real = urllib.request.urlopen
+
+        class FakeResponse:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def read(self):
+                return self.payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake_urlopen(req, timeout=None):
+            body = json.loads(req.data)
+            seen.append(json.dumps(body))
+            sent = body["contents"][0]["parts"][0]["text"]
+            token = next(w for w in sent.replace('"', " ").replace(".", " ").split() if w.startswith("DRIVER_"))
+            return FakeResponse(json.dumps(
+                {"candidates": [{"content": {"parts": [{"text": f"{token} is waiting at the customer."}]}}]}).encode())
+
+        urllib.request.urlopen = fake_urlopen
+        try:
+            ai = fresh()
+            ai.llm = GeminiLLM("test-key")
+            name = ai.twin["TRK-027"].driver_name
+            ans = ai.ask("What's happening with 27?", COORD)
+        finally:
+            urllib.request.urlopen = real
+        self.assertNotIn(name, seen[0])               # only a pseudonym left the process
+        self.assertNotIn("test-key", seen[0])
+        self.assertIn(name, ans.text)                 # re-identified locally
+
+    def test_api_failure_falls_back_to_rule_based_answer(self):
+        import urllib.request
+        real = urllib.request.urlopen
+
+        def boom(req, timeout=None):
+            raise OSError("network down")
+
+        urllib.request.urlopen = boom
+        try:
+            out = GeminiLLM("k").narrate("q", "TRK-001 is 25 minutes late.", {"a": 1}, Pseudonymizer([]))
+        finally:
+            urllib.request.urlopen = real
+        self.assertIn("TRK-001 is 25 minutes late.", out)
+        self.assertIn("Gemini unavailable", out)
 
 
 if __name__ == "__main__":

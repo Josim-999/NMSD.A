@@ -6,14 +6,23 @@
   llama.cpp server). It refuses to talk to anything that is not loopback or a
   private-network address, so company data cannot leave the network by
   accident, and personal data is pseudonymised before every call.
+* `GeminiLLM` - Google's Gemini API. This one is a PUBLIC cloud endpoint, so it
+  deliberately crosses the data boundary and must be switched on twice: an API
+  key and an explicit acknowledgement. Personal data is pseudonymised exactly
+  as for the local model, so driver names, phones and ids never leave.
 
-Enable with:  TIS_LLM_URL=http://127.0.0.1:11434  TIS_LLM_MODEL=qwen2.5:7b
+Enable a local model with:
+    TIS_LLM_URL=http://127.0.0.1:11434  TIS_LLM_MODEL=qwen2.5:7b
+Enable Gemini with:
+    TIS_LLM_ALLOW_CLOUD=1  TIS_GEMINI_API_KEY=...  [TIS_GEMINI_MODEL=gemini-2.5-flash]
+A private TIS_LLM_URL always wins over Gemini, so the safe option stays the default.
 """
 import ipaddress
 import json
 import os
 import re
 import socket
+import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
@@ -25,8 +34,31 @@ SYSTEM_PROMPT = (
 )
 
 
+GEMINI_HOST = "generativelanguage.googleapis.com"
+GEMINI_MODEL = "gemini-2.5-flash"
+TRUTHY = {"1", "true", "yes", "on"}
+
+
 class DataBoundaryError(RuntimeError):
     pass
+
+
+def build_prompt(question, draft, facts, pseudo):
+    """The single user turn every provider sends - already pseudonymised."""
+    payload = pseudo.mask(json.dumps(facts, default=str, ensure_ascii=False))
+    return (f"QUESTION: {pseudo.mask(question)}\n\nFACTS:\n{payload}\n\n"
+            f"DRAFT ANSWER:\n{pseudo.mask(draft)}\n\nRewrite the draft as a clear answer.")
+
+
+def describe_http_error(e):
+    """Short, key-free reason for a failed API call - good enough to act on."""
+    if isinstance(e, urllib.error.HTTPError):
+        try:
+            msg = json.load(e).get("error", {}).get("message", "")
+        except Exception:
+            msg = ""
+        return f"HTTP {e.code}" + (f": {msg}" if msg else "")
+    return e.__class__.__name__
 
 
 def assert_private_endpoint(url):
@@ -75,11 +107,9 @@ class LocalLLM:
         self.name = f"local model {model} @ {urlparse(base_url).hostname}"
 
     def narrate(self, question, draft, facts, pseudo):
-        payload = pseudo.mask(json.dumps(facts, default=str, ensure_ascii=False))
         body = {"model": self.model, "temperature": 0.1, "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": f"QUESTION: {pseudo.mask(question)}\n\nFACTS:\n{payload}\n\n"
-                                        f"DRAFT ANSWER:\n{pseudo.mask(draft)}\n\nRewrite the draft as a clear answer."}]}
+            {"role": "user", "content": build_prompt(question, draft, facts, pseudo)}]}
         req = urllib.request.Request(self.url, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
@@ -89,8 +119,51 @@ class LocalLLM:
         return pseudo.unmask(text)
 
 
+class GeminiLLM:
+    """Google Gemini over the public generativelanguage API.
+
+    This is the one provider that leaves the company network, so the caller has
+    to say so explicitly (see `from_env`). The facts are pseudonymised first, so
+    what travels is TRK-012 / DRIVER_3 / [PHONE], never a real person.
+    """
+
+    def __init__(self, api_key, model=GEMINI_MODEL, timeout=60, host=GEMINI_HOST):
+        if not (api_key or "").strip():
+            raise DataBoundaryError("Gemini API key is empty")
+        self.key = api_key.strip()
+        self.model, self.timeout = model, timeout
+        self.url = f"https://{host}/v1beta/models/{model}:generateContent"
+        self.name = f"Google Gemini {model} (public cloud, pseudonymised facts)"
+
+    def narrate(self, question, draft, facts, pseudo):
+        body = {"systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+                "contents": [{"role": "user", "parts": [{"text": build_prompt(question, draft, facts, pseudo)}]}],
+                "generationConfig": {"temperature": 0.1}}
+        # the key goes in a header, never in the url, so it stays out of logs
+        req = urllib.request.Request(self.url, data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json", "x-goog-api-key": self.key})
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as r:
+                data = json.load(r)
+            parts = data["candidates"][0]["content"]["parts"]
+            text = "".join(p.get("text", "") for p in parts).strip()
+            if not text:
+                raise ValueError("empty response")
+        except Exception as e:                       # API down or quota spent -> deterministic answer still works
+            return draft + f"\n\n(Gemini unavailable: {describe_http_error(e)}; showing rule-based answer)"
+        return pseudo.unmask(text)
+
+
 def from_env():
     url = os.environ.get("TIS_LLM_URL")
-    if not url:
+    if url:                                          # a private endpoint always wins
+        return LocalLLM(url, os.environ.get("TIS_LLM_MODEL", "llama3.1:8b"))
+    key = os.environ.get("TIS_GEMINI_API_KEY", "").strip()
+    if not key:
         return OfflineNarrator()
-    return LocalLLM(url, os.environ.get("TIS_LLM_MODEL", "llama3.1:8b"))
+    if os.environ.get("TIS_LLM_ALLOW_CLOUD", "").strip().lower() not in TRUTHY:
+        raise DataBoundaryError(
+            "TIS_GEMINI_API_KEY is set but TIS_LLM_ALLOW_CLOUD is not. Gemini is a public "
+            "endpoint: set TIS_LLM_ALLOW_CLOUD=1 to confirm pseudonymised operational facts "
+            "may leave the network, or unset the key to stay offline.")
+    return GeminiLLM(key, os.environ.get("TIS_GEMINI_MODEL", GEMINI_MODEL))
