@@ -28,7 +28,7 @@ Or directly:
 ```bash
 export TIS_LLM_ALLOW_CLOUD=1
 export TIS_GEMINI_API_KEY='AIza...'
-export TIS_GEMINI_MODEL=gemini-2.5-flash   # optional
+export TIS_GEMINI_MODEL=gemini-3.8-flash   # optional
 ```
 
 `TIS_LLM_ALLOW_CLOUD` is the acknowledgement that pseudonymised operational
@@ -47,7 +47,7 @@ python3 -m tis llm-check     # dummy facts only, no company data
 Expected:
 
 ```
-Language layer: Google Gemini gemini-2.5-flash (public cloud, pseudonymised facts)
+Language layer: Google Gemini gemini-3.8-flash (public cloud, pseudonymised facts)
 ...
 OK - the model answered.
 ```

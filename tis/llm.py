@@ -35,7 +35,7 @@ SYSTEM_PROMPT = (
 
 
 GEMINI_HOST = "generativelanguage.googleapis.com"
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.8-flash"   # `models?key=` lists what a key may use
 TRUTHY = {"1", "true", "yes", "on"}
 
 
@@ -146,7 +146,8 @@ class GeminiLLM:
             with urllib.request.urlopen(req, timeout=self.timeout) as r:
                 data = json.load(r)
             parts = data["candidates"][0]["content"]["parts"]
-            text = "".join(p.get("text", "") for p in parts).strip()
+            # reasoning models return thought parts too; only the answer is wanted
+            text = "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
             if not text:
                 raise ValueError("empty response")
         except Exception as e:                       # API down or quota spent -> deterministic answer still works
