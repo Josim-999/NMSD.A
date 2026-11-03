@@ -1,0 +1,4 @@
+{
+  "cleanUrls": true,
+  "headers": [{"source": "/samples/(.*)", "headers": [{"key": "Content-Disposition", "value": "attachment"}]}]
+}

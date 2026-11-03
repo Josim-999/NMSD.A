@@ -1,0 +1,158 @@
+{
+  "_note": "Sanitized export of the scheduled backup flow. Site URL and file paths replaced with placeholders.",
+  "displayName": "Tracker backup every 12 hours",
+  "definition": {
+    "metadata": {
+      "workflowEntityId": null,
+      "processAdvisorMetadata": null,
+      "flowChargedByPaygo": null,
+      "flowclientsuspensionreason": "None",
+      "flowclientsuspensiontime": null,
+      "flowclientsuspensionreasondetails": "",
+      "creator": {
+        "id": "cb81348a-604b-41ac-b3bc-38b37b26ed11",
+        "type": "User",
+        "tenantId": "05d75c05-fa1a-42e7-9cf1-eb416c396f2d"
+      },
+      "provisioningMethod": "FromDefinition",
+      "failureAlertSubscription": true,
+      "clientLastModifiedTime": "2026-07-08T11:12:55.3052534Z",
+      "connectionKeySavedTimeKey": "2026-08-05T09:17:00.8825862Z",
+      "creationSource": "Portal",
+      "modifiedSources": "Portal",
+      "clientCreatedTime": "2026-03-04T11:07:32.7197464Z",
+      "migrationSourceId": "/subscriptions/bdca1911-887e-46d1-bdb8-a9b744a7adf6/resourceGroups/05d75c05fa1a42e79cf1eb416c396f2d-default05d75c05fa1a42e79cf1eb416c396f2d-env/providers/Microsoft.Logic/workflows/e6ca57de-ab2d-493a-8146-38a7539f5acd-azshadow"
+    },
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "undefined",
+    "parameters": {
+      "$authentication": {
+        "defaultValue": {},
+        "type": "SecureObject"
+      },
+      "$connections": {
+        "defaultValue": {},
+        "type": "Object"
+      }
+    },
+    "triggers": {
+      "Recurrence": {
+        "recurrence": {
+          "frequency": "Hour",
+          "interval": 12,
+          "startTime": "2026-03-04T07:00:00.000Z",
+          "timeZone": "Arab Standard Time"
+        },
+        "evaluatedRecurrence": {
+          "frequency": "Hour",
+          "interval": 12,
+          "startTime": "2026-03-04T07:00:00.000Z",
+          "timeZone": "Arab Standard Time"
+        },
+        "type": "Recurrence",
+        "description": "Schedule Trigger"
+      }
+    },
+    "actions": {
+      "Take_inbound_tracker_data": {
+        "runAfter": {},
+        "metadata": {
+          "%252fShared%2bDocuments%252fOps%252fOps%2binbound%2btracker.xlsx": "/Shared Documents/Ops/Ops inbound tracker.xlsx"
+        },
+        "type": "OpenApiConnection",
+        "inputs": {
+          "parameters": {
+            "dataset": "https://contoso.sharepoint.com/sites/LogisticsOps",
+            "id": "%252fShared%2bDocuments%252fOps%252fOps%2binbound%2btracker.xlsx",
+            "inferContentType": true
+          },
+          "host": {
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+            "connectionName": "shared_sharepointonline",
+            "operationId": "GetFileContent"
+          },
+          "authentication": "@parameters('$authentication')"
+        }
+      },
+      "make_new_backup_file": {
+        "runAfter": {
+          "Take_inbound_tracker_data": [
+            "Succeeded"
+          ]
+        },
+        "type": "OpenApiConnection",
+        "inputs": {
+          "parameters": {
+            "dataset": "https://contoso.sharepoint.com/sites/LogisticsOps",
+            "folderPath": "/Shared Documents/Ops/Archive inbound tracker/Daily Backup",
+            "name": "BackUp_@{formatDateTime(convertTimeZone(utcNow(),'UTC','Arabian Standard Time'),'yyyy-MM-dd_HH-mm')}.xlsx",
+            "body": "@body('Take_inbound_tracker_data')"
+          },
+          "host": {
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+            "connectionName": "shared_sharepointonline",
+            "operationId": "CreateFile"
+          },
+          "authentication": "@parameters('$authentication')"
+        },
+        "runtimeConfiguration": {
+          "contentTransfer": {
+            "transferMode": "Chunked"
+          }
+        }
+      },
+      "make_outbound_new_backup_file": {
+        "runAfter": {
+          "Take_outbound_tracker_data": [
+            "Succeeded"
+          ]
+        },
+        "type": "OpenApiConnection",
+        "inputs": {
+          "parameters": {
+            "dataset": "https://contoso.sharepoint.com/sites/LogisticsOps",
+            "folderPath": "/Shared Documents/Ops/Archive outbound tracker/Daily Backup",
+            "name": "@{formatDateTime(convertTimeZone(utcNow(),'UTC','Arabian Standard Time'),'yyyy-MM-dd_HH-mm')}.xlsx",
+            "body": "@body('Take_outbound_tracker_data')"
+          },
+          "host": {
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+            "connectionName": "shared_sharepointonline",
+            "operationId": "CreateFile"
+          },
+          "authentication": "@parameters('$authentication')"
+        },
+        "runtimeConfiguration": {
+          "contentTransfer": {
+            "transferMode": "Chunked"
+          }
+        }
+      },
+      "Take_outbound_tracker_data": {
+        "runAfter": {
+          "make_new_backup_file": [
+            "Succeeded"
+          ]
+        },
+        "metadata": {
+          "%252fShared%2bDocuments%252fOps%252fOps%2boutbound%2btracker.xlsx": "/Shared Documents/Ops/Ops outbound tracker.xlsx"
+        },
+        "type": "OpenApiConnection",
+        "inputs": {
+          "parameters": {
+            "dataset": "https://contoso.sharepoint.com/sites/LogisticsOps",
+            "id": "%252fShared%2bDocuments%252fOps%252fOps%2boutbound%2btracker.xlsx",
+            "inferContentType": true
+          },
+          "host": {
+            "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline",
+            "connectionName": "shared_sharepointonline",
+            "operationId": "GetFileContent"
+          },
+          "authentication": "@parameters('$authentication')"
+        }
+      }
+    },
+    "description": ""
+  }
+}

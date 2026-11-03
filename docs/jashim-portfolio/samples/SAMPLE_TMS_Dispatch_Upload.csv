@@ -1,0 +1,13 @@
+Truck,Driver,Shipment,Customer code,Customer,Destination,Stops,Status
+DEMO-01,Driver A,SHP-73858,C1006,Demo Eye Hospital,Makkah,4,In transit
+DEMO-02,Driver B,SHP-74947,C1005,Demo Children's Hospital,Jeddah,1,In transit
+DEMO-03,Driver C,SHP-75890,C1010,Demo Rehab Hospital,Jeddah,2,Loaded
+DEMO-04,Driver D,SHP-71936,C1010,Demo Rehab Hospital,Jeddah,4,In transit
+DEMO-05,Driver E,SHP-76642,C1002,Demo Health Centre,Madinah,3,Loaded
+DEMO-06,Driver F,SHP-74833,C1010,Demo Rehab Hospital,Jeddah,3,Returning
+DEMO-07,Driver G,SHP-73590,C1003,Demo Specialist Hospital,Riyadh,2,Delivered
+DEMO-08,Driver H,SHP-77454,C1002,Demo Health Centre,Madinah,3,Delivered
+DEMO-09,Driver I,SHP-78998,C1011,Demo Dental Centre,Buraidah,4,Returning
+DEMO-10,Driver J,SHP-73578,C1010,Demo Rehab Hospital,Jeddah,2,Returning
+DEMO-11,Driver K,SHP-78609,C1001,Demo Medical City,Taif,4,Returning
+DEMO-12,Driver L,SHP-75927,C1011,Demo Dental Centre,Buraidah,1,Returning

@@ -1,0 +1,26 @@
+Found 1 PDF file(s) in:
+  C:\Demo
+  • SAMPLE_GRN_Bundle.pdf
+============================================================
+  SAMPLE_GRN_Bundle.pdf
+============================================================
+  Total pages : 12
+  TRK found   : 3
+  ✅ TRK0000418203.pdf  (4 pages)
+  ✅ TRK0000418377.pdf  (4 pages)
+  ✅ TRK0000418412.pdf  (4 pages)
+  ┌───────────────────────────────────────────┬───────┐
+  │ Total pages processed                     │    12 │
+  │ ✅ TRK files created                      │     3 │
+  │ ⚠️  Pages with no TRK                      │     0 │
+  │ 🔁 Duplicates                             │     0 │
+  │ 🔧 Corrections applied                    │     0 │
+  └───────────────────────────────────────────┴───────┘
+============================================================
+  ✅ ALL DONE
+============================================================
+  Source PDFs processed : 1
+  Total TRK files       : 3
+  Output ZIP            : TRK_Split_Output.zip
+  ZIP size              : 0.0 MB
+============================================================

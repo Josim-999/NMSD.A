@@ -1,0 +1,30 @@
+[setup] Checking dependencies...
+[setup] Dependency check complete.
+Processing 11 pages from 1 file(s) using 2 worker(s)...
+  SAMPLE_Checking_Report_Bundle.pdf p1 -> 103-208-559 [CLEAN]
+  SAMPLE_Checking_Report_Bundle.pdf p2 -> 101-517-044 [CLEAN]
+  SAMPLE_Checking_Report_Bundle.pdf p3 -> 101-482-306 [CLEAN]
+  SAMPLE_Checking_Report_Bundle.pdf p4 -> 101-517-044 [CLEAN]
+  SAMPLE_Checking_Report_Bundle.pdf p5 -> 101-690-125 [CLEAN]
+  SAMPLE_Checking_Report_Bundle.pdf p6 -> 000-858-088 [confusion]
+  SAMPLE_Checking_Report_Bundle.pdf p7 -> 101-482-306 [CLEAN]
+  SAMPLE_Checking_Report_Bundle.pdf p8 -> 103-208-559 [CLEAN]
+  SAMPLE_Checking_Report_Bundle.pdf p9 -> 101-690-125 [CLEAN]
+  SAMPLE_Checking_Report_Bundle.pdf p10 -> 101-482-306 [CLEAN]
+  SAMPLE_Checking_Report_Bundle.pdf p11 -> 102-033-781 [CLEAN]
+============================================================
+SUMMARY
+============================================================
+PDF files processed     : 1
+Total pages processed   : 11
+Clean pages             : 10
+Confusion pages         : 1
+Clean output PDF files  : 5
+Confusion output files  : 1
+Output folder           : C:\Demo/splitted_output
+Notes:
+- Pages were processed in parallel (2 workers max). Set PARALLEL_WORKERS = 1 at the top of the script if you ever need the old single-process behaviour.
+- Same order numbers are merged into one PDF file.
+- No spaces are allowed in final order numbers; spaces are removed automatically.
+- 9-digit hyphen-style orders are accepted only if they start with '0' or one of the prefixes 100-105 (e.g. 098-450-764, 100-234-567, 103-555-777); others like 120-329-010 or 220-111-555 are rejected. Edit VALID_9DIGIT_PREFIXES at the top of the script to add more series.
+- A page lands in clean/ when its order number is corroborated by 2+ independent detection methods, OR comes from a source that's inherently reliable on its own: an explicit label in the PDF's real text layer (not OCR), or a fully-decoded QR code. Everything else (single uncorroborated OCR reads, close calls between two candidates) goes to confusion/ for review.
