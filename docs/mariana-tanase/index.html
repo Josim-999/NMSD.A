@@ -1,0 +1,589 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Mariana Tanase Portfolio</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,wght@0,400;0,600;1,400;1,500&family=Manrope:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout concept: full-bleed 3D hero, then a single editorial column with a
+   sticky index rail, a vertical experience timeline and a 3D tilt grid of languages. */
+:root {
+  --bg: #F3F2EC;
+  --bg-2: #E9E8E0;
+  --fg: #101513;
+  --muted: #5E6661;
+  --line: rgba(16,21,19,.14);
+  --accent: #9A6B1F;
+  --display: "Bodoni Moda", "Didot", Georgia, serif;
+  --body: "Manrope", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1412;
+    --bg-2: #131C19;
+    --fg: #ECE7DA;
+    --muted: #9AA39C;
+    --line: rgba(236,231,218,.14);
+    --accent: #E8B86D;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1412;
+  --bg-2: #131C19;
+  --fg: #ECE7DA;
+  --muted: #9AA39C;
+  --line: rgba(236,231,218,.14);
+  --accent: #E8B86D;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  overflow-x: hidden;
+}
+img { max-width: 100%; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.wrap { max-width: 1120px; margin: 0 auto; }
+.label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+h1, h2, h3 { font-family: var(--display); font-weight: 400; text-wrap: balance; margin: 0; }
+h2 { font-size: clamp(2.2rem, 5vw, 3.6rem); line-height: 1.05; letter-spacing: -.01em; }
+h2 em, h1 em { font-style: italic; color: var(--accent); }
+p { margin: 0; max-width: 62ch; }
+
+/* HERO */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  padding-block: 96px 56px;
+}
+#hero-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  z-index: 0;
+}
+.hero::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(to top, var(--bg) 4%, transparent 55%);
+}
+.hero-inner { position: relative; z-index: 2; width: 100%; }
+.hero h1 {
+  font-size: clamp(3.2rem, 11vw, 9.5rem);
+  line-height: .92;
+  letter-spacing: -.025em;
+  margin-top: 18px;
+}
+.hero-meta {
+  display: flex; flex-wrap: wrap; gap: 14px 32px;
+  margin-top: 28px; align-items: center;
+}
+.hero-role { font-size: clamp(1rem, 2vw, 1.2rem); max-width: 46ch; color: var(--fg); }
+.status {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .08em;
+}
+.status i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 0 var(--accent); animation: pulse 2.4s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
+.scroll-cue { position: absolute; right: 16px; bottom: 56px; z-index: 2; writing-mode: vertical-rl; }
+
+/* INDEX + SECTIONS */
+section { padding-block: clamp(72px, 12vw, 140px); border-top: 1px solid var(--line); }
+.grid-2 { display: grid; grid-template-columns: 200px 1fr; gap: 40px; }
+.rail { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 32px); align-self: start; }
+.rail .label { display: block; margin-bottom: 14px; }
+.rail nav a { display: block; text-decoration: none; padding: 6px 0; color: var(--muted); font-size: 14px; transition: color .25s; }
+.rail nav a:hover, .rail nav a.on { color: var(--fg); }
+.rail nav a.on::before { content: "— "; color: var(--accent); }
+
+/* ABOUT */
+.about-lead { font-family: var(--display); font-size: clamp(1.5rem, 3vw, 2.2rem); line-height: 1.3; font-weight: 400; max-width: 30ch; margin-bottom: 48px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0; border-top: 1px solid var(--line); }
+.fact { padding: 22px 22px 22px 0; border-bottom: 1px solid var(--line); }
+.fact b { display: block; font-family: var(--display); font-size: 2.4rem; font-weight: 400; line-height: 1; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.fact span { color: var(--muted); font-size: 14px; }
+
+/* EXPERIENCE */
+.timeline { position: relative; margin-top: 8px; }
+.timeline::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: var(--line); transform-origin: top; }
+.job { position: relative; padding: 28px 0 28px 36px; border-bottom: 1px solid var(--line); }
+.job::before { content: ""; position: absolute; left: -4px; top: 36px; width: 9px; height: 9px; border-radius: 50%; background: var(--bg); border: 1px solid var(--accent); }
+.job.now::before { background: var(--accent); }
+.job-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 24px; align-items: baseline; }
+.job h3 { font-size: clamp(1.35rem, 2.6vw, 1.8rem); line-height: 1.15; }
+.job .co { color: var(--muted); font-size: 15px; margin-top: 4px; }
+.job ul { margin: 14px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.job li { position: relative; padding-left: 20px; color: color-mix(in srgb, var(--fg) 86%, transparent); font-size: 15px; max-width: 70ch; }
+.job li::before { content: ""; position: absolute; left: 0; top: .72em; width: 10px; height: 1px; background: var(--accent); }
+
+/* SKILLS */
+.skills { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 40px; }
+.skill {
+  padding: 14px 22px; border: 1px solid var(--line); border-radius: 2px;
+  font-family: var(--display); font-size: 1.35rem; transition: transform .4s cubic-bezier(.2,.7,.2,1), border-color .3s, color .3s;
+}
+.skill:hover { transform: translateY(-4px); border-color: var(--accent); color: var(--accent); }
+
+/* LANGUAGES: 3D tilt cards */
+.langs { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; perspective: 900px; margin-top: 40px; }
+.lang {
+  position: relative; padding: 28px 24px; min-height: 180px;
+  background: var(--bg-2); border: 1px solid var(--line);
+  transform-style: preserve-3d; transition: transform .5s cubic-bezier(.2,.7,.2,1);
+  display: flex; flex-direction: column; justify-content: space-between; gap: 24px;
+}
+.lang .name { font-family: var(--display); font-size: 2rem; line-height: 1; }
+.lang .lvl { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: .06em; }
+.lang .bar { height: 3px; background: var(--line); margin-top: 10px; overflow: hidden; }
+.lang .bar i { display: block; height: 100%; background: var(--accent); transform-origin: left; }
+.lang .glow {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .4s;
+  background: radial-gradient(circle at var(--mx,50%) var(--my,50%), color-mix(in srgb, var(--accent) 22%, transparent), transparent 55%);
+}
+.lang:hover .glow { opacity: 1; }
+
+/* CERTS + EDUCATION */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; }
+.list { margin: 24px 0 0; padding: 0; list-style: none; }
+.list li { padding: 16px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; }
+.list li span:last-child { color: var(--muted); font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
+.list strong { font-weight: 600; }
+
+/* CONTACT */
+.contact h2 { font-size: clamp(2.8rem, 9vw, 7.5rem); line-height: .95; letter-spacing: -.02em; }
+.contact-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 44px; align-items: center; }
+.btn {
+  display: inline-flex; align-items: center; gap: 10px; padding: 16px 24px;
+  border: 1px solid var(--fg); background: transparent; color: var(--fg); font: inherit; font-size: 15px; font-weight: 600;
+  text-decoration: none; cursor: pointer; transition: background .3s, color .3s, transform .3s;
+}
+.btn:hover { background: var(--fg); color: var(--bg); transform: translateY(-2px); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #FFFFFF; }
+.btn.primary:hover { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.addr { font-family: var(--mono); font-size: 15px; user-select: all; }
+.copied { font-family: var(--mono); font-size: 12px; color: var(--accent); min-height: 1em; }
+footer { padding-block: 32px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13px; }
+
+/* JOURNEY: milestone strip */
+.journey { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0; margin-top: 40px; border-top: 1px solid var(--line); }
+.stop { padding: 26px 22px 26px 0; border-bottom: 1px solid var(--line); }
+.stop .yr { font-family: var(--display); font-style: italic; font-size: 2rem; color: var(--accent); line-height: 1; font-variant-numeric: tabular-nums; }
+.stop h3 { font-family: var(--body); font-size: 17px; font-weight: 600; margin-top: 12px; }
+.stop p { font-size: 14px; color: var(--muted); margin-top: 6px; }
+
+/* Reveal target: visible at rest; GSAP animates it on scroll */
+.reveal { will-change: transform, opacity; }
+
+@media (max-width: 860px) {
+  .grid-2, .two-col { grid-template-columns: 1fr; gap: 24px; }
+  .rail { position: static; }
+  .rail nav { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .rail nav a { padding: 4px 0; }
+  .rail nav a.on::before { content: ""; }
+  .scroll-cue { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+
+<header class="hero">
+  <canvas id="hero-canvas" aria-hidden="true"></canvas>
+  <div class="hero-inner wrap">
+    <p class="label">Portfolio &middot; Bucharest, Romania</p>
+    <h1 class="reveal">Mariana<br><em>Tanase</em></h1>
+    <div class="hero-meta">
+      <p class="hero-role">Owner and administrator, with a decade of hospitality, medical reception and management work across four countries.</p>
+      <span class="status"><i></i>Open to new projects</span>
+    </div>
+  </div>
+  <span class="label scroll-cue">Scroll</span>
+</header>
+
+<main>
+  <section id="about">
+    <div class="wrap grid-2">
+      <aside class="rail">
+        <span class="label">Index</span>
+        <nav>
+          <a href="#about">About</a>
+          <a href="#experience">Experience</a>
+          <a href="#skills">Skills</a>
+          <a href="#languages">Languages</a>
+          <a href="#credentials">Credentials</a>
+          <a href="#contact">Contact</a>
+        </nav>
+      </aside>
+      <div>
+        <span class="label">01 &middot; About</span>
+        <p class="about-lead reveal" style="margin-top:20px">I run operations where people come first: patients, guests and teams. I bring a structured, calm approach to the front desk, the floor and the back office.</p>
+        <div class="facts">
+          <div class="fact reveal"><span>Years in hospitality and healthcare</span><b>20+</b></div>
+          <div class="fact reveal"><span>Languages, professional level</span><b>5</b></div>
+          <div class="fact reveal"><span>Certifications held</span><b>5</b></div>
+          <div class="fact reveal"><span>Current role</span><b>Owner</b></div>
+        </div>
+        <p style="margin-top:32px;color:var(--muted)" class="reveal">My background covers negotiation, business strategy, risk management and team management. I started in pharmacy and restaurants, moved into medical reception and clinic administration, and now run my own company in Bucharest.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="journey">
+    <div class="wrap">
+      <span class="label">The journey</span>
+      <h2 class="reveal" style="margin-top:18px">From the <em>pharmacy</em> to her own company</h2>
+      <div class="journey">
+        <div class="stop reveal"><div class="yr">2003</div><h3>First supervisor role</h3><p>Lo Spaccio, Bucharest, while working at Flora Pharmacy.</p></div>
+        <div class="stop reveal"><div class="yr">2005</div><h3>Interpreter</h3><p>Milan-Rome Design, travelling with partners and clients.</p></div>
+        <div class="stop reveal"><div class="yr">2013</div><h3>Public relations</h3><p>Antica Cagliari Restaurant, handling clients and large bookings.</p></div>
+        <div class="stop reveal"><div class="yr">2016</div><h3>Deputy General Manager</h3><p>KFC UK &amp; Ireland, London.</p></div>
+        <div class="stop reveal"><div class="yr">2021</div><h3>Medical reception</h3><p>Noblesse Medical Clinique, then a master's degree in marketing administration.</p></div>
+        <div class="stop reveal"><div class="yr">2026</div><h3>Owner &amp; Administrator</h3><p>Thea Efficency Advance S.R.L., Bucharest.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="experience">
+    <div class="wrap grid-2">
+      <aside class="rail"><span class="label">Index</span></aside>
+      <div>
+        <span class="label">02 &middot; Experience</span>
+        <h2 class="reveal" style="margin:18px 0 40px">Where I have <em>worked</em></h2>
+        <div class="timeline" id="timeline">
+
+          <article class="job now">
+            <div class="job-head"><h3>Owner &amp; Administrator</h3><span class="label">Jul 2026 &ndash; Present</span></div>
+            <p class="co">Thea Efficency Advance S.R.L. &middot; Bucharest, Romania</p>
+            <ul><li>Lead the company day to day, covering strategy, administration and risk.</li></ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>International Sales</h3><span class="label">Jan 2023 &ndash; Apr 2025</span></div>
+            <p class="co">A.R. Ricambi Elettronica San Marino &middot; Emilia-Romagna, Italy</p>
+            <ul><li>Sales work for an international parts supplier.</li></ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>Freelancer</h3><span class="label">Dec 2016 &ndash; Jan 2023</span></div>
+            <p class="co">Self-employed &middot; Bucharest, Romania</p>
+            <ul><li>Independent work for clients over six years.</li></ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>Medical Receptionist</h3><span class="label">Jul 2021 &ndash; May 2022</span></div>
+            <p class="co">Noblesse Medical Clinique &middot; Bucharest, Romania</p>
+            <ul>
+              <li>Greeted patients and guided them to the right department, including imaging and the lab.</li>
+              <li>Handled phone calls and e-mail requests, managed appointments and organised records.</li>
+              <li>Collected payments for medical services and paid the clinic's suppliers.</li>
+            </ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>Secretary</h3><span class="label">Nov 2018 &ndash; May 2021</span></div>
+            <p class="co">Cabinet Medical &middot; Bucharest, Romania</p>
+            <ul><li>Helped patients complete forms, managed reception tasks, appointments and correspondence.</li></ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>Deputy General Manager</h3><span class="label">Jan 2016 &ndash; Dec 2016</span></div>
+            <p class="co">KFC UK &amp; Ireland &middot; London, United Kingdom</p>
+            <ul>
+              <li>Directed shifts to lift sales, operating efficiency and profit, in line with company policy.</li>
+              <li>Recruited, trained and coached team members, and took corrective action where needed.</li>
+              <li>Kept safety procedures and service standards on track for cleanliness, accuracy and speed.</li>
+            </ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>Deputy Manager</h3><span class="label">May 2014 &ndash; Nov 2015</span></div>
+            <p class="co">Smemo the Pub</p>
+            <ul><li>Managed reservations, supplier accounts and meetings, and led menu printing and the pub's image.</li></ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>Public Relations</h3><span class="label">Mar 2013 &ndash; Apr 2014</span></div>
+            <p class="co">Antica Cagliari Restaurant &middot; Bucharest, Romania</p>
+            <ul><li>Booked reservations and table layouts for large parties, and liaised with clients and suppliers.</li></ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>Deputy Manager</h3><span class="label">Jan 2009 &ndash; Mar 2013</span></div>
+            <p class="co">Sabinvest Active &middot; Bucharest, Romania</p>
+            <ul>
+              <li>Screened calls and enquiries, and kept records organised with clear retention and disposal rules.</li>
+              <li>Took part in recruitment and helped new hires settle into their teams.</li>
+            </ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>Interpreter</h3><span class="label">May 2005 &ndash; Jan 2009</span></div>
+            <p class="co">Milan-Rome Design &middot; International</p>
+            <ul><li>Read and prepared documents, consulted clients, travelled with partners and kept client contact with the agency.</li></ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>Beauty Adviser &amp; Laboratory Analyst</h3><span class="label">Dec 2003 &ndash; Oct 2006</span></div>
+            <p class="co">Flora Pharmacy &middot; Bucharest, Romania</p>
+            <ul><li>Advised customers on products, prepared pharmaceutical mixtures and kept inventory.</li></ul>
+          </article>
+
+          <article class="job">
+            <div class="job-head"><h3>Supervisor</h3><span class="label">Aug 2003 &ndash; May 2005</span></div>
+            <p class="co">Lo Spaccio &middot; Bucharest, Romania</p>
+            <ul><li>Managed stock and staff, monitored attendance and conduct, and ran twice-yearly staff reviews.</li></ul>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="skills">
+    <div class="wrap">
+      <span class="label">03 &middot; Skills</span>
+      <h2 class="reveal" style="margin-top:18px">What I <em>bring</em></h2>
+      <div class="skills">
+        <span class="skill">Negotiation</span>
+        <span class="skill">Management</span>
+        <span class="skill">Risk management</span>
+        <span class="skill">Business strategy</span>
+        <span class="skill">Team management</span>
+        <span class="skill">Reception &amp; patient care</span>
+        <span class="skill">Client relations</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="languages">
+    <div class="wrap">
+      <span class="label">04 &middot; Languages</span>
+      <h2 class="reveal" style="margin-top:18px">Five <em>languages</em>, in daily use</h2>
+      <div class="langs" id="langs">
+        <div class="lang"><div class="glow"></div><div><div class="name">Romanian</div><div class="lvl">Native or bilingual</div></div><div class="bar"><i style="width:100%"></i></div></div>
+        <div class="lang"><div class="glow"></div><div><div class="name">English</div><div class="lvl">Full professional</div></div><div class="bar"><i style="width:92%"></i></div></div>
+        <div class="lang"><div class="glow"></div><div><div class="name">Italian</div><div class="lvl">Full professional</div></div><div class="bar"><i style="width:92%"></i></div></div>
+        <div class="lang"><div class="glow"></div><div><div class="name">French</div><div class="lvl">Limited working</div></div><div class="bar"><i style="width:55%"></i></div></div>
+        <div class="lang"><div class="glow"></div><div><div class="name">Spanish</div><div class="lvl">Limited working</div></div><div class="bar"><i style="width:55%"></i></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="credentials">
+    <div class="wrap two-col">
+      <div>
+        <span class="label">05 &middot; Certifications</span>
+        <ul class="list reveal">
+          <li><strong>Pharmacy Assistant</strong></li>
+          <li><strong>Fire, Health and Safety Course</strong></li>
+          <li><strong>Massage Therapist</strong></li>
+          <li><strong>Team Leader Course and Certificate</strong></li>
+          <li><strong>Deputy Manager Course and Certificate</strong></li>
+        </ul>
+      </div>
+      <div>
+        <span class="label">06 &middot; Education</span>
+        <ul class="list reveal">
+          <li><span><strong>Master's, Marketing administration</strong><br><span style="color:var(--muted);font-size:14px">Artifex of Bucharest</span></span><span>2021 &ndash; 2023</span></li>
+          <li><span><strong>Bachelor's, Marketing administration</strong><br><span style="color:var(--muted);font-size:14px">Artifex of Bucharest</span></span><span>2018 &ndash; 2021</span></li>
+          <li><span><strong>Bachelor's Degree</strong><br><span style="color:var(--muted);font-size:14px">University of Physical Education and Sport, Oradea</span></span><span>2001 &ndash; 2003</span></li>
+          <li><span><strong>High School, Mathematics and Physics</strong><br><span style="color:var(--muted);font-size:14px">Sfantul Pantelimon</span></span><span>1997 &ndash; 2001</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact" class="contact">
+    <div class="wrap">
+      <span class="label">07 &middot; Contact</span>
+      <h2 class="reveal" style="margin:18px 0 0">Let's <em>talk</em>.</h2>
+      <p class="addr" style="margin-top:40px">monicamaria2005@yahoo.com</p>
+      <div class="contact-row">
+        <button class="btn primary" id="copy" type="button">Copy e-mail</button>
+        <a class="btn" href="https://www.linkedin.com/in/marianatanase-4a3532110" target="_blank" rel="noopener">LinkedIn &rarr;</a>
+        <span class="copied" id="copied" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="wrap">
+  <footer>
+    <span>Mariana Tanase &middot; Bucharest</span>
+    <span>Built as a single page</span>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+(function () {
+  var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- 3D hero (Three.js) ---------- */
+  try {
+    var canvas = document.getElementById('hero-canvas');
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.set(0, 0, 7);
+
+    var accent = new THREE.Color(getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#E8B86D');
+
+    var core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(1.5, 1),
+      new THREE.MeshBasicMaterial({ color: accent, wireframe: true, transparent: true, opacity: 0.55 })
+    );
+    var inner = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.9, 0),
+      new THREE.MeshBasicMaterial({ color: accent, wireframe: true, transparent: true, opacity: 0.25 })
+    );
+    var group = new THREE.Group();
+    group.add(core, inner);
+    scene.add(group);
+
+    var COUNT = 1400, pos = new Float32Array(COUNT * 3);
+    for (var i = 0; i < COUNT; i++) {
+      var r = 2.6 + Math.random() * 2.4, t = Math.random() * Math.PI * 2, p = Math.acos(2 * Math.random() - 1);
+      pos[i * 3] = r * Math.sin(p) * Math.cos(t);
+      pos[i * 3 + 1] = r * Math.sin(p) * Math.sin(t);
+      pos[i * 3 + 2] = r * Math.cos(p);
+    }
+    var pgeo = new THREE.BufferGeometry();
+    pgeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    var dust = new THREE.Points(pgeo, new THREE.PointsMaterial({ color: accent, size: 0.018, transparent: true, opacity: 0.7 }));
+    scene.add(dust);
+
+    var mx = 0, my = 0;
+    window.addEventListener('pointermove', function (e) {
+      mx = (e.clientX / window.innerWidth - 0.5);
+      my = (e.clientY / window.innerHeight - 0.5);
+    });
+
+    function resize() {
+      var w = canvas.clientWidth, h = canvas.clientHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / Math.max(h, 1);
+      camera.position.x = w < 700 ? 0 : 1.6;
+      camera.position.y = w < 700 ? 1.1 : 0.2;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    var t0 = performance.now(), running = true;
+    function frame(now) {
+      var t = (now - t0) / 1000;
+      if (!reduce) {
+        core.rotation.x = t * 0.15 + my * 0.6;
+        core.rotation.y = t * 0.2 + mx * 0.8;
+        inner.rotation.x = -t * 0.3;
+        inner.rotation.z = t * 0.25;
+        dust.rotation.y = t * 0.03;
+        group.position.x += (mx * 0.4 - group.position.x) * 0.04;
+      }
+      renderer.render(scene, camera);
+      if (running && !reduce) requestAnimationFrame(frame);
+    }
+    if (reduce) { frame(performance.now()); }
+    else { requestAnimationFrame(frame); }
+    /* pause the loop when the hero scrolls out of view */
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (es) {
+        var was = running;
+        running = es[0].isIntersecting;
+        if (running && !was && !reduce) requestAnimationFrame(frame);
+      }).observe(canvas);
+    }
+  } catch (err) { /* WebGL unavailable: the hero text still reads fine */ }
+
+  /* ---------- Intro + scroll motion (GSAP) ---------- */
+  if (window.gsap) {
+    gsap.registerPlugin(ScrollTrigger);
+    if (!reduce) {
+      gsap.from('.hero h1', { y: 60, opacity: 0, duration: 1.2, ease: 'power4.out', delay: 0.15 });
+      gsap.from('.hero-meta > *', { y: 24, opacity: 0, duration: 0.9, stagger: 0.12, delay: 0.5, ease: 'power3.out' });
+      gsap.from('.hero .label', { opacity: 0, duration: 1, delay: 0.1 });
+      gsap.utils.toArray('.reveal').forEach(function (el) {
+        gsap.from(el, {
+          y: 40, opacity: 0, duration: 1, ease: 'power3.out',
+          scrollTrigger: { trigger: el, start: 'top 88%', once: true }
+        });
+      });
+      gsap.utils.toArray('.job').forEach(function (job) {
+        gsap.from(job, {
+          x: -24, opacity: 0, duration: 0.9, ease: 'power3.out',
+          scrollTrigger: { trigger: job, start: 'top 90%', once: true }
+        });
+      });
+      gsap.utils.toArray('.lang .bar i').forEach(function (bar) {
+        gsap.from(bar, {
+          scaleX: 0, duration: 1.4, ease: 'expo.out',
+          scrollTrigger: { trigger: bar, start: 'top 92%', once: true }
+        });
+      });
+      gsap.to('.scroll-cue', { opacity: 0.4, repeat: -1, yoyo: true, duration: 1.4, ease: 'sine.inOut' });
+    }
+  }
+
+  /* ---------- Rail: highlight the section in view ---------- */
+  var links = document.querySelectorAll('.rail nav a');
+  if ('IntersectionObserver' in window) {
+    var secIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (a) { a.classList.toggle('on', a.getAttribute('href') === '#' + e.target.id); });
+        }
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    document.querySelectorAll('main section[id]').forEach(function (s) { secIO.observe(s); });
+  }
+
+  /* ---------- 3D tilt on language cards ---------- */
+  if (!reduce) {
+    document.querySelectorAll('.lang').forEach(function (card) {
+      card.addEventListener('pointermove', function (e) {
+        var b = card.getBoundingClientRect();
+        var x = (e.clientX - b.left) / b.width, y = (e.clientY - b.top) / b.height;
+        card.style.setProperty('--mx', (x * 100) + '%');
+        card.style.setProperty('--my', (y * 100) + '%');
+        card.style.transform = 'rotateX(' + ((0.5 - y) * 12) + 'deg) rotateY(' + ((x - 0.5) * 14) + 'deg) translateZ(0)';
+      });
+      card.addEventListener('pointerleave', function () { card.style.transform = ''; });
+    });
+  }
+
+  /* ---------- Copy e-mail ---------- */
+  var copyBtn = document.getElementById('copy');
+  var copied = document.getElementById('copied');
+  copyBtn.addEventListener('click', function () {
+    var addr = 'monicamaria2005@yahoo.com';
+    var done = function () { copied.textContent = 'E-mail copied'; setTimeout(function () { copied.textContent = ''; }, 2200); };
+    var fail = function () { copied.textContent = 'Select the address above to copy it'; };
+    try {
+      navigator.clipboard.writeText(addr).then(done, fail);
+    } catch (e) { fail(); }
+  });
+})();
+</script>
+
+</body></html>
