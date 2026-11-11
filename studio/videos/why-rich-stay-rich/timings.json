@@ -1,0 +1,47 @@
+{
+  "fps": 30,
+  "total": 58.859,
+  "title": "Why The Rich Stay Rich (And You Don't)",
+  "scenes": [
+    {
+      "id": "hook",
+      "start": 0.0,
+      "vo": 8.858,
+      "total": 9.208,
+      "caption": "SAME SALARY.\nDIFFERENT LIFE.",
+      "accent": "#f7c948"
+    },
+    {
+      "id": "liability",
+      "start": 9.208,
+      "vo": 13.584,
+      "total": 13.934,
+      "caption": "THE POOR BUY\nLIABILITIES",
+      "accent": "#6c5ce7"
+    },
+    {
+      "id": "asset",
+      "start": 23.142,
+      "vo": 13.201,
+      "total": 13.551,
+      "caption": "THE RICH BUY\nASSETS",
+      "accent": "#2f9e6f"
+    },
+    {
+      "id": "compound",
+      "start": 36.693,
+      "vo": 12.365,
+      "total": 12.715,
+      "caption": "MONEY WORKS\nFOR THEM",
+      "accent": "#ffe08a"
+    },
+    {
+      "id": "cta",
+      "start": 49.407,
+      "vo": 9.102,
+      "total": 9.452,
+      "caption": "START WITH\nONE ASSET",
+      "accent": "#f7c948"
+    }
+  ]
+}

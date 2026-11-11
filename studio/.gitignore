@@ -1,0 +1,4 @@
+# heavy / regenerable artifacts
+.voices/
+**/work/
+output/*.wav

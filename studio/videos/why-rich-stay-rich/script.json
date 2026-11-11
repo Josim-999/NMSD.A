@@ -1,0 +1,37 @@
+{
+  "title": "Why The Rich Stay Rich (And You Don't)",
+  "voice": "en_US-amy-medium",
+  "fps": 30,
+  "scenes": [
+    {
+      "id": "hook",
+      "vo": "Two people earn the exact same salary. Ten years later, one is rich and one is broke. Here is the real reason.",
+      "caption": "SAME SALARY.\nDIFFERENT LIFE.",
+      "accent": "#f7c948"
+    },
+    {
+      "id": "liability",
+      "vo": "When most people get money, they spend it on things that take money out of their pocket. A newer phone. A nicer car. Meet Cardy. Every swipe makes him stronger, and you weaker.",
+      "caption": "THE POOR BUY\nLIABILITIES",
+      "accent": "#6c5ce7"
+    },
+    {
+      "id": "asset",
+      "vo": "The rich do the opposite. They buy assets. Things that put money back in. Stocks, a business, index funds. Piggy takes that money and grows it while they sleep.",
+      "caption": "THE RICH BUY\nASSETS",
+      "accent": "#2f9e6f"
+    },
+    {
+      "id": "compound",
+      "vo": "That is the whole secret. The poor work for money. The rich make money work for them. One dollar becomes two. Two becomes four. And it never stops.",
+      "caption": "MONEY WORKS\nFOR THEM",
+      "accent": "#ffe08a"
+    },
+    {
+      "id": "cta",
+      "vo": "You do not need a bigger paycheck. You need your first asset. Start with one. Follow for more money moves.",
+      "caption": "START WITH\nONE ASSET",
+      "accent": "#f7c948"
+    }
+  ]
+}
