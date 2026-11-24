@@ -3,6 +3,19 @@
 Turns a topic into a finished vertical Short on the phone: Gemini researches and writes the
 script, a Microsoft neural voice reads it, the app animates and renders the video, then posts it.
 
+## What's new in 1.5
+
+- **Gemini quota (HTTP 429) no longer stops a video.** A per-minute limit waits the time Gemini
+  asks for and retries. A daily limit (or a model with no free quota) moves to the next model:
+  the research model, the script model, then gemini-2.5-flash, gemini-2.5-flash-lite and
+  gemini-2.0-flash; models out of quota are skipped until the midnight-Pacific reset. If research
+  has no quota anywhere, the script is written without it. Only when every model is out does the
+  app stop, with a plain message.
+- **Google sign-in no longer hangs after "Continue".** Android froze the app while the browser
+  was in front, so its loopback sign-in server never answered. A short foreground service
+  (`KeepAliveService`, with a notification) keeps it awake during sign-in, and there is a
+  Cancel button.
+
 ## What's new in 1.4: better video at the same Gemini cost
 
 Everything below runs on the phone; Gemini is called exactly as before.

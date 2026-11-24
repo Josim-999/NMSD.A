@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.videostudio.app.ai.Gemini
+import com.videostudio.app.ai.GeminiQuotaError
 import com.videostudio.app.ai.Prompts
 import com.videostudio.app.ai.Stock
 import com.videostudio.app.ai.extractJson
@@ -41,17 +42,25 @@ class Pipeline(
     private val step: (String, Float?) -> Unit,
     private val cancelled: () -> Boolean,
 ) {
-    private fun gemini() = Gemini(settings.geminiKey)
+    private fun gemini() = Gemini(settings.geminiKey, notice = log)
 
     fun writeScript(p: Project, feedback: String = "") {
         if (p.research && p.researchNotes.isBlank()) {
             step("Researching the topic (Google Search)", null)
             log("Researching with ${settings.researchModel}…")
-            val reply = gemini().generate(Prompts.research(p), settings.researchModel, search = true)
-            val pages = reply.sources.distinctBy { it.second }.joinToString("\n") { "- ${it.first}: ${it.second}" }
-            p.researchNotes = reply.text + if (pages.isNotBlank()) "\n\nPages searched:\n$pages" else ""
-            store.save(p)
-            log("Research done (${reply.sources.size} pages).")
+            // Research is a bonus: if no model has quota left for it, write the script without it.
+            val reply = try {
+                gemini().generate(Prompts.research(p), settings.researchModel, search = true, fallbacks = listOf(settings.scriptModel))
+            } catch (e: GeminiQuotaError) {
+                log("Research skipped: Gemini's free search quota is used up for today. Writing from general knowledge instead.")
+                null
+            }
+            if (reply != null) {
+                val pages = reply.sources.distinctBy { it.second }.joinToString("\n") { "- ${it.first}: ${it.second}" }
+                p.researchNotes = reply.text + if (pages.isNotBlank()) "\n\nPages searched:\n$pages" else ""
+                store.save(p)
+                log("Research done with ${reply.model} (${reply.sources.size} pages).")
+            }
         }
         if (cancelled()) return
         step(if (feedback.isBlank()) "Writing the script" else "Rewriting the script", null)
@@ -61,12 +70,13 @@ class Pipeline(
             p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags, feedback, current,
             stockFootage = settings.pexelsKey.isNotBlank(),
         )
-        applyScript(p, extractJson(gemini().generate(prompt, settings.scriptModel, json = true).text))
+        val reply = gemini().generate(prompt, settings.scriptModel, json = true, fallbacks = listOf(settings.researchModel))
+        applyScript(p, extractJson(reply.text))
         p.status = Status.SCRIPTED
         p.error = ""
         store.save(p)
         val words = p.scenes.sumOf { it.say.split(Regex("\\s+")).size }
-        log("Script ready: ${p.scenes.size} scenes, $words words.")
+        log("Script ready with ${reply.model}: ${p.scenes.size} scenes, $words words.")
     }
 
     private fun applyScript(p: Project, o: JSONObject) {

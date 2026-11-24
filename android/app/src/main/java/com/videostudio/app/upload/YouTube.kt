@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Base64
 import androidx.browser.customtabs.CustomTabsIntent
 import com.videostudio.app.data.Settings
+import com.videostudio.app.work.KeepAliveService
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -30,7 +31,7 @@ data class UploadResult(val id: String, val url: String)
  * Direct upload to YouTube with the user's own Google Cloud OAuth client ("Desktop app" type).
  * This is the advanced path; "Post everywhere" (SocialPost) needs no Google Cloud setup at all.
  */
-class YouTube(private val settings: Settings) {
+class YouTube(private val settings: Settings, private val tokenUrl: String = TOKEN_URL) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.MINUTES)
@@ -61,11 +62,34 @@ class YouTube(private val settings: Settings) {
      */
     fun signIn(activity: Activity) {
         configProblem()?.let { throw UploadError(it) }
+        // Without this Android freezes the app while the browser is in front, and Google's page
+        // hangs after "Continue" because nobody answers on the sign-in port.
+        KeepAliveService.start(activity)
+        try {
+            signInAwake(activity)
+        } finally {
+            KeepAliveService.stop(activity)
+            server = null
+        }
+    }
+
+    /** Stops a sign-in that is waiting for Google (the Cancel button). */
+    fun cancelSignIn() {
+        cancelled = true
+        runCatching { server?.close() }
+    }
+
+    @Volatile private var server: ServerSocket? = null
+    @Volatile private var cancelled = false
+
+    private fun signInAwake(activity: Activity) {
+        cancelled = false
         val verifier = b64(ByteArray(48).also { SecureRandom().nextBytes(it) })
         val challenge = b64(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(Charsets.UTF_8)))
         val state = b64(ByteArray(16).also { SecureRandom().nextBytes(it) })
 
-        ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { server ->
+        ServerSocket(0, 8, InetAddress.getByName("127.0.0.1")).use { server ->
+            this.server = server
             server.soTimeout = 300_000
             val redirect = "http://127.0.0.1:${server.localPort}"
             val url = Uri.parse(AUTH_URL).buildUpon()
@@ -88,6 +112,9 @@ class YouTube(private val settings: Settings) {
                     server.accept()
                 } catch (e: SocketTimeoutException) {
                     throw UploadError("Sign-in timed out. Try again.")
+                } catch (e: java.net.SocketException) {
+                    if (cancelled) throw UploadError("Sign-in cancelled.")
+                    throw e
                 }
                 socket.use { s ->
                     val line = s.getInputStream().bufferedReader().readLine() ?: return@use
@@ -125,7 +152,7 @@ a{display:inline-block;margin-top:28px;padding:16px 28px;border-radius:30px;back
                 .add("grant_type", "authorization_code")
                 .add("code_verifier", verifier)
                 .build()
-            http.newCall(Request.Builder().url(TOKEN_URL).post(body).build()).execute().use { resp ->
+            http.newCall(Request.Builder().url(tokenUrl).post(body).build()).execute().use { resp ->
                 val text = resp.body?.string() ?: ""
                 if (resp.code != 200) throw UploadError("Google did not issue a token (${resp.code}): ${explainTokenError(text)}")
                 val o = JSONObject(text)
@@ -150,7 +177,7 @@ a{display:inline-block;margin-top:28px;padding:16px 28px;border-radius:30px;back
             .add("grant_type", "refresh_token")
             .build()
         val (code, text) = try {
-            http.newCall(Request.Builder().url(TOKEN_URL).post(body).build()).execute().use { it.code to (it.body?.string() ?: "") }
+            http.newCall(Request.Builder().url(tokenUrl).post(body).build()).execute().use { it.code to (it.body?.string() ?: "") }
         } catch (e: Exception) {
             // A network blip must not throw the sign-in away.
             throw UploadError("Could not reach Google to refresh the sign-in: ${e.message}")

@@ -221,6 +221,10 @@ private fun YouTubeSettings(app: App) {
                     }
                 },
             ) { Text(if (signingIn) "Waiting for Google…" else "Sign in with Google") }
+            if (signingIn) {
+                Hint("Pick your account, press Continue on Google's page, then come back here. Stuck? Cancel and try again.")
+                TextButton(onClick = { yt.cancelSignIn() }) { Text("Cancel sign-in", color = Danger) }
+            }
         }
         error?.let {
             Spacer(Modifier.height(6.dp))
