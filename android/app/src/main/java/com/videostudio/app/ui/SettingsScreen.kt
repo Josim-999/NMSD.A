@@ -105,7 +105,7 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
             }
 
             Section("Stock photos (optional)") {
-                Hint("Free key from pexels.com/api. Without it, photo scenes show a big emoji instead.")
+                Hint("Free key from pexels.com/api. With it, photo scenes play real stock video clips full-screen (or a photo if no clip fits). Without it, they show a big emoji.")
                 Spacer(Modifier.height(6.dp))
                 SecretField("Pexels API key", s.pexelsKey) { s.pexelsKey = it }
             }
@@ -144,6 +144,17 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                     FilterChip(selected = q == "1080", onClick = { q = "1080"; s.quality = "1080" }, label = { Text("1080p (best)") })
                     FilterChip(selected = q == "720", onClick = { q = "720"; s.quality = "720" }, label = { Text("720p (faster)") })
                 }
+                Spacer(Modifier.height(8.dp))
+                var smooth by remember { mutableStateOf(s.smooth60) }
+                ToggleRow("Smooth motion (60 fps)", "Silkier animations and transitions. Rendering takes about twice as long.", smooth) {
+                    smooth = it; s.smooth60 = it
+                }
+                var music by remember { mutableStateOf(s.music) }
+                ToggleRow("Background music", "A soft music bed made on the phone (no copyright), lowered automatically while the voice speaks.", music) {
+                    music = it; s.music = it
+                }
+                var sfx by remember { mutableStateOf(s.soundEffects) }
+                ToggleRow("Sound effects", "A light whoosh on every scene change.", sfx) { sfx = it; s.soundEffects = it }
             }
 
             YouTubeSettings(app)
@@ -215,6 +226,17 @@ private fun YouTubeSettings(app: App) {
             Spacer(Modifier.height(6.dp))
             Hint(it, Danger)
         }
+    }
+}
+
+@Composable
+private fun ToggleRow(title: String, hint: String, value: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+        Column(Modifier.weight(1f)) {
+            Text(title)
+            Hint(hint)
+        }
+        Switch(value, onChange)
     }
 }
 

@@ -3,6 +3,25 @@
 Turns a topic into a finished vertical Short on the phone: Gemini researches and writes the
 script, a Microsoft neural voice reads it, the app animates and renders the video, then posts it.
 
+## What's new in 1.4: better video at the same Gemini cost
+
+Everything below runs on the phone; Gemini is called exactly as before.
+
+- **Sharper master file:** 12 Mbps at 1080p 30 fps (16 Mbps at 60 fps), H.264 High profile,
+  variable bitrate (Android 12+ keeps a minimum quality), BT.709 colour tags. Falls back step by
+  step on phones whose encoder refuses a setting.
+- **Optional 60 fps** (Settings → Voice and video) for silkier motion.
+- **Platform safe zones:** graphics stay in 300-1150 px and captions around 1330 px on the
+  1080x1920 frame, clear of TikTok, Reels and Shorts buttons and captions.
+- **Motion:** zoom-push transitions between scenes, a slow camera push-in, spring pops on list
+  items, captions and buttons, soft text shadows, vignette and fine film grain.
+- **Real footage:** with a Pexels key, photo scenes play portrait stock video clips full-screen
+  (free Pexels video API), falling back to a photo, then an emoji. Gemini is asked for 2-3
+  such scenes when footage is available.
+- **Sound:** voice high-pass and compression; music generated on the phone (no licences), about
+  16 dB under the voice while speaking and 8 dB in pauses; a whoosh on each scene change;
+  loudness about -14 LUFS with a -1 dBFS peak limit; AAC 160 kbps at 48 kHz.
+
 ## What's new in 1.3
 
 - Ready for updates: every future version installs over this one and keeps your videos and
@@ -59,7 +78,7 @@ The application id `com.videostudio.app` must never change either.
 
 - `ai/` Gemini client and the research/script prompts
 - `voice/` Microsoft Edge neural voice (with word timings) and the phone's own voice as fallback
-- `render/` timeline, scene painter (all scene types, captions) and the H.264/AAC encoder
+- `render/` timeline, scene painter (all scene types, captions, transitions), stock media, soundtrack mixer (`AudioMix`) and the H.264/AAC encoder
 - `upload/` `PostAll` (the Post to all queue), `Share` (opening each app), `YouTube` (optional direct upload)
 - `work/` background jobs, foreground service and the pipeline steps
 - `ui/` Compose screens

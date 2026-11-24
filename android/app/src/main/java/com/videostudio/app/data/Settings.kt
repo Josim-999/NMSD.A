@@ -91,6 +91,21 @@ class Settings(context: Context) {
         get() = str("quality", "1080")
         set(v) = put("quality", v)
 
+    /** 60 frames a second: smoother motion graphics, about twice the render time. */
+    var smooth60: Boolean
+        get() = p.getBoolean("fps60", false)
+        set(v) = p.edit().putBoolean("fps60", v).apply()
+
+    /** Soft background music made on the phone, ducked under the voice. */
+    var music: Boolean
+        get() = p.getBoolean("music", true)
+        set(v) = p.edit().putBoolean("music", v).apply()
+
+    /** Whoosh on scene changes. */
+    var soundEffects: Boolean
+        get() = p.getBoolean("sfx", true)
+        set(v) = p.edit().putBoolean("sfx", v).apply()
+
     var defaultHashtags: String
         get() = str("hashtags", "ai shorts learnai tech")
         set(v) = put("hashtags", v)

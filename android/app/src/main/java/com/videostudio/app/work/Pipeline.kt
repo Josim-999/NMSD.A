@@ -16,7 +16,9 @@ import com.videostudio.app.data.Status
 import com.videostudio.app.data.Upload
 import com.videostudio.app.data.objects
 import com.videostudio.app.data.strings
+import com.videostudio.app.render.AudioMix
 import com.videostudio.app.render.Palettes
+import com.videostudio.app.render.SceneMedia
 import com.videostudio.app.render.ScenePainter
 import com.videostudio.app.render.Timeline
 import com.videostudio.app.render.VideoRenderer
@@ -55,7 +57,10 @@ class Pipeline(
         step(if (feedback.isBlank()) "Writing the script" else "Rewriting the script", null)
         log("Writing the script with ${settings.scriptModel}…")
         val current = if (feedback.isBlank()) "" else JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).toString(1)
-        val prompt = Prompts.script(p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags, feedback, current)
+        val prompt = Prompts.script(
+            p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags, feedback, current,
+            stockFootage = settings.pexelsKey.isNotBlank(),
+        )
         applyScript(p, extractJson(gemini().generate(prompt, settings.scriptModel, json = true).text))
         p.status = Status.SCRIPTED
         p.error = ""
@@ -102,38 +107,66 @@ class Pipeline(
         log(String.format("Voice: %.1f s, %d words.", voice.seconds, voice.words.size))
         if (cancelled()) return
 
-        val photos = LinkedHashMap<Int, Bitmap>()
+        val timeline = Timeline(p.scenes, voice.words, voice.seconds)
+
+        // Photo scenes: a real stock video clip, else a stock photo, else a big emoji.
+        val media = LinkedHashMap<Int, SceneMedia.Lazy>()
         val photoScenes = p.scenes.withIndex().filter { it.value.type == "photo" }
         if (photoScenes.isNotEmpty()) {
             if (settings.pexelsKey.isBlank()) {
                 log("No Pexels key in Settings: photo scenes show an emoji instead.")
             } else {
-                step("Finding stock photos", null)
+                step("Finding stock footage", null)
                 val credits = ArrayList<String>()
+                var clips = 0
+                var stills = 0
                 for ((i, scene) in photoScenes) {
+                    if (cancelled()) return
+                    val query = scene.query.ifBlank { scene.text }
+                    val span = timeline.spans[i]
+                    val seconds = (span.end - span.start) + ScenePainter.TRANSITION
+                    val clip = File(dir, "photo_$i.mp4")
+                    val videoCredit = runCatching { Stock.pexelsVideo(settings.pexelsKey, query, clip, seconds) }.getOrNull()
+                    if (videoCredit != null) {
+                        credits.add(videoCredit)
+                        clips++
+                        media[i] = SceneMedia.Lazy { SceneMedia.Clip.load(clip, seconds) ?: loadBitmap(clip)?.let { SceneMedia.Photo(it) } }
+                        continue
+                    }
                     val f = File(dir, "photo_$i.jpg")
-                    val credit = runCatching { Stock.pexelsPhoto(settings.pexelsKey, scene.query.ifBlank { scene.text }, f) }.getOrNull()
+                    val credit = runCatching { Stock.pexelsPhoto(settings.pexelsKey, query, f) }.getOrNull()
                     if (credit != null) {
                         credits.add(credit)
-                        loadBitmap(f)?.let { photos[i] = it }
+                        stills++
+                        media[i] = SceneMedia.Lazy { loadBitmap(f)?.let { SceneMedia.Photo(it) } }
                     }
                 }
                 File(dir, "credits.txt").writeText(credits.joinToString("\n"))
-                log("Photos: ${photos.size} of ${photoScenes.size} found.")
+                log("Stock footage: $clips video clip(s), $stills photo(s) for ${photoScenes.size} scene(s).")
             }
         }
 
-        val timeline = Timeline(p.scenes, voice.words, voice.seconds)
-        val painter = ScenePainter(context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, photos)
+        val painter = ScenePainter(context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media)
         val (w, h) = if (settings.quality == "720") 720 to 1280 else 1080 to 1920
-        val renderer = VideoRenderer(w, h)
+        val fps = if (settings.smooth60) 60 else 30
+        val renderer = VideoRenderer(w, h, fps)
+        val audioPlan = AudioMix.Plan(
+            durationSec = timeline.duration,
+            sceneStarts = timeline.spans.map { it.start },
+            music = settings.music,
+            sfx = settings.soundEffects,
+            seed = p.id.hashCode(),
+        )
         step("Rendering the video", 0f)
-        log(String.format("Rendering ${w}x$h, %.1f s…", timeline.duration))
+        log(String.format("Rendering ${w}x$h at $fps fps, %.1f s…", timeline.duration))
         val started = System.currentTimeMillis()
-        renderer.render(painter, timeline.duration, voice.audio, p.video(store.root), cancelled) { step("Rendering the video", it) }
-        val first = timeline.spans.first()
-        renderer.thumbnail(painter, minOf(first.start + 1.2, (first.end - 0.2).coerceAtLeast(0.5)), p.thumb(store.root))
-        photos.values.forEach { it.recycle() }
+        try {
+            renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled) { step("Rendering the video", it) }
+            val first = timeline.spans.first()
+            renderer.thumbnail(painter, minOf(first.start + 1.2, (first.end - 0.2).coerceAtLeast(0.5)), p.thumb(store.root))
+        } finally {
+            painter.release()
+        }
         p.durationSec = timeline.duration
         p.status = if (p.uploads.isNotEmpty()) Status.POSTED else Status.RENDERED
         p.error = ""

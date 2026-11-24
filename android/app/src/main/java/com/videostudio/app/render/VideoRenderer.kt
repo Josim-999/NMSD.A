@@ -25,34 +25,44 @@ import java.nio.FloatBuffer
 
 /** Paints every frame with [ScenePainter] and encodes H.264 + AAC into an MP4, all on the phone. */
 class VideoRenderer(private val width: Int, private val height: Int, private val fps: Int = 30) {
-    private val bitrate = if (height >= 1920) 10_000_000 else 6_000_000
+    // Upload bitrates creators use for 9:16 1080p: 8-12 Mbps at 30 fps, 12-16 Mbps at 60 fps.
+    // The platforms re-encode anyway; a clean, high-bitrate master survives that best.
+    private val bitrate = when {
+        height >= 1920 && fps >= 50 -> 16_000_000
+        height >= 1920 -> 12_000_000
+        fps >= 50 -> 10_000_000
+        else -> 8_000_000
+    }
 
     fun render(
         painter: ScenePainter,
         durationSec: Double,
         audioFile: File,
+        audioPlan: AudioMix.Plan,
         out: File,
         cancelled: () -> Boolean,
         progress: (Float) -> Unit,
     ) {
-        val audio = encodeAudio(audioFile, durationSec)
+        val audio = encodeAudio(audioFile, audioPlan)
         out.parentFile?.mkdirs()
         val part = File(out.parentFile, out.name + ".part")
         part.delete()
 
-        val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
-            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
-            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-        }
         val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-        val surface: Surface
-        try {
-            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            surface = encoder.createInputSurface()
-            encoder.start()
-        } catch (e: Exception) {
+        // Best settings first; phones whose encoder refuses some of them fall back step by step.
+        val attempts = listOf(true to true, false to true, false to false)
+        var surface: Surface? = null
+        for ((high, extras) in attempts) {
+            try {
+                encoder.configure(videoFormat(high, extras), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                surface = encoder.createInputSurface()
+                encoder.start()
+                break
+            } catch (e: Exception) {
+                runCatching { encoder.reset() }
+            }
+        }
+        if (surface == null) {
             encoder.release()
             throw RenderError("This phone's video encoder does not support ${width}x$height. Try 720p in Settings.")
         }
@@ -94,6 +104,29 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         out.delete()
         if (!part.renameTo(out)) throw RenderError("could not save the video file")
     }
+
+    /**
+     * [high]: H.264 High profile (better quality per bit than Baseline). [extras]: variable bitrate
+     * (Android 12+ keeps a minimum quality in VBR) and BT.709 colour tags, the HD standard, so
+     * colours look the same after the platforms re-encode.
+     */
+    private fun videoFormat(high: Boolean, extras: Boolean) =
+        MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
+            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
+            setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
+            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
+            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            if (high) {
+                setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileHigh)
+                setInteger(MediaFormat.KEY_LEVEL, if (fps >= 50) MediaCodecInfo.CodecProfileLevel.AVCLevel42 else MediaCodecInfo.CodecProfileLevel.AVCLevel41)
+            }
+            if (extras) {
+                setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+                setInteger(MediaFormat.KEY_COLOR_STANDARD, MediaFormat.COLOR_STANDARD_BT709)
+                setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
+                setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
+            }
+        }
 
     private class MuxState {
         var videoTrack = -1
@@ -139,7 +172,7 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         val s = width / ScenePainter.W
         c.scale(s, s)
         painter.draw(c, t, captions = false)
-        out.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        out.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 95, it) }
         bmp.recycle()
     }
 
@@ -234,13 +267,14 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         Pcm(shorts, rate, channels.toInt())
     }
 
-    private fun encodeAudio(file: File, durationSec: Double): EncodedAudio {
-        val pcm = decode(file)
-        val needed = (pcm.rate * durationSec).toInt() * pcm.channels
-        val data = if (pcm.data.size < needed) pcm.data.copyOf(needed) else pcm.data
+    private fun encodeAudio(file: File, plan: AudioMix.Plan): EncodedAudio {
+        val voice = decode(file)
+        // Voice cleanup, music bed, whooshes and loudness, as one 48 kHz mono track.
+        val data = AudioMix.mix(voice.data, voice.rate, voice.channels, plan)
+        val pcm = Pcm(data, AudioMix.RATE, 1)
         val fmt = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, pcm.rate, pcm.channels).apply {
             setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
-            setInteger(MediaFormat.KEY_BIT_RATE, 128_000)
+            setInteger(MediaFormat.KEY_BIT_RATE, 160_000)
             setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384)
         }
         val enc = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)

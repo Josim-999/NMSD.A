@@ -33,7 +33,8 @@ class ScenePainter(
     private val timeline: Timeline,
     private val palette: Palette,
     private val seriesName: String,
-    private val photos: Map<Int, Bitmap>,
+    /** Stock photo or video clip per photo scene, loaded only while its scene is on screen. */
+    private val media: Map<Int, SceneMedia.Lazy>,
 ) {
     private val black: Typeface = runCatching { Typeface.createFromAsset(context.assets, "fonts/Inter-Black.otf") }
         .getOrElse { Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
@@ -57,6 +58,22 @@ class ScenePainter(
         shader = RadialGradient(0f, 0f, 560f, withAlpha(palette.accent, 55), 0, Shader.TileMode.CLAMP)
     }
     private val layouts = HashMap<String, StaticLayout>()
+
+    // Finishing layers drawn over every frame: soft vignette and fine film grain (hides gradient
+    // banding after the platforms re-encode and gives flat colour a filmic texture).
+    private val vignette = Paint().apply {
+        shader = RadialGradient(W / 2, H * 0.45f, H * 0.72f, intArrayOf(0, 0, Color.argb(120, 0, 0, 0)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+    }
+    private val grainBitmap: Bitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888).apply {
+        val rnd = java.util.Random(7)
+        val px = IntArray(256 * 256) { val v = rnd.nextInt(256); Color.argb(rnd.nextInt(22), v, v, v) }
+        setPixels(px, 0, 256, 0, 0, 256, 256)
+    }
+    private val grainPaint = Paint().apply {
+        shader = android.graphics.BitmapShader(grainBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+    }
+    private val grainShift = android.graphics.Matrix()
+    private val scrim = Paint()
     private val rect = RectF()
     private val path = Path()
     private val zoneMid = (ZONE_TOP + ZONE_BOTTOM) / 2f
@@ -68,6 +85,13 @@ class ScenePainter(
     private fun outBack(x: Double): Double {
         val c = clamp(x) - 1
         return 1 + 2.70158 * c * c * c + 1.70158 * c * c
+    }
+
+    /** Damped spring from 0 to 1: overshoots a little and settles, like real objects. */
+    private fun spring(x: Double): Double {
+        val t = x.coerceAtLeast(0.0)
+        if (t >= 1.6) return 1.0
+        return 1 - kotlin.math.exp(-6.5 * t) * cos(11.0 * t)
     }
 
     private fun withAlpha(color: Int, a: Int) = Color.argb(a.coerceIn(0, 255), Color.red(color), Color.green(color), Color.blue(color))
@@ -94,6 +118,8 @@ class ScenePainter(
                 typeface = face
                 textSize = size
                 this.color = color
+                // Soft drop shadow: text stays readable over photos, video and bright colours.
+                setShadowLayer(size * 0.12f, 0f, size * 0.05f, Color.argb(150, 0, 0, 0))
             }
             layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, maxWidth.toInt())
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
@@ -167,12 +193,34 @@ class ScenePainter(
     fun draw(c: Canvas, t: Double, captions: Boolean = true) {
         background(c, t)
         val span = timeline.sceneAt(t)
-        val scene = scenes[span.index]
-        val dur = (span.end - span.start).coerceAtLeast(0.3)
+        manageMedia(span.index, t - span.start)
         val lt = t - span.start
-        // Quick fade out at the end of every scene but the last.
-        val fade = if (span.index < scenes.size - 1) clamp((span.end - t) / 0.15).toFloat() else 1f
-        c.saveLayerAlpha(0f, 0f, W, H, (fade * 255).toInt())
+        if (span.index > 0 && lt < TRANSITION) {
+            // Zoom-push transition: the old scene grows and fades away, the new one settles in.
+            val k = outCubic(lt / TRANSITION).toFloat()
+            val prev = timeline.spans[span.index - 1]
+            drawScene(c, prev.index, t - prev.start, prev.end - prev.start, alpha = 1f - k, scale = 1f + 0.10f * k, dy = -70f * k)
+            drawScene(c, span.index, lt, span.end - span.start, alpha = k, scale = 0.90f + 0.10f * k, dy = 90f * (1 - k))
+        } else {
+            drawScene(c, span.index, lt, span.end - span.start, alpha = 1f, scale = 1f, dy = 0f)
+        }
+        chrome(c, t, span.index)
+        c.drawRect(0f, 0f, W, H, vignette)
+        grainShift.setTranslate(((t * 97) % 256).toFloat(), ((t * 61) % 256).toFloat())
+        grainPaint.shader.setLocalMatrix(grainShift)
+        c.drawRect(0f, 0f, W, H, grainPaint)
+        if (captions) captions(c, t)
+    }
+
+    /** One scene, with a slow push-in "camera" over its whole length. */
+    private fun drawScene(c: Canvas, index: Int, lt: Double, durRaw: Double, alpha: Float, scale: Float, dy: Float) {
+        if (alpha <= 0.01f) return
+        val scene = scenes[index]
+        val dur = durRaw.coerceAtLeast(0.3)
+        val drift = 1f + 0.035f * clamp(lt / dur).toFloat()
+        c.saveLayerAlpha(0f, 0f, W, H, (alpha * 255).toInt())
+        c.translate(0f, dy)
+        c.scale(scale * drift, scale * drift, W / 2, H * 0.42f)
         when (scene.type.lowercase(Locale.ROOT)) {
             "hook" -> hook(c, scene, lt)
             "stat" -> stat(c, scene, lt)
@@ -181,13 +229,23 @@ class ScenePainter(
             "compare" -> compare(c, scene, lt, dur)
             "emoji" -> emojiScene(c, scene, lt)
             "question" -> question(c, scene, lt)
-            "photo" -> photo(c, scene, span.index, lt, dur)
+            "photo" -> photo(c, scene, index, lt, dur)
             "outro" -> outro(c, scene, lt)
             else -> statement(c, scene, lt)
         }
         c.restore()
-        chrome(c, t, span.index)
-        if (captions) captions(c, t)
+    }
+
+    /** Keeps only the clips of the scene on screen (and the one leaving) in memory. */
+    private fun manageMedia(index: Int, lt: Double) {
+        val keep = if (index > 0 && lt < TRANSITION + 0.05) setOf(index, index - 1) else setOf(index)
+        for ((i, m) in media) if (i !in keep) m.release()
+    }
+
+    /** Frees every clip; call when rendering is finished. */
+    fun release() {
+        media.values.forEach { it.release() }
+        grainBitmap.recycle()
     }
 
     private fun background(c: Canvas, t: Double) {
@@ -261,6 +319,10 @@ class ScenePainter(
             val nextStart = g.words.getOrNull(i + 1)?.start ?: g.end
             val active = t >= g.words[i].start && t < nextStart
             if (active) {
+                // The spoken word pops on its chip.
+                val pop = 1f + 0.12f * (1f - spring((t - g.words[i].start) / 0.25).toFloat()).coerceAtLeast(-0.2f)
+                c.save()
+                c.scale(pop, pop, x + widths[i] / 2, -0.28f * tp.textSize)
                 card(c, x - 18f, -0.86f * tp.textSize, x + widths[i] + 18f, tp.textSize * 0.3f, palette.accent, 22f)
             } else {
                 tp.style = Paint.Style.STROKE
@@ -272,6 +334,7 @@ class ScenePainter(
             tp.style = Paint.Style.FILL
             tp.color = if (active) Color.BLACK else Color.WHITE
             c.drawText(word, x, 0f, tp)
+            if (active) c.restore()
             x += widths[i] + space
         }
         c.restore()
@@ -349,9 +412,10 @@ class ScenePainter(
             val delay = if (items.size == 1) 0.0 else i * spread / (items.size - 1).coerceAtLeast(1) * 0.9
             val a = outCubic((lt - delay) / 0.35).toFloat()
             if (a <= 0f) return@forEachIndexed
+            val bounce = spring((lt - delay) / 0.45).toFloat()
             val y = y0 + i * (rowH + gap)
             c.save()
-            c.translate(-(1 - a) * 160f, 0f)
+            c.translate(-(1 - bounce) * 160f, 0f)
             card(c, SIDE, y, W - SIDE, y + rowH, withAlpha(palette.card, (Color.alpha(palette.card) * a).toInt()))
             val cy = y + rowH / 2
             val alpha = (255 * a).toInt()
@@ -378,9 +442,10 @@ class ScenePainter(
 
     private fun compare(c: Canvas, s: Scene, lt: Double, dur: Double) {
         val second = (dur * 0.42).coerceIn(0.5, 2.2)
-        val h = 435f
+        val gap = 50f
+        val h = (ZONE_BOTTOM - ZONE_TOP - gap) / 2
         compareHalf(c, lt, h, second, ZONE_TOP, s.left.ifBlank { "Myth" }, s.leftText, palette.bad, "✕", 0.0, strike = true)
-        compareHalf(c, lt, h, second, ZONE_TOP + h + 60f, s.right.ifBlank { "Fact" }, s.rightText, palette.good, "✓", second, strike = false)
+        compareHalf(c, lt, h, second, ZONE_TOP + h + gap, s.right.ifBlank { "Fact" }, s.rightText, palette.good, "✓", second, strike = false)
     }
 
     private fun compareHalf(
@@ -460,36 +525,37 @@ class ScenePainter(
         tp.textAlign = Paint.Align.LEFT
         c.restore()
         val a = clamp((lt - 0.15) / 0.3).toFloat()
-        drawBlock(c, block("q", upper(s.text.ifBlank { s.say }), black, 104f, zoneW, 440f), W / 2, 1020f, a)
+        drawBlock(c, block("q", upper(s.text.ifBlank { s.say }), black, 104f, zoneW, 360f), W / 2, 950f, a)
     }
 
+    /** Full-screen stock video (or photo) with a slow zoom, a dark scrim for legibility, and its text. */
     private fun photo(c: Canvas, s: Scene, index: Int, lt: Double, dur: Double) {
-        val bmp = photos[index]
-        if (bmp == null) {
+        val m = media[index]?.get()
+        if (m == null) {
             emojiScene(c, s.copy(emoji = s.emoji.ifBlank { "📸" }), lt)
             return
         }
-        val a = outCubic(lt / 0.4).toFloat()
-        c.save()
-        val slide = (1 - a) * 80f
-        rect.set(SIDE, ZONE_TOP + slide, W - SIDE, ZONE_TOP + 700f + slide)
-        path.reset()
-        path.addRoundRect(rect, 48f, 48f, Path.Direction.CW)
-        c.clipPath(path)
-        // Slow zoom and pan (Ken Burns).
-        val zoom = max(rect.width() / bmp.width, rect.height() / bmp.height) *
-            (1.08f + 0.12f * clamp(lt / dur.coerceAtLeast(1.0)).toFloat())
-        val w = bmp.width * zoom
-        val h = bmp.height * zoom
-        val left = rect.centerX() - w / 2 - (8 * lt).toFloat()
-        val top = rect.centerY() - h / 2
+        val frame = m.frameAt(lt)
+        val zoom = max(W / frame.width, H / frame.height) * (1.04f + 0.08f * clamp(lt / dur.coerceAtLeast(1.0)).toFloat())
+        val w = frame.width * zoom
+        val h = frame.height * zoom
+        val left = (W - w) / 2 - (6 * lt).toFloat()
+        val top = (H - h) / 2
         fill.shader = null
-        fill.alpha = (255 * a).toInt()
-        c.drawBitmap(bmp, Rect(0, 0, bmp.width, bmp.height), RectF(left, top, left + w, top + h), fill)
         fill.alpha = 255
-        c.restore()
+        fill.isFilterBitmap = true
+        c.drawBitmap(frame, Rect(0, 0, frame.width, frame.height), RectF(left, top, left + w, top + h), fill)
+        // Darken top and bottom so the progress bar, text and captions read on any footage.
+        scrim.shader = LinearGradient(
+            0f, 0f, 0f, H,
+            intArrayOf(Color.argb(150, 0, 0, 0), Color.argb(40, 0, 0, 0), Color.argb(60, 0, 0, 0), Color.argb(190, 0, 0, 0)),
+            floatArrayOf(0f, 0.3f, 0.55f, 1f), Shader.TileMode.CLAMP,
+        )
+        c.drawRect(0f, 0f, W, H, scrim)
         if (s.text.isBlank()) return
-        drawBlock(c, block("photo", upper(s.text), black, 92f, zoneW, 200f), W / 2, 1150f, clamp((lt - 0.25) / 0.3).toFloat())
+        val a = clamp((lt - 0.2) / 0.3).toFloat()
+        val pop = spring((lt - 0.2) / 0.5).toFloat()
+        drawBlock(c, block("photo", upper(s.text), black, 96f, zoneW, 300f), W / 2, ZONE_TOP + 160f, a, 0.85f + 0.15f * pop)
     }
 
     private fun outro(c: Canvas, s: Scene, lt: Double) {
@@ -506,21 +572,30 @@ class ScenePainter(
             tp.textSize = 52f
             val half = (tp.measureText(label) + 80f) / 2
             val alpha = (255 * a).toInt()
-            card(c, W / 2 - half, 1170f, W / 2 + half, 1270f, withAlpha(palette.accent, alpha), 50f)
+            val pop = spring((lt - 0.5) / 0.5).toFloat()
+            c.save()
+            c.scale(pop, pop, W / 2, 1150f)
+            card(c, W / 2 - half, 1100f, W / 2 + half, 1200f, withAlpha(palette.accent, alpha), 50f)
             tp.color = Color.BLACK
             tp.alpha = alpha
             tp.textAlign = Paint.Align.CENTER
-            c.drawText(label, W / 2, 1238f, tp)
+            c.drawText(label, W / 2, 1168f, tp)
             tp.textAlign = Paint.Align.LEFT
+            c.restore()
         }
     }
 
     companion object {
         const val W = 1080f
         const val H = 1920f
-        const val SIDE = 90f
-        const val ZONE_TOP = 330f
-        const val ZONE_BOTTOM = 1260f
-        const val CAPTION_Y = 1420f
+        // Safe zones for TikTok, Reels and Shorts on 1080x1920: their buttons cover roughly the
+        // right 120-180 px, the top 130-240 px and the bottom 320-660 px (caption, music, CTA).
+        // Graphics live in 300-1150; captions sit around 1330, above the bottom overlay.
+        const val SIDE = 110f
+        const val ZONE_TOP = 300f
+        const val ZONE_BOTTOM = 1150f
+        const val CAPTION_Y = 1330f
+        /** Length of the zoom-push between scenes, in seconds. */
+        const val TRANSITION = 0.28
     }
 }

@@ -35,6 +35,7 @@ Do not invent anything; leave out any fact you could not find a source for.
         extraHashtags: String,
         feedback: String = "",
         current: String = "",
+        stockFootage: Boolean = false,
     ): String {
         val maxWords = (p.lengthSec * WORDS_PER_SECOND).toInt()
         val research = if (p.researchNotes.isNotBlank())
@@ -78,6 +79,7 @@ For every scene choose ONE visual from this list (the app animates them), and fi
 - {"type":"photo","query":"2-4 word stock photo search in English","text":"2-6 words"}
 - {"type":"outro","text":"the comment question, short","emoji":"one emoji"}  (use for the last scene)
 Vary the visuals; never use the same type more than twice in a row. On-screen text must be short.
+${if (stockFootage) "Real stock video is available: use the \"photo\" visual for 2 or 3 scenes where real footage helps (places, objects, people doing things), with a concrete visual search query." else "No stock footage is available: use \"photo\" at most once."}
 
 Reply with one JSON object and nothing else, exactly this shape:
 {
