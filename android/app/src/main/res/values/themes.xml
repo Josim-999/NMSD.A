@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.VideoStudio" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#ff0e0f1a</item>
+        <item name="android:statusBarColor">#ff0e0f1a</item>
+        <item name="android:navigationBarColor">#ff0e0f1a</item>
+    </style>
+</resources>

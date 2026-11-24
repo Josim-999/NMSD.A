@@ -1,0 +1,66 @@
+package com.videostudio.app
+
+import android.graphics.Bitmap
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import com.videostudio.app.data.Project
+import com.videostudio.app.data.Scene
+import com.videostudio.app.data.Status
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import java.io.File
+
+/** Writes screenshots of the new screens to build/screens for a visual check (not an assertion). */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34], qualifiers = "w411dp-h891dp-xxhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class ScreenshotTest {
+    @get:Rule
+    val rule = createAndroidComposeRule<MainActivity>()
+
+    private fun shot(name: String) {
+        rule.waitForIdle()
+        // Draw the window ourselves; works with Robolectric's native graphics.
+        val view = rule.activity.window.decorView
+        val bmp = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        rule.runOnUiThread { view.draw(android.graphics.Canvas(bmp)) }
+        val dir = File("build/screens").apply { mkdirs() }
+        File(dir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test
+    fun settingsAndPostEverywhere() {
+        shot("1_home_empty")
+        rule.onNodeWithContentDescription("Settings").performClick()
+        shot("2_settings_not_connected")
+
+        // Pretend accounts are already linked, then open a project with a finished video.
+        val app = rule.activity.application as App
+        app.settings.socialApiKey = "demo-key"
+        app.settings.socialConnected = listOf("tiktok", "instagram", "youtube", "facebook", "x")
+        app.settings.socialAccountNames = mapOf("tiktok" to "@mychannel", "youtube" to "My Channel")
+        val p = Project(id = "demo", topic = "Why your phone battery dies in the cold", status = Status.RENDERED, durationSec = 42.0)
+        p.title = "Why cold kills your battery"
+        p.ytTitle = "Why your phone dies in the cold"
+        p.description = "Cold slows the chemistry inside lithium batteries."
+        p.hashtags = listOf("tech", "battery", "shorts")
+        p.scenes = mutableListOf(Scene("Why?", type = "hook"), Scene("Because.", type = "statement"), Scene("Comment!", type = "outro"))
+        rule.runOnUiThread {
+            app.store.save(p)
+            p.video(app.store.root).writeBytes(ByteArray(1000))
+        }
+        rule.activity.runOnUiThread { rule.activity.onBackPressedDispatcher.onBackPressed() }
+        rule.waitForIdle()
+        rule.onNodeWithText("Why cold kills your battery").performClick()
+        rule.onNodeWithText("Video & upload").performClick()
+        rule.onNodeWithText("Post to all 5").performScrollTo()
+        shot("3_post_everywhere")
+    }
+}

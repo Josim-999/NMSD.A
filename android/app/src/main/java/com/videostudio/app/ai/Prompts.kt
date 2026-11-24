@@ -1,0 +1,98 @@
+package com.videostudio.app.ai
+
+import com.videostudio.app.data.Project
+
+object Prompts {
+    const val WORDS_PER_SECOND = 2.9
+
+    val BEATS = listOf(
+        "HOOK (first line, about 2 s): a curiosity gap the viewer must close: a question, a claim that sounds wrong, or a stake. Under 12 words. No greeting, no intro, no 'in this video'.",
+        "PROMISE (by about 3 s, line 2 at the latest): say what the viewer will know by the end.",
+        "PROOF (most of the video): one idea only, shown in beats of 3 to 5 seconds: escalate, break a myth, give a specific fact with its source.",
+        "PAYOFF (the last 10-15 s): the answer that closes the loop the hook opened.",
+        "TRIGGER (last lines): one line that makes the viewer feel something (surprise, a little fear, the urge to argue) and one that loops back to the hook, so the replay feels seamless.",
+    )
+
+    fun research(p: Project): String {
+        val audience = if (p.audience.isBlank()) "" else "Audience: ${p.audience}"
+        return """
+You are a researcher preparing facts for a 30 to 60 second vertical video.
+Topic: ${p.topic}
+$audience
+Use Google Search. Find:
+1. The single most surprising, specific angle on this topic that would make a viewer stop scrolling.
+2. Eight to twelve concrete, checkable facts (numbers, dates, named studies, named tools), each with the URL of the page it came from.
+3. Common myths or mistakes people believe about it.
+Write plain notes in English, one fact per line in the form: FACT — source URL.
+Do not invent anything; leave out any fact you could not find a source for.
+""".trim()
+    }
+
+    fun script(
+        p: Project,
+        seriesName: String,
+        seriesPromise: String,
+        extraHashtags: String,
+        feedback: String = "",
+        current: String = "",
+    ): String {
+        val maxWords = (p.lengthSec * WORDS_PER_SECOND).toInt()
+        val research = if (p.researchNotes.isNotBlank())
+            "The research is below. Use only facts listed in it for numbers and claims.\n<research>\n${p.researchNotes}\n</research>"
+        else
+            "No research was run. Use only facts you are confident are true and well known; avoid exact numbers you are unsure of."
+        val rewrite = if (feedback.isBlank() || current.isBlank()) "" else
+            "\nThis is a rewrite. The current script is:\n<current_script>\n$current\n</current_script>\nThe user asked for this change: $feedback\n"
+        val series = if (seriesName.isNotBlank()) "Series: \"$seriesName\" — $seriesPromise" else "Series promise: $seriesPromise"
+        val beats = BEATS.joinToString("\n") { "   - $it" }
+        return """
+You are a scriptwriter with years of short-form video behind you. Write the script for one vertical short
+(YouTube Shorts, TikTok, Instagram Reels).
+
+Topic: ${p.topic}
+Audience: ${p.audience.ifBlank { "work it out from the topic" }}
+Language of the spoken lines and on-screen text: ${p.language}
+Target length: ${p.lengthSec} seconds spoken: write ${maxWords - 8} to $maxWords words in total (the voice reads about 2.9 words a second).
+$series
+$rewrite
+$research
+
+Rules that make a short spread; follow every one:
+1. Hook in the first second. Scene 1 opens a curiosity gap: a question (strongest), a claim that sounds wrong, or a stake. Under 12 words. No greeting, no intro, no "in this video".
+2. One idea, paid off fast. By scene 2 the viewer knows what they get by the end. No list of five tips.
+3. Tight pacing: each scene is one spoken line of 4 to 12 words, so the picture changes every 1.5 to 4 seconds.
+4. Follow these beats in order:
+$beats
+5. Honest: every number or factual claim must be listed in "sources" with its URL. Make the viewer feel one thing and end on a question viewers will want to answer in the comments. The last line loops back to the hook.
+Write the way a person talks to a friend. Write numbers in "say" as they are spoken ("seventy percent"), but in the visual use digits ("70%").
+
+For every scene choose ONE visual from this list (the app animates them), and fill only its fields:
+- {"type":"hook","text":"3-7 punchy words","emoji":"one emoji"}            (use for scene 1)
+- {"type":"stat","value":"70%","label":"short label under the number"}     (a number: %, x, ${'$'}, years...)
+- {"type":"list","text":"short title","items":["2-4 short items"]}
+- {"type":"steps","text":"short title","items":["2-4 short steps"]}
+- {"type":"compare","left":"MYTH","leftText":"short","right":"FACT","rightText":"short"}
+- {"type":"statement","text":"5-10 words on screen","highlight":"one word from text"}
+- {"type":"emoji","emoji":"one emoji","text":"2-5 words"}
+- {"type":"question","text":"short question"}
+- {"type":"photo","query":"2-4 word stock photo search in English","text":"2-6 words"}
+- {"type":"outro","text":"the comment question, short","emoji":"one emoji"}  (use for the last scene)
+Vary the visuals; never use the same type more than twice in a row. On-screen text must be short.
+
+Reply with one JSON object and nothing else, exactly this shape:
+{
+  "title": "working title",
+  "one_idea": "the single idea of the video, in one sentence",
+  "comment_question": "the question that invites comments",
+  "scenes": [ {"say": "the spoken words of this scene", "visual": { ...one of the visuals above... }} ],
+  "sources": [ {"claim": "...", "url": "..."} ],
+  "publish": {
+    "titles": ["three title options under 60 characters"],
+    "description": "two or three sentences, the search phrase people type in the first one",
+    "hashtags": ["five to eight, without the # sign"]
+  }
+}
+Hashtags the channel always likes (use if they fit): $extraHashtags
+""".trim()
+    }
+}
