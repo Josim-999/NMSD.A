@@ -149,6 +149,8 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
             YouTubeSettings(app)
 
             Section("About") {
+                Text("Video Studio ${com.videostudio.app.BuildConfig.VERSION_NAME} (build ${com.videostudio.app.BuildConfig.VERSION_CODE})")
+                Spacer(Modifier.height(6.dp))
                 Hint(
                     "Keys are stored only on this phone, in the app's private storage. Videos are made on the phone: only the script requests (Gemini), " +
                         "the voice (Microsoft) and the apps you post with use the internet."

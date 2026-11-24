@@ -1,3 +1,7 @@
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.time.Duration
+import java.time.Instant
 import java.util.Properties
 
 plugins {
@@ -6,15 +10,50 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Release signing: set these in android/keystore.properties (not committed) or as
-// environment variables (GitHub Actions secrets). Without them the release build
-// is signed with the debug key so it still installs.
+// ---- Updates must install over the app already on the phone ----
+//
+// 1. Same signing key. Android only installs an update signed with the same key as the installed
+//    app. Release signing reads android/keystore.properties (never committed) or the environment
+//    (GitHub secrets). With REQUIRE_RELEASE_KEY=1 (set on GitHub) a release build refuses to run
+//    without the key, or with any key other than the app's own (checked by its fingerprint).
+// 2. Higher version code. Android refuses an "update" whose versionCode is not higher. It is
+//    generated from the build time (minutes since 2025-01-01), so every later build is higher,
+//    whatever branch or machine builds it. VERSION_CODE in the environment overrides it.
+
+/** SHA-256 of the Video Studio release certificate (CN=Video Studio). Every update must match. */
+val releaseCertSha256 = "2b18af1117d2e064e5c52e4c4272cb9471658ec4ea3804a4e46432c4f60d6c14"
+
 val keyProps = Properties().apply {
     val f = rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
 fun signingValue(name: String): String? =
-    keyProps.getProperty(name) ?: System.getenv(name.uppercase().replace('.', '_'))
+    keyProps.getProperty(name) ?: System.getenv(name.uppercase().replace('.', '_'))?.takeIf { it.isNotBlank() }
+
+val requireReleaseKey = System.getenv("REQUIRE_RELEASE_KEY") == "1"
+
+/** Fails the build when the key is missing or is not the app's own key. */
+fun checkReleaseKey() {
+    val path = signingValue("store.file")
+    if (path == null) {
+        if (requireReleaseKey) throw GradleException(
+            "No release signing key. Add the RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD and RELEASE_KEY_ALIAS " +
+                "repository secrets: an APK signed with another key will not install over the app."
+        )
+        return
+    }
+    val ks = KeyStore.getInstance(KeyStore.getDefaultType())
+    file(path).inputStream().use { ks.load(it, signingValue("store.password")?.toCharArray()) }
+    val alias = signingValue("key.alias") ?: throw GradleException("key.alias is missing")
+    val cert = ks.getCertificate(alias) ?: throw GradleException("No key named '$alias' in the keystore")
+    val sha = MessageDigest.getInstance("SHA-256").digest(cert.encoded).joinToString("") { "%02x".format(it) }
+    if (sha != releaseCertSha256) throw GradleException(
+        "This keystore is not the Video Studio release key (certificate $sha). Updates signed with it would not install."
+    )
+}
+
+val autoVersionCode: Int = System.getenv("VERSION_CODE")?.toIntOrNull()
+    ?: Duration.between(Instant.parse("2025-01-01T00:00:00Z"), Instant.now()).toMinutes().toInt()
 
 android {
     namespace = "com.videostudio.app"
@@ -24,8 +63,9 @@ android {
         applicationId = "com.videostudio.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2"
+        // Always higher than the last build (1.2 was 3), see autoVersionCode above.
+        versionCode = maxOf(4, autoVersionCode)
+        versionName = "1.3"
     }
 
     signingConfigs {
@@ -45,6 +85,7 @@ android {
             // Not shrunk, like the original release: keeps every class the app might need at runtime.
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            checkReleaseKey()
             signingConfig = if (signingValue("store.file") != null) {
                 signingConfigs.getByName("release")
             } else {
@@ -58,7 +99,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
     testOptions {
         unitTests {

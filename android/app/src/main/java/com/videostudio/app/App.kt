@@ -1,6 +1,7 @@
 package com.videostudio.app
 
 import android.app.Application
+import com.videostudio.app.data.Migrations
 import com.videostudio.app.data.ProjectStore
 import com.videostudio.app.data.Settings
 import com.videostudio.app.upload.PostAll
@@ -17,6 +18,7 @@ class App : Application() {
         super.onCreate()
         settings = Settings(this)
         store = ProjectStore(File(filesDir, "projects"))
+        Migrations.run(this, store)
         jobs = Jobs(this, store, settings)
         postAll = PostAll(store)
     }

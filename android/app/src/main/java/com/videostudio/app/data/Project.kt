@@ -91,6 +91,7 @@ data class Project(
     fun displayTitle(): String = title.ifBlank { topic }
 
     fun toJson(): JSONObject = JSONObject()
+        .put("schema", Migrations.CURRENT)
         .put("id", id).put("topic", topic).put("audience", audience).put("lengthSec", lengthSec)
         .put("language", language).put("voice", voice).put("palette", palette).put("research", research)
         .put("status", status).put("title", title).put("researchNotes", researchNotes)
