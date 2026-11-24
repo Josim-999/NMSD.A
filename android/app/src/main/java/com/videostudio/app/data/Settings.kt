@@ -56,39 +56,10 @@ class Settings(context: Context) {
         p.edit().remove("yt_refresh").remove("yt_access").remove("yt_access_exp").remove("yt_channel").apply()
     }
 
-    // ---- One-tap posting to every platform (Upload-Post connected accounts) ----
-
-    /** API key from the Upload-Post dashboard. The only thing the user ever pastes. */
-    var socialApiKey: String
-        get() = str("social_api_key")
-        set(v) = put("social_api_key", v.trim())
-
-    /** Name of the Upload-Post profile the social accounts are linked to. Created automatically. */
-    var socialProfile: String
-        get() = str("social_profile", "videostudio")
-        set(v) = put("social_profile", v.trim().ifBlank { "videostudio" })
-
-    /** Platforms linked to the profile, as last read from Upload-Post. */
-    var socialConnected: List<String>
-        get() = str("social_connected").split(',').map { it.trim() }.filter { it.isNotEmpty() }
-        set(v) = put("social_connected", v.joinToString(","))
-
-    /** Display names of the linked accounts, "platform=name" pairs. */
-    var socialAccountNames: Map<String, String>
-        get() = str("social_names").split('\n').mapNotNull {
-            val i = it.indexOf('=')
-            if (i > 0) it.substring(0, i) to it.substring(i + 1) else null
-        }.toMap()
-        set(v) = put("social_names", v.entries.joinToString("\n") { "${it.key}=${it.value.replace('\n', ' ')}" })
-
-    /** Platforms "Post everywhere" sends to by default. Empty means every connected one. */
-    var socialTargets: List<String>
-        get() = str("social_targets").split(',').map { it.trim() }.filter { it.isNotEmpty() }
-        set(v) = put("social_targets", v.joinToString(","))
-
-    fun signOutSocial() {
-        p.edit().remove("social_connected").remove("social_names").remove("social_targets").apply()
-    }
+    /** Apps "Post to all" opens, in order. Empty means the main four that are installed. */
+    var postTargets: List<String>
+        get() = str("post_targets").split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        set(v) = put("post_targets", v.joinToString(","))
 
     // ---- Voice, look and publishing defaults ----
 

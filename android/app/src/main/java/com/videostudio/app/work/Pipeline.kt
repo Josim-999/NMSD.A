@@ -20,8 +20,6 @@ import com.videostudio.app.render.Palettes
 import com.videostudio.app.render.ScenePainter
 import com.videostudio.app.render.Timeline
 import com.videostudio.app.render.VideoRenderer
-import com.videostudio.app.upload.SocialPost
-import com.videostudio.app.upload.UploadError
 import com.videostudio.app.upload.YouTube
 import com.videostudio.app.voice.DeviceTts
 import com.videostudio.app.voice.EdgeTts
@@ -165,41 +163,6 @@ class Pipeline(
         p.status = Status.POSTED
         store.save(p)
         log("Posted: ${result.url}")
-    }
-
-    /** One tap: the video goes to every chosen connected account at once. */
-    fun postEverywhere(p: Project, platforms: List<String>, visibility: String) {
-        val video = p.video(store.root)
-        if (!video.exists()) throw IllegalStateException("Render the video first.")
-        log("Posting to ${platforms.joinToString { SocialPost.name(it) }} as $visibility…")
-        val results = SocialPost(settings).post(
-            video = video,
-            ytTitle = p.ytTitle.ifBlank { p.displayTitle() },
-            caption = publishText(p, settings, forYouTube = false),
-            ytDescription = publishText(p, settings, forYouTube = true),
-            hashtags = p.hashtags,
-            platforms = platforms,
-            visibility = visibility,
-            aiLabel = settings.aiLabel,
-            progress = { s, f -> step(s, f) },
-            cancelled = cancelled,
-        )
-        val now = System.currentTimeMillis()
-        for (r in results) {
-            if (r.ok) {
-                p.uploads.add(Upload(r.platform, r.url, visibility, now))
-                log("✓ ${SocialPost.name(r.platform)}: ${r.url.ifBlank { "posted" }}")
-            } else {
-                log("✕ ${SocialPost.name(r.platform)}: ${r.error}")
-            }
-        }
-        if (results.any { it.ok }) p.status = Status.POSTED
-        store.save(p)
-        val failed = results.filter { !it.ok }
-        if (failed.size == results.size) {
-            throw UploadError("Nothing was posted. " + failed.joinToString("; ") { "${SocialPost.name(it.platform)}: ${it.error}" })
-        }
-        log("Posted to ${results.count { it.ok }} of ${results.size}.")
     }
 
     companion object {

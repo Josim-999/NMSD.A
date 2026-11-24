@@ -3,21 +3,17 @@
 Turns a topic into a finished vertical Short on the phone: Gemini researches and writes the
 script, a Microsoft neural voice reads it, the app animates and renders the video, then posts it.
 
-## What's new in 1.1
+## What's new in 1.2
 
-- **Connected accounts: post everywhere with one tap.** Paste one Upload-Post API key, tap
-  *Connect accounts*, log in to each network once (TikTok, Instagram, YouTube, Facebook, X,
-  LinkedIn, Threads, Bluesky). After that, *Post everywhere* sends a video to all of them in one
-  go and shows each network's link. No Google Cloud project, no developer accounts, no app reviews.
-  Upload-Post holds the approved app registrations with each network; its free plan allows
-  10 uploads a month.
-- **YouTube upload fixed.** YouTube now works through Connected accounts with no Google Cloud
-  setup. The old direct route (your own OAuth client) stays under Settings as an advanced option,
-  with fixes: it no longer signs you out on a network blip, and Google's errors are explained
-  (no test user added, the 7-day sign-in limit in Testing mode, the API not enabled, no channel,
-  daily quota).
-- Share buttons for X, Threads, LinkedIn and WhatsApp next to TikTok, Instagram, Facebook and the
-  YouTube app.
+- **Post to all, with nothing to set up.** One button opens TikTok, Instagram, YouTube and
+  Facebook (plus X, Threads, LinkedIn or WhatsApp if ticked) one after another. Each app opens
+  with the video attached and the caption on the clipboard (the title, for YouTube). Post there,
+  come back, and the next app opens after a 3-second countdown, with Skip, Stop and "open it again".
+  No API keys, no accounts to connect, no backend: you are already signed in to those apps.
+- The video is saved once to Movies/Video Studio and shared from the gallery, which every app accepts.
+- Removed the Upload-Post connection (it needed an account and an API key).
+- YouTube direct upload with your own Google Cloud client moved to Settings → Advanced and only
+  shows on the video screen once you have signed in there.
 
 ## Build
 
@@ -50,6 +46,6 @@ also use Google's mirror of it.
 - `ai/` Gemini client and the research/script prompts
 - `voice/` Microsoft Edge neural voice (with word timings) and the phone's own voice as fallback
 - `render/` timeline, scene painter (all scene types, captions) and the H.264/AAC encoder
-- `upload/` `SocialPost` (one-tap posting), `YouTube` (direct upload), `Share` (apps on the phone)
+- `upload/` `PostAll` (the Post to all queue), `Share` (opening each app), `YouTube` (optional direct upload)
 - `work/` background jobs, foreground service and the pipeline steps
 - `ui/` Compose screens

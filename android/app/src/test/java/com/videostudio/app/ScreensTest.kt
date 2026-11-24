@@ -25,13 +25,11 @@ class ScreensTest {
     val rule = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun homeToSettingsShowsConnectedAccounts() {
+    fun homeToSettingsOpens() {
         rule.onNodeWithText("Make your first Short").assertIsDisplayed()
         rule.onNodeWithContentDescription("Settings").performClick()
-        rule.onNodeWithText("Connected accounts — post everywhere with one tap").assertIsDisplayed()
-        rule.onNodeWithText("Upload-Post API key").assertIsDisplayed()
-        rule.onNodeWithText("Connect accounts").assertIsDisplayed()
-        rule.onNodeWithText("YouTube direct upload (advanced, optional)").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Posting").assertIsDisplayed()
+        rule.onNodeWithText("Advanced: YouTube direct upload (optional)").performScrollTo().assertIsDisplayed()
     }
 
     @Test

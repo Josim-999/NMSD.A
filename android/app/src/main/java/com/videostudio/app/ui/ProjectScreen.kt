@@ -74,7 +74,6 @@ import com.videostudio.app.MainActivity
 import com.videostudio.app.data.Project
 import com.videostudio.app.data.Scene
 import com.videostudio.app.upload.Share
-import com.videostudio.app.upload.SocialPost
 import com.videostudio.app.upload.YouTube
 import com.videostudio.app.work.JobState
 import com.videostudio.app.work.Pipeline
@@ -132,7 +131,7 @@ fun ProjectScreen(app: App, id: String, onBack: () -> Unit, onSettings: () -> Un
                         }
                     }
                 }
-                if (tab == 0) ScriptTab(app, p, job) { tab = 1 } else VideoTab(app, p, job, onSettings)
+                if (tab == 0) ScriptTab(app, p, job) { tab = 1 } else VideoTab(app, p, job)
                 Spacer(Modifier.height(32.dp))
             }
         }
@@ -300,7 +299,7 @@ private fun SceneFields(s: Scene, enabled: Boolean, onChange: (Scene) -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ColumnScope.VideoTab(app: App, p: Project, job: JobState?, onSettings: () -> Unit) {
+private fun ColumnScope.VideoTab(app: App, p: Project, job: JobState?) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val s = app.settings
@@ -338,7 +337,6 @@ private fun ColumnScope.VideoTab(app: App, p: Project, job: JobState?, onSetting
     var title by remember(p.id) { mutableStateOf(p.ytTitle.ifBlank { p.displayTitle() }) }
     var description by remember(p.id) { mutableStateOf(p.description) }
     var tags by remember(p.id) { mutableStateOf(p.hashtags.joinToString(" ")) }
-    var visibility by rememberSaveable { mutableStateOf(s.defaultVisibility) }
     var aiLabel by remember { mutableStateOf(s.aiLabel) }
 
     fun saveText() {
@@ -347,7 +345,6 @@ private fun ColumnScope.VideoTab(app: App, p: Project, job: JobState?, onSetting
         fresh.description = description.trim()
         fresh.hashtags = tags.split(Regex("[\\s,]+")).map { it.removePrefix("#") }.filter { it.isNotBlank() }
         app.store.save(fresh)
-        s.defaultVisibility = visibility
         s.aiLabel = aiLabel
     }
 
@@ -363,75 +360,52 @@ private fun ColumnScope.VideoTab(app: App, p: Project, job: JobState?, onSetting
         Spacer(Modifier.height(6.dp))
         OutlinedTextField(tags, { tags = it }, Modifier.fillMaxWidth(), label = { Text("Hashtags (no #)") })
         Spacer(Modifier.height(10.dp))
-        Text("Who can see it")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (v in listOf("private", "unlisted", "public")) {
-                FilterChip(selected = visibility == v, onClick = { visibility = v }, label = { Text(v.replaceFirstChar { it.uppercase() }) })
-            }
-        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("AI label")
-                Hint("Marks the post as AI-made where the network supports it.")
+                Hint("Adds the AI line from Settings to the caption.")
             }
             Switch(aiLabel, { aiLabel = it })
         }
     }
 
-    // ---- One tap: every connected account ----
-    PostEverywhere(app, p, busy, onSettings) { platforms ->
+    // ---- One button: every app on this phone, one after another ----
+    PostToAll(app, p) {
         saveText()
-        val v = visibility
-        app.jobs.start(p.id, "post") { it.postEverywhere(app.store.get(p.id) ?: p, platforms, v) }
+        app.store.get(p.id) ?: p
     }
 
-    // ---- Share through the apps on this phone ----
-    Section("Share with an app on this phone") {
-        Hint("Opens the app with the video attached. The caption is copied: paste it in the caption box.")
-        Spacer(Modifier.height(8.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (t in Share.targets) {
-                OutlinedButton(onClick = {
-                    saveText()
-                    val fresh = app.store.get(p.id) ?: p
-                    val caption = Pipeline.publishText(fresh, s, forYouTube = false)
-                    if (Share.shareTo(ctx, t, video, caption)) toast(ctx, "Caption copied — paste it in ${t.name}")
-                    else toast(ctx, "${t.name} is not installed on this phone.")
-                }) { Text(t.name) }
-            }
-            OutlinedButton(onClick = {
+    Section("More") {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = {
                 saveText()
                 Share.shareAny(ctx, video, Pipeline.publishText(app.store.get(p.id) ?: p, s))
-            }) { Text("Other…") }
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            }) { Text("Share to another app…") }
             TextButton(onClick = {
                 saveText()
                 Share.copy(ctx, "caption", Pipeline.publishText(app.store.get(p.id) ?: p, s))
                 toast(ctx, "Caption copied")
             }) { Text("Copy caption") }
-            TextButton(onClick = {
-                scope.launch {
-                    val where = withContext(Dispatchers.IO) { runCatching { Share.saveToGallery(ctx, video, p.displayTitle()) } }
-                    toast(ctx, where.fold({ "Saved to $it" }, { "Could not save: ${it.message}" }))
-                }
-            }) { Text("Save to gallery") }
         }
+        TextButton(onClick = {
+            scope.launch {
+                val where = withContext(Dispatchers.IO) { runCatching { Share.saveToGallery(ctx, video, p.displayTitle()) } }
+                toast(ctx, where.fold({ "Saved to $it" }, { "Could not save: ${it.message}" }))
+            }
+        }) { Text("Save to gallery") }
     }
 
-    // ---- Direct YouTube upload (advanced) ----
-    YouTubeDirect(app, busy, onSettings) {
+    // ---- Direct YouTube upload: only for people who set up their own Google Cloud client ----
+    YouTubeDirect(app, busy) { visibility ->
         saveText()
-        val v = visibility
-        app.jobs.start(p.id, "upload") { it.uploadYouTube(app.store.get(p.id) ?: p, v) }
+        app.jobs.start(p.id, "upload") { it.uploadYouTube(app.store.get(p.id) ?: p, visibility) }
     }
 
     if (p.uploads.isNotEmpty()) {
         Section("Posted") {
             for (u in p.uploads.asReversed()) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                    Text("${SocialPost.name(u.platform)} · ${u.visibility}", Modifier.weight(1f), fontSize = 14.sp)
+                    Text("${Share.name(u.platform)} · ${u.visibility}", Modifier.weight(1f), fontSize = 14.sp)
                     if (u.url.startsWith("http")) {
                         TextButton(onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u.url))) } }) { Text("Open") }
                     }
@@ -441,115 +415,179 @@ private fun ColumnScope.VideoTab(app: App, p: Project, job: JobState?, onSetting
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * "Post to all": opens TikTok, Instagram, YouTube, Facebook... one after another with the video
+ * attached and the caption copied. Coming back to this screen moves on to the next app.
+ */
 @Composable
-private fun PostEverywhere(app: App, p: Project, busy: Boolean, onSettings: () -> Unit, onPost: (List<String>) -> Unit) {
+private fun PostToAll(app: App, p: Project, freshProject: () -> Project) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     val s = app.settings
-    val social = remember { SocialPost(s) }
-    var connected by remember { mutableStateOf(s.socialConnected) }
-    val names = remember(connected) { s.socialAccountNames }
-    val chosen = remember(connected) {
-        mutableStateListOf<String>().apply { addAll(s.socialTargets.filter { it in connected }.ifEmpty { connected }) }
-    }
-    val returned by MainActivity.returns.collectAsState()
-    // Coming back from the connect page, or opening the screen: read the linked accounts again.
-    LaunchedEffect(returned) {
-        if (social.configured) {
-            withContext(Dispatchers.IO) { runCatching { social.refreshAccounts() } }.onSuccess { list ->
-                connected = list.map { it.platform }
-            }
-        }
+    val state by app.postAll.state.collectAsState()
+    val active = state?.takeIf { it.projectId == p.id }
+    var preparing by remember { mutableStateOf(false) }
+
+    if (active != null) {
+        PostAllProgress(app, active)
+        return
     }
 
-    Section("Post everywhere") {
-        if (!social.configured) {
-            Hint("Connect TikTok, Instagram, YouTube, Facebook, X, LinkedIn and more once, then post this video to all of them with one tap. No Google Cloud setup, no developer accounts.")
-            Spacer(Modifier.height(10.dp))
-            Button(onClick = onSettings) { Text("Connect accounts") }
-            return@Section
-        }
-        if (connected.isEmpty()) {
-            Hint("No accounts connected yet. Open Settings → Connected accounts and tap Connect accounts.")
-            Spacer(Modifier.height(10.dp))
-            Button(onClick = onSettings) { Text("Connect accounts") }
-            return@Section
-        }
-        val posted = p.uploads.map { it.platform }.toSet()
-        for (key in connected) {
+    val installed = remember { Share.targets.filter { Share.isInstalled(ctx, it.key) }.map { it.key }.toSet() }
+    val chosen = remember {
+        val saved = s.postTargets.filter { it in installed }
+        mutableStateListOf<String>().apply { addAll(saved.ifEmpty { Share.MAIN.filter { it in installed } }) }
+    }
+    val posted = p.uploads.map { it.platform }.toSet()
+
+    Section("Post to all your apps") {
+        Hint("Uses the apps on this phone, where you are already signed in. Nothing to set up. Each app opens with the video ready and the caption copied; tap Post there, come back, and the next app opens.")
+        Spacer(Modifier.height(8.dp))
+        for (t in Share.targets) {
+            val has = t.key in installed
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = !busy) { if (key in chosen) chosen.remove(key) else chosen.add(key) },
+                    .clickable(enabled = has) { if (t.key in chosen) chosen.remove(t.key) else chosen.add(t.key) },
             ) {
-                Checkbox(key in chosen, { if (it) chosen.add(key) else chosen.remove(key) }, enabled = !busy)
-                Column(Modifier.weight(1f)) {
-                    Text(SocialPost.name(key))
-                    val n = names[key]
-                    if (!n.isNullOrBlank() && n != SocialPost.name(key)) Hint(n)
+                Checkbox(t.key in chosen, { if (it) chosen.add(t.key) else chosen.remove(t.key) }, enabled = has)
+                Text(t.name, Modifier.weight(1f), color = if (has) Color.White else Muted)
+                when {
+                    !has -> Hint("not installed")
+                    t.key in posted -> Pill("posted", Good)
                 }
-                if (key in posted) Pill("posted", Good)
             }
         }
         Spacer(Modifier.height(8.dp))
+        // Keep the order of the list, whatever order the boxes were ticked in.
+        val ordered = Share.targets.map { it.key }.filter { it in chosen }
         Button(
             onClick = {
-                s.socialTargets = chosen.toList()
-                onPost(connected.filter { it in chosen })
+                s.postTargets = ordered
+                val fresh = freshProject()
+                preparing = true
+                scope.launch {
+                    val uri = withContext(Dispatchers.IO) {
+                        runCatching { Share.galleryUri(ctx, fresh.video(app.store.root), fresh.displayTitle()) }
+                    }
+                    preparing = false
+                    uri.onSuccess {
+                        app.postAll.start(
+                            fresh.id, ordered, it,
+                            caption = Pipeline.publishText(fresh, s, forYouTube = false),
+                            title = fresh.ytTitle.ifBlank { fresh.displayTitle() },
+                        )
+                        app.postAll.openCurrent(ctx)
+                    }.onFailure { toast(ctx, "Could not prepare the video: ${it.message}") }
+                }
             },
-            enabled = !busy && chosen.isNotEmpty(),
-            modifier = Modifier.fillMaxWidth().height(54.dp),
+            enabled = ordered.isNotEmpty() && !preparing,
+            modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Accent),
         ) {
             Text(
-                if (chosen.size == connected.size) "Post to all ${chosen.size}" else "Post to ${chosen.size}",
+                when {
+                    preparing -> "Preparing the video…"
+                    ordered.isEmpty() -> if (installed.isEmpty()) "Install TikTok, Instagram, YouTube or Facebook" else "Pick at least one app"
+                    else -> "Post to all ${ordered.size}"
+                },
                 fontWeight = FontWeight.Bold,
             )
         }
-        Spacer(Modifier.height(4.dp))
-        Hint("Instagram and TikTok usually take a minute or two to publish. You can leave the app; a notification shows the progress.")
     }
 }
 
 @Composable
-private fun YouTubeDirect(app: App, busy: Boolean, onSettings: () -> Unit, onUpload: () -> Unit) {
+private fun PostAllProgress(app: App, st: com.videostudio.app.upload.PostAllState) {
     val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val yt = remember { YouTube(app.settings) }
-    var signedIn by remember { mutableStateOf(yt.signedIn) }
-    var signingIn by remember { mutableStateOf(false) }
-    // Only show the direct route to people who set it up (or have not set up one-tap posting).
-    if (yt.configProblem() != null && SocialPost(app.settings).configured) return
+    val current = st.current
+    var countdown by remember(st.index, st.waiting) { mutableIntStateOf(3) }
 
-    Section("YouTube (direct, with your own Google Cloud)") {
-        val problem = yt.configProblem()
-        when {
-            problem != null -> {
-                Hint(problem)
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = onSettings) { Text("Open Settings") }
+    // Back from one app: the next one opens by itself after a short countdown.
+    LaunchedEffect(st.index, st.waiting) {
+        if (current == null || st.waiting) return@LaunchedEffect
+        while (countdown > 0) {
+            kotlinx.coroutines.delay(1000)
+            countdown--
+        }
+        app.postAll.openCurrent(ctx)
+    }
+
+    Section(if (st.finished) "All done" else "Posting to all your apps") {
+        for ((i, key) in st.targets.withIndex()) {
+            val (mark, color) = when {
+                key in st.done -> "✓" to Good
+                key in st.failed -> "✕" to Danger
+                key in st.skipped -> "–" to Muted
+                i == st.index -> "▶" to Accent
+                else -> "•" to Muted
             }
-            !signedIn -> {
-                Hint("Sign in once with the Google account that owns your channel.")
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    enabled = !signingIn,
-                    onClick = {
-                        signingIn = true
-                        scope.launch {
-                            val r = withContext(Dispatchers.IO) { runCatching { yt.signIn(ctx as Activity) } }
-                            signingIn = false
-                            signedIn = yt.signedIn
-                            r.exceptionOrNull()?.let { toast(ctx, it.message ?: "Sign-in failed") }
-                        }
-                    },
-                ) { Text(if (signingIn) "Waiting for Google…" else "Sign in with Google") }
-            }
-            else -> {
-                Button(onClick = onUpload, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Upload to YouTube") }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 3.dp)) {
+                Text(mark, color = color, fontWeight = FontWeight.Black, modifier = Modifier.width(26.dp))
+                Text(Share.name(key), Modifier.weight(1f), color = if (i == st.index && !st.finished) Color.White else Muted)
+                when {
+                    key in st.done -> Hint("opened ✓", Good)
+                    key in st.failed -> Hint("could not open", Danger)
+                    key in st.skipped -> Hint("skipped")
+                }
             }
         }
+        Spacer(Modifier.height(10.dp))
+        when {
+            st.finished -> {
+                Hint("Video Studio opened ${st.done.size} app${if (st.done.size == 1) "" else "s"} with your video. The video is also in your gallery (Movies/Video Studio).")
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { app.postAll.stop() }) { Text("Close") }
+                    if (st.done.isNotEmpty()) {
+                        TextButton(onClick = { app.postAll.retryLast(ctx) }) { Text("Open ${Share.name(st.done.last())} again") }
+                    }
+                }
+            }
+            st.waiting && current != null -> {
+                Text("Finish in ${Share.name(current)}, then come back here.", fontWeight = FontWeight.Bold)
+                Share.target(current)?.let { Hint(it.hint) }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { app.postAll.openCurrent(ctx) }) { Text("Open ${Share.name(current)} again") }
+                    TextButton(onClick = { app.postAll.skip() }) { Text("Skip") }
+                }
+            }
+            current != null -> {
+                Text("Opening ${Share.name(current)} in $countdown…", fontWeight = FontWeight.Bold)
+                Share.target(current)?.let { Hint(it.hint) }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { app.postAll.openCurrent(ctx) }) { Text("Open now") }
+                    TextButton(onClick = { app.postAll.skip() }) { Text("Skip") }
+                    TextButton(onClick = { app.postAll.stop() }) { Text("Stop", color = Danger) }
+                }
+                if (st.done.isNotEmpty()) {
+                    TextButton(onClick = { app.postAll.retryLast(ctx) }) { Text("Didn't post in ${Share.name(st.done.last())}? Open it again") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun YouTubeDirect(app: App, busy: Boolean, onUpload: (String) -> Unit) {
+    val yt = remember { YouTube(app.settings) }
+    // Hidden unless the user set up their own Google Cloud client and signed in (Settings → Advanced).
+    if (yt.configProblem() != null || !yt.signedIn) return
+    var visibility by rememberSaveable { mutableStateOf(app.settings.defaultVisibility) }
+    Section("YouTube direct upload (advanced)") {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (v in listOf("private", "unlisted", "public")) {
+                FilterChip(selected = visibility == v, onClick = { visibility = v }, label = { Text(v.replaceFirstChar { it.uppercase() }) })
+            }
+        }
+        Button(
+            onClick = { app.settings.defaultVisibility = visibility; onUpload(visibility) },
+            enabled = !busy, modifier = Modifier.fillMaxWidth(),
+        ) { Text("Upload to YouTube") }
     }
 }
 

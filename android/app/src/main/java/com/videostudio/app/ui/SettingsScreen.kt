@@ -53,9 +53,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.videostudio.app.App
-import com.videostudio.app.MainActivity
-import com.videostudio.app.upload.SocialAccount
-import com.videostudio.app.upload.SocialPost
 import com.videostudio.app.upload.YouTube
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -88,7 +85,12 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            ConnectedAccounts(app)
+            Section("Posting") {
+                Hint(
+                    "Post to all uses the apps on this phone (TikTok, Instagram, YouTube, Facebook, X, Threads, LinkedIn, WhatsApp). " +
+                        "You are already signed in there, so there is nothing to connect and no keys. Pick the apps on each video's Video & upload tab."
+                )
+            }
 
             Section("Gemini (research and script)") {
                 Hint("Free key: aistudio.google.com/apikey → Create API key. Paste it here.")
@@ -101,8 +103,6 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 Spacer(Modifier.height(6.dp))
                 Hint("If a model name stops working, the app falls back to gemini-2.5-flash.")
             }
-
-            YouTubeSettings(app)
 
             Section("Stock photos (optional)") {
                 Hint("Free key from pexels.com/api. Without it, photo scenes show a big emoji instead.")
@@ -146,116 +146,15 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 }
             }
 
+            YouTubeSettings(app)
+
             Section("About") {
                 Hint(
                     "Keys are stored only on this phone, in the app's private storage. Videos are made on the phone: only the script requests (Gemini), " +
-                        "the voice (Microsoft) and uploads use the internet. Posting to several networks at once goes through Upload-Post, which holds " +
-                        "the approved app registrations with each network."
+                        "the voice (Microsoft) and the apps you post with use the internet."
                 )
             }
             Spacer(Modifier.height(24.dp))
-        }
-    }
-}
-
-/** The one-time "Zapier-style" setup: paste one key, tap Connect, log in to each network. */
-@Composable
-private fun ConnectedAccounts(app: App) {
-    val s = app.settings
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val social = remember { SocialPost(s) }
-    var key by remember { mutableStateOf(s.socialApiKey) }
-    var accounts by remember { mutableStateOf(s.socialConnected.map { SocialAccount(it, s.socialAccountNames[it] ?: SocialPost.name(it)) }) }
-    var working by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf<String?>(null) }
-    val returned by MainActivity.returns.collectAsState()
-
-    fun refresh() {
-        if (!social.configured) return
-        working = true
-        scope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { social.refreshAccounts() } }
-            working = false
-            r.onSuccess { accounts = it; message = null }.onFailure { message = it.message }
-        }
-    }
-
-    // Back from the connect page (videostudio://connected) or first open: show what is linked now.
-    LaunchedEffect(returned) { refresh() }
-
-    Section("Connected accounts — post everywhere with one tap") {
-        Hint(
-            "Connect TikTok, Instagram, YouTube, Facebook, X, LinkedIn, Threads and Bluesky once. After that, every video goes to all of them " +
-                "with a single tap. No Google Cloud, no API setup, no developer accounts."
-        )
-        Spacer(Modifier.height(10.dp))
-        if (!social.configured) {
-            Text("1. Create a free Upload-Post account", fontWeight = FontWeight.Bold)
-            Hint("It is the service that holds the approved connections to each network (free plan: 10 uploads a month).")
-            TextButton(onClick = { CustomTabsIntent.Builder().build().launchUrl(ctx, Uri.parse(SocialPost.SIGNUP_URL)) }) {
-                Text("Open upload-post.com")
-            }
-            Text("2. Copy your API key there (API Keys → Create) and paste it here", fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-        }
-        SecretField("Upload-Post API key", key) {
-            key = it
-            s.socialApiKey = it
-        }
-        Spacer(Modifier.height(10.dp))
-        Button(
-            enabled = key.isNotBlank() && !working,
-            onClick = {
-                working = true
-                message = null
-                scope.launch {
-                    val r = withContext(Dispatchers.IO) { runCatching { social.connectLink() } }
-                    working = false
-                    r.onSuccess { url -> CustomTabsIntent.Builder().build().launchUrl(ctx, Uri.parse(url)) }
-                        .onFailure { message = it.message }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (accounts.isEmpty()) "Connect accounts" else "Connect more accounts") }
-
-        if (working) {
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.width(18.dp).height(18.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(8.dp))
-                Hint("Talking to Upload-Post…")
-            }
-        }
-        message?.let {
-            Spacer(Modifier.height(8.dp))
-            Hint(it, Danger)
-        }
-        if (accounts.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            Text("Connected", fontWeight = FontWeight.Bold)
-            for (a in accounts) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                    Pill("✓", Good)
-                    Spacer(Modifier.width(8.dp))
-                    Text(SocialPost.name(a.platform), Modifier.weight(1f))
-                    if (a.name != SocialPost.name(a.platform)) Hint(a.name)
-                }
-            }
-        } else if (social.configured && !working) {
-            Spacer(Modifier.height(8.dp))
-            Hint("No accounts connected yet. Tap Connect accounts, log in to each network, then come back.")
-        }
-        if (social.configured) {
-            Row {
-                TextButton(onClick = { refresh() }) { Text("Refresh") }
-                TextButton(onClick = {
-                    s.socialApiKey = ""
-                    s.signOutSocial()
-                    key = ""
-                    accounts = emptyList()
-                }) { Text("Remove key", color = Danger) }
-            }
         }
     }
 }
@@ -270,9 +169,9 @@ private fun YouTubeSettings(app: App) {
     var signingIn by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    Section("YouTube direct upload (advanced, optional)") {
+    Section("Advanced: YouTube direct upload (optional)") {
         Hint(
-            "Not needed if you use Connected accounts above. This route uses your own Google Cloud project: Google Cloud Console → " +
+            "Not needed: Post to all already opens the YouTube app. Only for developers with their own Google Cloud project: Google Cloud Console → " +
                 "APIs & Services → enable \"YouTube Data API v3\", then Google Auth Platform → Clients → Create client, type \"Desktop app\". " +
                 "Paste its client ID and secret."
         )
@@ -284,7 +183,7 @@ private fun YouTubeSettings(app: App) {
         Hint(
             "Common problems, already handled with clear messages: \"Access blocked\" → add your Gmail under Google Auth Platform → Audience → Test users. " +
                 "Sign-in ends after 7 days → press \"Publish app\" on the same page. Videos stuck as private → Google locks uploads from " +
-                "unverified projects to private until the project passes YouTube's audit; Connected accounts above avoids this."
+                "unverified projects to private until the project passes YouTube's audit."
         )
         Spacer(Modifier.height(8.dp))
         if (signedIn) {

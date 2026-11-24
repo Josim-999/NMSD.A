@@ -44,7 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.videostudio.app.App
 import com.videostudio.app.data.Project
 import com.videostudio.app.data.Status
-import com.videostudio.app.upload.SocialPost
+import com.videostudio.app.upload.Share
 import com.videostudio.app.work.JobState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,12 +88,8 @@ fun HomeScreen(app: App, onNew: () -> Unit, onOpen: (String) -> Unit, onSettings
                     if (app.settings.geminiKey.isBlank())
                         "First add your free Gemini API key in Settings (top right). Then tap New video, type a topic, and the app researches, writes, voices and renders it."
                     else
-                        "Tap New video, type a topic, and the app researches, writes, voices and renders it, then posts it to TikTok, Instagram, YouTube, Facebook and more with one tap."
+                        "Tap New video, type a topic, and the app researches, writes, voices and renders it. Then Post to all opens TikTok, Instagram, YouTube and Facebook one after another with the video ready."
                 )
-                if (!SocialPost(app.settings).configured) {
-                    Spacer(Modifier.height(16.dp))
-                    Hint("Tip: connect your social accounts once in Settings → Connected accounts, and every video can go everywhere with one tap.", Accent2)
-                }
             }
         } else {
             LazyColumn(
@@ -151,7 +147,7 @@ private fun ProjectRow(app: App, p: Project, job: JobState?, onClick: () -> Unit
                 val posted = p.uploads.map { it.platform }.distinct()
                 if (posted.isNotEmpty()) {
                     Spacer(Modifier.width(8.dp))
-                    Hint(posted.joinToString(" · ") { SocialPost.name(it) }, Good)
+                    Hint(posted.joinToString(" · ") { Share.name(it) }, Good)
                 }
             }
             if (job?.running == true) {

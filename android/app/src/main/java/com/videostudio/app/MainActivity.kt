@@ -31,12 +31,18 @@ class MainActivity : ComponentActivity() {
         setContent { StudioTheme { Nav(app) } }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Back from TikTok, Instagram...: that step of "Post to all" is finished.
+        (application as App).postAll.onReturn()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleReturn(intent)
     }
 
-    /** videostudio://connected (accounts linked) and videostudio://signed-in (Google) bring us back here. */
+    /** videostudio://signed-in (Google sign-in for the optional direct YouTube upload) brings us back here. */
     private fun handleReturn(intent: Intent?) {
         val host = intent?.data?.takeIf { it.scheme == "videostudio" }?.host ?: return
         returns.value = host to System.currentTimeMillis()

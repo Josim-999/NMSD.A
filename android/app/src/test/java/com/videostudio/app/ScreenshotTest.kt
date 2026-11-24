@@ -43,9 +43,9 @@ class ScreenshotTest {
 
         // Pretend accounts are already linked, then open a project with a finished video.
         val app = rule.activity.application as App
-        app.settings.socialApiKey = "demo-key"
-        app.settings.socialConnected = listOf("tiktok", "instagram", "youtube", "facebook", "x")
-        app.settings.socialAccountNames = mapOf("tiktok" to "@mychannel", "youtube" to "My Channel")
+        for (pkg in listOf("com.zhiliaoapp.musically", "com.instagram.android", "com.google.android.youtube", "com.facebook.katana")) {
+            org.robolectric.Shadows.shadowOf(app.packageManager).installPackage(android.content.pm.PackageInfo().apply { packageName = pkg })
+        }
         val p = Project(id = "demo", topic = "Why your phone battery dies in the cold", status = Status.RENDERED, durationSec = 42.0)
         p.title = "Why cold kills your battery"
         p.ytTitle = "Why your phone dies in the cold"
@@ -60,7 +60,20 @@ class ScreenshotTest {
         rule.waitForIdle()
         rule.onNodeWithText("Why cold kills your battery").performClick()
         rule.onNodeWithText("Video & upload").performClick()
-        rule.onNodeWithText("Post to all 5").performScrollTo()
-        shot("3_post_everywhere")
+        rule.onNodeWithText("Post to all 4").performScrollTo()
+        shot("3_post_to_all")
+
+        // Tap the button: the video goes to the gallery and TikTok opens with it.
+        rule.onNodeWithText("Post to all 4").performClick()
+        rule.waitUntil(10_000) { app.postAll.state.value?.waiting == true }
+        val started = org.robolectric.Shadows.shadowOf(app).nextStartedActivity
+        org.junit.Assert.assertEquals("com.zhiliaoapp.musically", started.`package`)
+        org.junit.Assert.assertTrue(started.getParcelableExtra<android.net.Uri>(android.content.Intent.EXTRA_STREAM).toString().startsWith("content://"))
+        shot("4_waiting_for_tiktok")
+
+        // Back from TikTok: Instagram is next, with a countdown.
+        rule.runOnUiThread { app.postAll.onReturn() }
+        rule.onNodeWithText("Opening Instagram in", substring = true).assertExists()
+        shot("5_next_instagram")
     }
 }
