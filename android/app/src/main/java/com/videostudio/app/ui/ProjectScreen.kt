@@ -1,6 +1,7 @@
 package com.videostudio.app.ui
 
 import android.app.Activity
+import com.videostudio.app.compliance.YouTubeCheck
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -382,6 +383,9 @@ private fun ColumnScope.VideoTab(app: App, p: Project, job: JobState?) {
         }
     }
 
+    // ---- YouTube rules, checked before posting (monetization) ----
+    YouTubeCheckPanel(app, p, aiLabel) { saveText() }
+
     // ---- One button: every app on this phone, one after another ----
     PostToAll(app, p) {
         saveText()
@@ -392,11 +396,11 @@ private fun ColumnScope.VideoTab(app: App, p: Project, job: JobState?) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = {
                 saveText()
-                Share.shareAny(ctx, video, Pipeline.publishText(app.store.get(p.id) ?: p, s))
+                Share.shareAny(ctx, video, Pipeline.publishText(app.store.get(p.id) ?: p, s, credits = Pipeline.credits(p.dir(app.store.root))))
             }) { Text("Share to another app…") }
             TextButton(onClick = {
                 saveText()
-                Share.copy(ctx, "caption", Pipeline.publishText(app.store.get(p.id) ?: p, s))
+                Share.copy(ctx, "caption", Pipeline.publishText(app.store.get(p.id) ?: p, s, credits = Pipeline.credits(p.dir(app.store.root))))
                 toast(ctx, "Caption copied")
             }) { Text("Copy caption") }
         }
@@ -488,7 +492,7 @@ private fun PostToAll(app: App, p: Project, freshProject: () -> Project) {
                     uri.onSuccess {
                         app.postAll.start(
                             fresh.id, ordered, it,
-                            caption = Pipeline.publishText(fresh, s, forYouTube = false),
+                            caption = Pipeline.publishText(fresh, s, forYouTube = false, credits = Pipeline.credits(fresh.dir(app.store.root))),
                             title = fresh.ytTitle.ifBlank { fresh.displayTitle() },
                         )
                         app.postAll.openCurrent(ctx)
@@ -508,6 +512,64 @@ private fun PostToAll(app: App, p: Project, freshProject: () -> Project) {
                 },
                 fontWeight = FontWeight.Bold,
             )
+        }
+    }
+}
+
+/** The rules that decide monetization, checked for this video, with the two declarations YouTube asks for. */
+@Composable
+private fun YouTubeCheckPanel(app: App, p: Project, aiLabel: Boolean, saveText: () -> Unit) {
+    var kids by remember(p.id) { mutableStateOf(p.madeForKids) }
+    var paid by remember(p.id) { mutableStateOf(p.paidPromotion) }
+    val all by app.store.projects.collectAsState()
+    val credits = remember(p.id, p.updated) { Pipeline.credits(p.dir(app.store.root)) }
+    val probe = p.copy(madeForKids = kids, paidPromotion = paid)
+    val items = remember(all, kids, paid, aiLabel, p.updated) { YouTubeCheck.check(probe, all, credits, aiLabel) }
+    val warnings = items.count { it.level == YouTubeCheck.Level.WARN }
+
+    fun store(change: (Project) -> Unit) {
+        saveText()
+        val fresh = app.store.get(p.id) ?: p
+        change(fresh)
+        app.store.save(fresh)
+    }
+
+    Section("YouTube check") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (warnings == 0) "Ready: follows the rules for monetization" else "$warnings to look at before posting",
+                Modifier.weight(1f), fontWeight = FontWeight.Bold,
+                color = if (warnings == 0) Good else Accent,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        for (it in items) {
+            Row(Modifier.padding(vertical = 4.dp)) {
+                Text(
+                    when (it.level) { YouTubeCheck.Level.OK -> "✓"; YouTubeCheck.Level.WARN -> "!"; YouTubeCheck.Level.INFO -> "i" },
+                    color = when (it.level) { YouTubeCheck.Level.OK -> Good; YouTubeCheck.Level.WARN -> Accent; YouTubeCheck.Level.INFO -> Muted },
+                    fontWeight = FontWeight.Bold, modifier = Modifier.width(22.dp),
+                )
+                Column(Modifier.weight(1f)) {
+                    Text(it.title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Hint(it.detail)
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Made for kids")
+                Hint("Only if children are the main audience (YouTube and US law require an honest answer).")
+            }
+            Switch(kids, { v -> kids = v; store { it.madeForKids = v } })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Paid promotion")
+                Hint("A brand paid or gave you something for this video.")
+            }
+            Switch(paid, { v -> paid = v; store { it.paidPromotion = v } })
         }
     }
 }

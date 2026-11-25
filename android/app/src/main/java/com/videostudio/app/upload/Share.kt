@@ -28,7 +28,7 @@ object Share {
         ),
         ShareTarget(
             "youtube", "YouTube", listOf("com.google.android.youtube"),
-            "It opens as a Short. Paste the title (long-press → Paste), then Upload."
+            "It opens as a Short. Paste the title (long-press → Paste). Audience: choose the answer from the YouTube check. Altered content: No (unless it shows realistic fake events). Then Upload."
         ),
         ShareTarget(
             "facebook", "Facebook", listOf("com.facebook.katana", "com.facebook.lite"),

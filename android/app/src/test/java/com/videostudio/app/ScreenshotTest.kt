@@ -60,6 +60,8 @@ class ScreenshotTest {
         rule.waitForIdle()
         rule.onNodeWithText("Why cold kills your battery").performClick()
         rule.onNodeWithText("Video & upload").performClick()
+        rule.onNodeWithText("Paid promotion").performScrollTo()
+        shot("3a_youtube_check")
         rule.onNodeWithText("Post to all 4").performScrollTo()
         shot("3_post_to_all")
 

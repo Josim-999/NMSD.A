@@ -185,7 +185,9 @@ class MediaFinder(
             val b = endpoints.openverse.toHttpUrl().newBuilder()
                 .addQueryParameter("q", q.take(80))
                 .addQueryParameter("page_size", "12")
-                .addQueryParameter("license_type", "commercial")
+                // Commercial use AND modification allowed: excludes NonCommercial and NoDerivatives
+                // licences, since the video crops and zooms the picture and may be monetized.
+                .addQueryParameter("license_type", "commercial,modification")
                 .addQueryParameter("mature", "false")
             if (aspect.isNotEmpty()) b.addQueryParameter("aspect_ratio", aspect)
             val url = b.build().toString()

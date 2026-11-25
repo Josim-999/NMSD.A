@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.videostudio.app.App
 import com.videostudio.app.upload.YouTube
 import kotlinx.coroutines.Dispatchers
@@ -158,6 +159,17 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
             }
 
             YouTubeSettings(app)
+
+            Section("Get monetized") {
+                Hint("Every video is checked against YouTube's rules before you post (see \"YouTube check\" on the Video tab). What YouTube asks for:")
+                Spacer(Modifier.height(6.dp))
+                for (step in com.videostudio.app.compliance.YouTubeCheck.YPP_STEPS) {
+                    Row(Modifier.padding(vertical = 3.dp)) {
+                        Text("•", color = Accent, modifier = Modifier.width(16.dp))
+                        Text(step, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    }
+                }
+            }
 
             Section("About") {
                 Text("Video Studio ${com.videostudio.app.BuildConfig.VERSION_NAME} (build ${com.videostudio.app.BuildConfig.VERSION_CODE})")

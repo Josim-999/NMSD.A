@@ -208,6 +208,8 @@ a{display:inline-block;margin-top:28px;padding:16px 28px;border-radius:30px;back
         tags: List<String>,
         visibility: String,
         aiLabel: Boolean,
+        madeForKids: Boolean = false,
+        paidPromotion: Boolean = false,
         progress: (Float) -> Unit,
     ): UploadResult {
         if (!video.exists()) throw UploadError("Render the video first.")
@@ -224,12 +226,15 @@ a{display:inline-block;margin-top:28px;padding:16px 28px;border-radius:30px;back
             .put(
                 "status", JSONObject()
                     .put("privacyStatus", visibility)
-                    .put("selfDeclaredMadeForKids", false)
+                    .put("selfDeclaredMadeForKids", madeForKids)
                     .put("containsSyntheticMedia", aiLabel)
             )
+            .apply {
+                if (paidPromotion) put("paidProductPlacementDetails", JSONObject().put("hasPaidProductPlacement", true))
+            }
         val session = http.newCall(
             Request.Builder()
-                .url("$UPLOAD_URL?uploadType=resumable&part=snippet,status")
+                .url("$UPLOAD_URL?uploadType=resumable&part=snippet,status${if (paidPromotion) ",paidProductPlacementDetails" else ""}")
                 .header("Authorization", "Bearer $token")
                 .header("X-Upload-Content-Length", length.toString())
                 .header("X-Upload-Content-Type", "video/mp4")

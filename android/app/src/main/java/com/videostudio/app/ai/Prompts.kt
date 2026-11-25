@@ -67,6 +67,12 @@ Rules that make a short spread; follow every one:
 $beats
 5. Honest: every number or factual claim must be listed in "sources" with its URL. Make the viewer feel one thing and end on a question viewers will want to answer in the comments. The last line loops back to the hook.
 Originality matters (platforms refuse to pay for template-like videos): include one line that gives a clear, reasoned take or insight in the creator's voice, not just facts.${if (take.isNotBlank()) " The creator's own take, to work in faithfully: \"$take\"." else ""}
+YouTube rules (the channel must stay monetizable), follow every one:
+- Advertiser-friendly: no profanity, no graphic, shocking or hateful content, no dangerous instructions.
+- The title and first line must honestly match what the video delivers: no clickbait that over-promises.
+- Health, money, law, news or elections: no unproven claims, no promises of cures or returns; say what the evidence shows. Never speak as a doctor, lawyer or financial adviser; the voice is a curious explainer.
+- Quotes only if they are real and appear in the research; otherwise paraphrase and say who argued it.
+- No real person's private life; public facts about public figures only.
 Write the way a person talks to a friend. Write numbers in "say" as they are spoken ("seventy percent"), but in the visual use digits ("70%").
 
 For every scene choose ONE visual from this list (the app animates them), and fill only its fields:
@@ -94,6 +100,7 @@ Reply with one JSON object and nothing else, exactly this shape:
   "one_idea": "the single idea of the video, in one sentence",
   "comment_question": "the question that invites comments",
   "mood": "one of: energetic, calm, dramatic, playful (sets the music)",
+  "compliance": {"sensitive": "none, health, finance, news or elections", "made_for_kids": false},
   "scenes": [ {"say": "the spoken words of this scene", "emphasis": "the one most important word of say, copied exactly", "visual": { ...one of the visuals above... }} ],
   "sources": [ {"claim": "...", "url": "..."} ],
   "publish": {

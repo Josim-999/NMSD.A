@@ -101,6 +101,12 @@ data class Project(
     var mood: String = "",
     /** Visual style of this video (captions, transitions, background); -1 = not chosen yet. */
     var style: Int = -1,
+    /** COPPA: the video is aimed at children. Must be declared truthfully on YouTube. */
+    var madeForKids: Boolean = false,
+    /** The video was paid for by a brand (YouTube's paid promotion declaration). */
+    var paidPromotion: Boolean = false,
+    /** Sensitive area flagged by the script writer: health, finance, news, elections, or empty. */
+    var sensitive: String = "",
     val created: Long = System.currentTimeMillis(),
     var updated: Long = System.currentTimeMillis(),
 ) {
@@ -124,6 +130,7 @@ data class Project(
         }))
         .put("error", error).put("voiceUsed", voiceUsed).put("durationSec", durationSec)
         .put("take", take).put("mood", mood).put("style", style)
+        .put("madeForKids", madeForKids).put("paidPromotion", paidPromotion).put("sensitive", sensitive)
         .put("created", created).put("updated", updated)
 
     companion object {
@@ -155,6 +162,9 @@ data class Project(
             take = o.optString("take"),
             mood = o.optString("mood"),
             style = o.optInt("style", -1),
+            madeForKids = o.optBoolean("madeForKids", false),
+            paidPromotion = o.optBoolean("paidPromotion", false),
+            sensitive = o.optString("sensitive"),
             created = o.optLong("created", System.currentTimeMillis()),
             updated = o.optLong("updated", System.currentTimeMillis()),
         )

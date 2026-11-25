@@ -1,5 +1,6 @@
 package com.videostudio.app.work
 
+import com.videostudio.app.compliance.YouTubeCheck
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -91,6 +92,11 @@ class Pipeline(
         p.title = o.optString("title").ifBlank { p.topic }
         p.commentQuestion = o.optString("comment_question")
         p.mood = o.optString("mood").lowercase().trim()
+        o.optJSONObject("compliance")?.let { c ->
+            p.sensitive = c.optString("sensitive").lowercase().trim().takeIf { it in setOf("health", "finance", "news", "elections") } ?: ""
+            // Only ever switch "made for kids" on from the script; the creator decides to switch it off.
+            if (c.optBoolean("made_for_kids", false)) p.madeForKids = true
+        }
         p.sources = objects(o.optJSONArray("sources")).map { Source(it.optString("claim"), it.optString("url")) }
             .filter { it.url.startsWith("http") }
         val publish = o.optJSONObject("publish")
@@ -273,8 +279,8 @@ class Pipeline(
         step("Uploading to YouTube", 0f)
         log("Uploading to YouTube as $visibility…")
         val result = YouTube(settings).upload(
-            video, p.ytTitle.ifBlank { p.displayTitle() }, publishText(p, settings, forYouTube = true),
-            p.hashtags, visibility, settings.aiLabel
+            video, p.ytTitle.ifBlank { p.displayTitle() }, publishText(p, settings, forYouTube = true, credits = credits(p.dir(store.root))),
+            p.hashtags, visibility, settings.aiLabel, p.madeForKids, p.paidPromotion
         ) { step("Uploading to YouTube", it) }
         p.uploads.add(Upload("youtube", result.url, visibility, System.currentTimeMillis()))
         p.status = Status.POSTED
@@ -284,7 +290,7 @@ class Pipeline(
 
     companion object {
         /** Caption / description text. YouTube also gets the sources; everything gets the hashtags. */
-        fun publishText(p: Project, s: Settings, forYouTube: Boolean = false): String {
+        fun publishText(p: Project, s: Settings, forYouTube: Boolean = false, credits: List<String> = emptyList()): String {
             val sb = StringBuilder()
             if (!forYouTube) sb.append(p.ytTitle.ifBlank { p.displayTitle() }).append("\n\n")
             if (p.description.isNotBlank()) sb.append(p.description.trim()).append("\n\n")
@@ -294,10 +300,25 @@ class Pipeline(
                 for (src in p.sources.take(8)) sb.append("• ").append(src.claim.take(80)).append(" — ").append(src.url).append("\n")
                 sb.append("\n")
             }
+            if (p.sensitive == "health") sb.append("For information only, not medical advice.\n\n")
+            if (p.sensitive == "finance") sb.append("For information only, not financial advice.\n\n")
+            if (p.paidPromotion) sb.append("Includes paid promotion.\n\n")
+            if (credits.isNotEmpty()) {
+                if (forYouTube) {
+                    sb.append("Picture credits:\n")
+                    for (c in credits.distinct().take(12)) sb.append("• ").append(c).append("\n")
+                    sb.append("\n")
+                } else sb.append(YouTubeCheck.shortCredits(credits)).append("\n\n")
+            }
             if (s.aiLabel && s.aiLabelText.isNotBlank()) sb.append(s.aiLabelText.trim()).append("\n\n")
             sb.append((p.hashtags + if (forYouTube) listOf("shorts") else emptyList()).distinct().joinToString(" ") { "#$it" })
             return sb.toString().trim()
         }
+
+        /** Credit lines of the pictures used in this video (written when it was made). */
+        fun credits(dir: File): List<String> = runCatching {
+            File(dir, "credits.txt").readLines().map { it.trim() }.filter { it.isNotBlank() }
+        }.getOrDefault(emptyList())
 
         fun words(f: File): List<Word> = runCatching {
             val a = JSONArray(f.readText())

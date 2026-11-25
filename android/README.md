@@ -134,3 +134,12 @@ The application id `com.videostudio.app` must never change either.
 - `upload/` `PostAll` (the Post to all queue), `Share` (opening each app), `YouTube` (optional direct upload)
 - `work/` background jobs, foreground service and the pipeline steps
 - `ui/` Compose screens
+
+## 1.8: YouTube rules and monetization
+
+- **YouTube check** on the Video tab, before posting. It checks: audience (made for kids), swearing, clickbait titles, sources, sensitive topics (health, money, news, elections), picture licences, original music, AI disclosure, paid promotion, and whether the video is too close to an earlier one.
+- **Made for kids** and **Paid promotion** switches, per video. Direct uploads send both to YouTube (`selfDeclaredMadeForKids`, `paidProductPlacementDetails`).
+- **The script writer follows YouTube's rules**: advertiser-friendly language, honest titles, careful health and finance claims, real quotes only. It also flags sensitive topics and child-directed videos.
+- **Pictures**: only licences that allow commercial use *and* changes (Openverse `commercial,modification`). Credits go into the YouTube description, and a short version goes into captions.
+- **Disclaimers** are added automatically: "not medical/financial advice" and "Includes paid promotion".
+- **Settings → Get monetized**: what the YouTube Partner Program asks for.
