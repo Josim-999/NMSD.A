@@ -167,3 +167,9 @@ The application id `com.videostudio.app` must never change either.
   - Blur-in kinetic captions on a glass pill, with gradient-filled punch words.
   - UI micro-events, each with a click sound: a cursor taps "send" on the hook card and clicks list items as they pop; a toggle flips from MYTH to FACT; percent stats fill a glass progress bar; photos play in a floating phone mock-up; the ending has a notification banner and a comment box.
 
+## 2.2: the script step never fails
+
+- **Built-in writer** (`ai/BuiltInWriter.kt`): no AI, no key, no quota. It looks the topic up on Wikipedia (REST search + summary, keyless), falling back to DuckDuckGo instant answers, and builds a full script with the usual beats: hook, promise, facts as stat/photo/list/statement scenes, the creator's take, payoff and comment question, plus titles, hashtags and sources. Offline it writes a grammatical, structured script from the topic alone.
+- It runs automatically whenever every free AI fails (quota, bad key, no internet), so writing a script never ends in an error. The Script tab says when the built-in writer was used; tap Rewrite later for an AI version.
+- Free research: when Gemini's search research is used up, Wikipedia facts become the research notes for the AI writers.
+

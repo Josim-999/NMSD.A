@@ -2,6 +2,7 @@ package com.videostudio.app.work
 
 import com.videostudio.app.compliance.YouTubeCheck
 import com.videostudio.app.ai.BackupAi
+import com.videostudio.app.ai.BuiltInWriter
 import com.videostudio.app.ai.GeminiReply
 import com.videostudio.app.render.AnimatedEmoji
 import com.videostudio.app.render.Cutout
@@ -62,7 +63,13 @@ class Pipeline(
             val reply = try {
                 gemini().generate(Prompts.research(p), settings.researchModel, search = true, fallbacks = listOf(settings.scriptModel))
             } catch (e: GeminiError) {
-                log("Research skipped (${e.message?.take(120)}). Writing from general knowledge instead.")
+                // Free, keyless research instead: facts from Wikipedia with their sources.
+                val facts = runCatching { BuiltInWriter().facts(p.topic) }.getOrDefault(emptyList())
+                if (facts.isNotEmpty()) {
+                    p.researchNotes = facts.joinToString("\n") { "${it.text} — ${it.url}" }
+                    store.save(p)
+                    log("Gemini research is used up; using ${facts.size} facts from Wikipedia instead.")
+                } else log("Research skipped (${e.message?.take(80)}). Writing from general knowledge.")
                 null
             }
             if (reply != null) {
@@ -81,7 +88,16 @@ class Pipeline(
             stockFootage = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank(),
             take = p.take,
         )
-        val reply = scriptReply(prompt)
+        // Never fails: if every free AI is busy, the built-in writer (no AI, no limits) writes it.
+        val reply = try {
+            scriptReply(prompt)
+        } catch (e: Exception) {
+            if (cancelled()) throw e
+            log(if (e is GeminiQuotaError) "Every free AI is busy right now, so the built-in writer is writing this script (no limits)."
+                else "The AI could not be reached (${e.message?.take(80)}), so the built-in writer is writing this script.")
+            GeminiReply(BuiltInWriter().write(p, settings.defaultHashtags).toString(), emptyList(), BUILT_IN)
+        }
+        p.writer = reply.model
         applyScript(p, extractJson(reply.text))
         p.status = Status.SCRIPTED
         p.error = ""
@@ -377,6 +393,8 @@ class Pipeline(
     }
 
     companion object {
+        const val BUILT_IN = "built-in writer"
+
         /** "Thu Nov 27, 7:00 PM ET" in the audience's zone. */
         fun scheduleText(at: Long, zone: String): String {
             val z = runCatching { java.time.ZoneId.of(zone) }.getOrDefault(java.time.ZoneId.of("America/New_York"))

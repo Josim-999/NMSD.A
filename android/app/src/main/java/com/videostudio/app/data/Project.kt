@@ -117,6 +117,8 @@ data class Project(
     var scheduleZone: String = "",
     /** Scheduled upload state: "", "queued" (waiting for a connection), "uploaded" (YouTube holds it). */
     var scheduleState: String = "",
+    /** Who wrote the script: the AI model, or "built-in writer" when every free AI was busy. */
+    var writer: String = "",
     val created: Long = System.currentTimeMillis(),
     var updated: Long = System.currentTimeMillis(),
 ) {
@@ -141,7 +143,7 @@ data class Project(
         .put("error", error).put("voiceUsed", voiceUsed).put("durationSec", durationSec)
         .put("take", take).put("mood", mood).put("style", style)
         .put("madeForKids", madeForKids).put("paidPromotion", paidPromotion).put("sensitive", sensitive)
-        .put("scheduledAt", scheduledAt).put("scheduleZone", scheduleZone).put("scheduleState", scheduleState)
+        .put("scheduledAt", scheduledAt).put("scheduleZone", scheduleZone).put("scheduleState", scheduleState).put("writer", writer)
         .put("created", created).put("updated", updated)
 
     companion object {
@@ -179,6 +181,7 @@ data class Project(
             scheduledAt = o.optLong("scheduledAt", 0),
             scheduleZone = o.optString("scheduleZone"),
             scheduleState = o.optString("scheduleState"),
+            writer = o.optString("writer"),
             created = o.optLong("created", System.currentTimeMillis()),
             updated = o.optLong("updated", System.currentTimeMillis()),
         )

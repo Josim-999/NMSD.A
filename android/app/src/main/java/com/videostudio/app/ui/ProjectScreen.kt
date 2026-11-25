@@ -204,6 +204,11 @@ private fun ScriptTab(app: App, p: Project, job: JobState?, toVideo: () -> Unit)
 
     val words = p.scenes.sumOf { it.say.split(Regex("\\s+")).size }
     Hint("${p.scenes.size} scenes · $words words · about ${(words / 2.9).toInt()} s")
+    if (p.writer == com.videostudio.app.work.Pipeline.BUILT_IN) {
+        Section("Written by the built-in writer") {
+            Hint("Every free AI was busy, so this script was written without AI from Wikipedia facts. You can make the video now, or tap \"Rewrite\" below when an AI is free again (add a free Z.ai or NVIDIA key in Settings for almost unlimited AI scripts).")
+        }
+    } else if (p.writer.isNotBlank()) Hint("Written by ${p.writer}", Muted)
 
     Button(
         onClick = {
