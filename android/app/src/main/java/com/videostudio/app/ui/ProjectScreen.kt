@@ -1,6 +1,7 @@
 package com.videostudio.app.ui
 
 import android.app.Activity
+import com.videostudio.app.upload.Schedule
 import com.videostudio.app.compliance.YouTubeCheck
 import android.content.Intent
 import android.net.Uri
@@ -412,6 +413,9 @@ private fun ColumnScope.VideoTab(app: App, p: Project, job: JobState?) {
         }) { Text("Save to gallery") }
     }
 
+    // ---- Schedule for US viewers: YouTube publishes it at the time, the phone can be offline ----
+    ScheduleSection(app, p, busy) { saveText() }
+
     // ---- Direct YouTube upload: only for people who set up their own Google Cloud client ----
     YouTubeDirect(app, busy) { visibility ->
         saveText()
@@ -644,6 +648,100 @@ private fun PostAllProgress(app: App, st: com.videostudio.app.upload.PostAllStat
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ScheduleSection(app: App, p: Project, busy: Boolean, saveText: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val s = app.settings
+    val yt = remember { YouTube(s) }
+    val direct = yt.configProblem() == null && yt.signedIn
+    var zone by remember { mutableStateOf(s.scheduleZone) }
+    var minutes by remember { mutableIntStateOf(s.scheduleMinutes) }
+    var day by remember(zone, minutes) { mutableIntStateOf(Schedule.firstDay(zone, minutes)) }
+    val at = Schedule.at(zone, day, minutes)
+    val fresh = app.store.projects.collectAsState().value.firstOrNull { it.id == p.id } ?: p
+
+    Section("Schedule for US viewers") {
+        if (fresh.scheduleState == "uploaded" && fresh.scheduledAt > System.currentTimeMillis()) {
+            Text("✓ On YouTube, goes public ${Pipeline.scheduleText(fresh.scheduledAt, fresh.scheduleZone)}", color = Good, fontWeight = FontWeight.Bold)
+            Hint("YouTube publishes it on its own servers: your phone can be off or offline. (${Schedule.onPhone(fresh.scheduledAt)} on your phone.)")
+            Spacer(Modifier.height(10.dp))
+        } else if (fresh.scheduleState == "queued") {
+            Text("Waiting for internet", color = Accent, fontWeight = FontWeight.Bold)
+            Hint("It uploads by itself as soon as the phone is online, then YouTube publishes it at ${Pipeline.scheduleText(fresh.scheduledAt, fresh.scheduleZone)}.")
+            Spacer(Modifier.height(10.dp))
+        }
+        Hint("Audience time zone")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (z in Schedule.ZONES) FilterChip(selected = zone == z.id, onClick = { zone = z.id; s.scheduleZone = z.id }, label = { Text(z.label, fontSize = 12.sp) })
+        }
+        Hint("Day")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (d in Schedule.firstDay(zone, minutes)..6) FilterChip(selected = day == d, onClick = { day = d }, label = { Text(Schedule.dayLabel(zone, d), fontSize = 12.sp) })
+        }
+        Hint("Time (${Pipeline.zoneShort(zone)}) — the best times for US Shorts")
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (m in Schedule.BEST_TIMES) FilterChip(selected = minutes == m, onClick = { minutes = m; s.scheduleMinutes = m }, label = { Text(Schedule.timeLabel(m), fontSize = 12.sp) })
+            FilterChip(selected = minutes !in Schedule.BEST_TIMES, onClick = {
+                android.app.TimePickerDialog(ctx, { _, h, min -> minutes = h * 60 + min; s.scheduleMinutes = minutes }, minutes / 60, minutes % 60, false).show()
+            }, label = { Text(if (minutes in Schedule.BEST_TIMES) "Other time…" else Schedule.timeLabel(minutes), fontSize = 12.sp) })
+        }
+        Spacer(Modifier.height(8.dp))
+        Text("Goes public: ${Pipeline.scheduleText(at, zone)}", fontWeight = FontWeight.Bold)
+        Hint("That is ${Schedule.onPhone(at)} on your phone.")
+        Spacer(Modifier.height(10.dp))
+
+        fun mark(state: String) {
+            saveText()
+            val f = app.store.get(p.id) ?: p
+            f.scheduledAt = at; f.scheduleZone = zone; f.scheduleState = state
+            app.store.save(f)
+        }
+
+        if (direct) {
+            Button(
+                onClick = {
+                    val online = ctx.getSystemService(android.net.ConnectivityManager::class.java).activeNetwork != null
+                    if (online) {
+                        mark("")
+                        app.jobs.start(p.id, "upload") { it.uploadScheduled(app.store.get(p.id) ?: p) }
+                    } else {
+                        mark("queued")
+                        com.videostudio.app.work.BackgroundJob.scheduleUpload(ctx, p.id)
+                        toast(ctx, "No internet now: it uploads by itself as soon as you are online.")
+                    }
+                },
+                enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Accent),
+            ) { Text("Schedule on YouTube", fontWeight = FontWeight.Bold) }
+            Hint("Uploads now as private with this publish time; YouTube makes it public at the time on its own. If your Google Cloud project has not passed YouTube's free API audit, YouTube keeps API uploads private: then use the YouTube app button below, or request the audit.")
+            TextButton(onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://support.google.com/youtube/contact/yt_api_form"))) } }) {
+                Text("Request YouTube's API audit (free)")
+            }
+        }
+        val ytInstalled = remember { Share.isInstalled(ctx, "youtube") }
+        OutlinedButton(
+            onClick = {
+                mark("")
+                val f = app.store.get(p.id) ?: p
+                Share.copy(ctx, "title", f.ytTitle.ifBlank { f.displayTitle() })
+                scope.launch {
+                    val uri = withContext(Dispatchers.IO) { runCatching { Share.galleryUri(ctx, f.video(app.store.root), f.displayTitle()) } }
+                    uri.onSuccess { u ->
+                        Share.target("youtube")?.let { t ->
+                            Share.open(ctx, t, u, Pipeline.publishText(f, s, credits = Pipeline.credits(f.dir(app.store.root))), f.ytTitle.ifBlank { f.displayTitle() })
+                        }
+                        toast(ctx, "In YouTube: paste the title, then Visibility → Schedule → ${Schedule.onPhone(at)}")
+                    }.onFailure { toast(ctx, "Could not prepare the video: ${it.message}") }
+                }
+            },
+            enabled = ytInstalled, modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (ytInstalled) "Schedule in the YouTube app" else "Install YouTube to schedule there") }
+        Hint("Opens YouTube with the video and the title copied. There: paste the title, tap Visibility → Schedule, and set ${Schedule.onPhone(at)} (YouTube shows your phone's time). YouTube publishes it at that time even if your phone is offline.")
     }
 }
 

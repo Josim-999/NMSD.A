@@ -102,13 +102,24 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 Spacer(Modifier.height(6.dp))
                 PlainField("Research model (uses Google Search)", s.researchModel) { s.researchModel = it }
                 Spacer(Modifier.height(6.dp))
-                Hint("If a model name stops working, the app falls back to gemini-2.5-flash.")
+                var auto by remember { mutableStateOf(s.autoSwitchModels) }
+                ToggleRow(
+                    "Auto-switch AI models",
+                    "When a model's free limit runs out, the app moves to the next free model on your key: newer Gemini Flash models, then Gemma (much bigger free limit). If every one is used up, the script is written again by itself after the midnight-Pacific reset. Free tier only: no extra cost.",
+                    auto,
+                ) { auto = it; s.autoSwitchModels = it }
             }
 
             Section("Stock photos (optional)") {
-                Hint("Free key from pexels.com/api. With it, photo scenes play real stock video clips full-screen (or a photo if no clip fits). Without it, they show a big emoji.")
+                Hint("Optional. A Pexels key (if you already have one) lets photo scenes play real stock video clips.")
                 Spacer(Modifier.height(6.dp))
                 SecretField("Pexels API key", s.pexelsKey) { s.pexelsKey = it }
+                Spacer(Modifier.height(10.dp))
+                Hint("Pixabay (free key at pixabay.com/api/docs, sign in, the key is shown on that page): millions of HD photos and vertical stock videos. Pexels has paused new keys, so Pixabay is the one to get.")
+                TextButton(onClick = { open("https://pixabay.com/api/docs/") }) { Text("Open Pixabay API page") }
+                SecretField("Pixabay API key", s.pixabayKey) { s.pixabayKey = it }
+                Spacer(Modifier.height(6.dp))
+                Hint("Without any key, pictures still come from Wikipedia, Wikimedia Commons, NASA, The Met museum and Openverse.")
             }
 
             Section("Channel format") {
@@ -178,6 +189,8 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                     "Keys are stored only on this phone, in the app's private storage. Videos are made on the phone: only the script requests (Gemini), " +
                         "the voice (Microsoft) and the apps you post with use the internet."
                 )
+                Spacer(Modifier.height(6.dp))
+                Hint("Free resources used: Google Noto Animated Emoji (CC BY 4.0), fonts Anton, Bebas Neue, Archivo Black, Poppins and Inter (SIL Open Font License), Lottie (Apache 2.0), Google ML Kit subject segmentation, pictures from Wikipedia, Wikimedia Commons, NASA, The Met and Openverse.")
             }
             Spacer(Modifier.height(24.dp))
         }

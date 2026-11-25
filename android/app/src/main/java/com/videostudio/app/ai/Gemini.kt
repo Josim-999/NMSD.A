@@ -33,6 +33,9 @@ class Gemini(
     private val notice: (String) -> Unit = {},
     /** Longest wait for a per-minute limit before moving on, in milliseconds. */
     private val maxWaitMs: Long = 65_000,
+    /** Try every model the key can use (Gemini Flash, then Gemma) when the usual ones run out. */
+    private val autoSwitch: Boolean = true,
+    private val listUrl: String = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
 ) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -52,7 +55,12 @@ class Gemini(
         fallbacks: List<String> = emptyList(),
     ): GeminiReply {
         if (apiKey.isBlank()) throw GeminiError("Add your Gemini API key in Settings (free at aistudio.google.com/apikey).")
-        val chain = (listOf(model) + fallbacks + FALLBACK_MODELS).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        val extra = if (autoSwitch) available() else FALLBACK_MODELS
+        val chain = (listOf(model) + fallbacks + extra).map { it.trim().removePrefix("models/") }
+            .filter { it.isNotEmpty() }.distinct()
+            // Google Search grounding only works on Gemini models, not on Gemma.
+            .filter { !search || supportsSearch(it) }
+            .take(MAX_TRIES)
         val tried = ArrayList<String>()
         var lastProblem = ""
         for (m in chain) {
@@ -69,8 +77,8 @@ class Gemini(
             }
         }
         throw GeminiQuotaError(
-            "Gemini's free quota is used up on every model tried (${tried.ifEmpty { chain }.joinToString()}). " +
-                "It resets at midnight Pacific time; try again then, or turn on billing for your key at aistudio.google.com."
+            "Every free AI model on your key is used up for today (${tried.size} tried: ${tried.ifEmpty { chain }.joinToString()}). " +
+                "Free quotas reset at midnight Pacific time."
         )
     }
 
@@ -80,7 +88,8 @@ class Gemini(
             JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", prompt))))
         )
         val config = JSONObject().put("temperature", 0.8)
-        if (json) config.put("responseMimeType", "application/json")
+        // Gemma on the Gemini API has no JSON mode; the prompt already asks for JSON and extractJson reads it.
+        if (json && !isGemma(model)) config.put("responseMimeType", "application/json")
         body.put("generationConfig", config)
         if (search) body.put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
 
@@ -123,8 +132,8 @@ class Gemini(
                     }
                     throw OutOfQuota(reason(text))
                 }
-                code == 400 && text.contains("not supported", ignoreCase = true) && model !in FALLBACK_MODELS ->
-                    throw ModelMissing(reason(text))
+                code == 400 && (text.contains("not supported", true) || text.contains("not enabled", true) ||
+                    text.contains("not found", true)) -> throw ModelMissing(reason(text))
                 code == 400 || code == 401 || code == 403 -> throw GeminiError(explain(code, text))
                 else -> {
                     // 500/503: Gemini is busy. Short waits, then the next model.
@@ -155,6 +164,26 @@ class Gemini(
         return if (sb.isNotBlank()) GeminiReply(sb.toString(), sources) else null
     }
 
+    /** Every text model this key can call, best first; cached for six hours. Falls back to a built-in list. */
+    fun available(): List<String> {
+        cachedModels?.let { (at, list) -> if (System.currentTimeMillis() - at < 6 * 3600_000L) return list }
+        val names = runCatching {
+            http.newCall(Request.Builder().url(listUrl).header("x-goog-api-key", apiKey).get().build()).execute().use { r ->
+                if (!r.isSuccessful) return@use null
+                val arr = JSONObject(r.body?.string() ?: "").optJSONArray("models") ?: return@use null
+                (0 until arr.length()).mapNotNull { i ->
+                    val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                    val methods = o.optJSONArray("supportedGenerationMethods")
+                    val ok = methods != null && (0 until methods.length()).any { methods.optString(it) == "generateContent" }
+                    if (ok) o.optString("name").removePrefix("models/") else null
+                }
+            }
+        }.getOrNull()
+        val ranked = if (names.isNullOrEmpty()) FALLBACK_MODELS + GEMMA_FALLBACKS else rank(names)
+        if (!names.isNullOrEmpty()) cachedModels = System.currentTimeMillis() to ranked
+        return ranked
+    }
+
     private fun reason(text: String): String =
         runCatching { JSONObject(text).getJSONObject("error").getString("message") }.getOrElse { text.take(300) }
 
@@ -173,7 +202,55 @@ class Gemini(
          * Tried after the chosen model, cheapest-first among the widely available ones. Unknown names
          * are skipped automatically, so this list can stay as it is when Google renames models.
          */
-        val FALLBACK_MODELS = listOf("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash")
+        val FALLBACK_MODELS = listOf("gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash")
+
+        /** Gemma models on the same key have their own, much larger free daily quota: the last safety net. */
+        val GEMMA_FALLBACKS = listOf("gemma-4-31b-it", "gemma-4-26b-a4b-it", "gemma-3-27b-it", "gemma-3-12b-it")
+
+        const val MAX_TRIES = 16
+
+        @Volatile private var cachedModels: Pair<Long, List<String>>? = null
+
+        fun isGemma(model: String) = model.startsWith("gemma")
+
+        fun supportsSearch(model: String) = model.startsWith("gemini")
+
+        private val SKIP = listOf(
+            "embedding", "aqa", "imagen", "veo", "tts", "image", "live", "audio", "native", "robotics",
+            "computer-use", "vision", "learnlm", "nano", "deep-research", "lyria", "gemma-3n", "-1b-it", "-4b-it", "-2b-it",
+        )
+
+        private fun version(name: String): Double =
+            Regex("(?:gemini|gemma)-(\\d+(?:\\.\\d+)?)").find(name)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+
+        private fun size(name: String): Int = Regex("(\\d+)b").find(name)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+
+        /**
+         * Orders the models a key can use: Gemini Flash (newest first, "latest" aliases first), then
+         * Flash-Lite, then Pro, then Gemma (largest first). Image, audio, embedding and tiny models are left out,
+         * and so are dated duplicates like "-001".
+         */
+        fun rank(names: List<String>): List<String> {
+            val usable = names.map { it.removePrefix("models/") }.distinct().filter { n ->
+                (n.startsWith("gemini-") || n.startsWith("gemma-")) && SKIP.none { n.contains(it) } && !Regex("-\\d{3}$").containsMatchIn(n)
+            }
+            fun group(n: String): Int = when {
+                n.startsWith("gemma") -> 3
+                n.contains("flash-lite") -> 1
+                n.contains("flash") -> 0
+                else -> 2
+            }
+            return usable.sortedWith(
+                compareBy<String> { group(it) }
+                    .thenBy { if (it.contains("latest")) 0 else 1 }
+                    .thenByDescending { version(it) }
+                    .thenBy { if (it.contains("preview") || it.contains("exp")) 1 else 0 }
+                    .thenByDescending { size(it) }
+            )
+        }
+
+        /** For tests. */
+        fun forgetModels() { cachedModels = null }
 
         data class Quota(val daily: Boolean, val retryMs: Long)
 
@@ -203,7 +280,7 @@ class Gemini(
         private val exhausted = ConcurrentHashMap<String, Long>()
 
         /** Free quotas reset at midnight Pacific time. */
-        private fun nextReset(): Long =
+        fun nextReset(): Long =
             ZonedDateTime.now(ZoneId.of("America/Los_Angeles")).toLocalDate().plusDays(1)
                 .atStartOfDay(ZoneId.of("America/Los_Angeles")).toInstant().toEpochMilli()
 

@@ -64,6 +64,8 @@ class ScreenshotTest {
         shot("3a_youtube_check")
         rule.onNodeWithText("Post to all 4").performScrollTo()
         shot("3_post_to_all")
+        rule.onNodeWithText("Schedule in the YouTube app").performScrollTo()
+        shot("3b_schedule")
 
         // Tap the button: the video goes to the gallery and TikTok opens with it.
         rule.onNodeWithText("Post to all 4").performClick()

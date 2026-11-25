@@ -43,9 +43,21 @@ class ScenePainter(
     private val look: Look = Look(0, 0, 0),
     /** Times (s) of the emphasis words: zoom punch and coloured caption. */
     private val emphasisTimes: List<Double> = emptyList(),
+    /** Animated versions of the emoji in this video (Noto, Lottie), by emoji. */
+    animated: Map<String, com.airbnb.lottie.LottieComposition> = emptyMap(),
+    /** Subject cut-outs of photo scenes, by scene index: the text goes behind the subject. */
+    private val cutouts: Map<Int, Cutout> = emptyMap(),
 ) {
+    private val animoji: Map<String, Animoji> = animated.mapValues { Animoji(it.value) }
+    /** The time of the frame being drawn, for animated emoji. */
+    private var now = 0.0
+
     private val black: Typeface = runCatching { Typeface.createFromAsset(context.assets, "fonts/Inter-Black.otf") }
         .getOrElse { Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
+    /** Headline and caption lettering: a different free (OFL) display font for each caption style. */
+    private val display: Typeface = runCatching {
+        Typeface.createFromAsset(context.assets, "fonts/" + DISPLAY_FONTS[look.captions % DISPLAY_FONTS.size])
+    }.getOrElse { black }
     private val bold: Typeface = runCatching { Typeface.createFromAsset(context.assets, "fonts/Inter-ExtraBold.otf") }
         .getOrElse { Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
 
@@ -188,6 +200,7 @@ class ScenePainter(
 
     private fun emoji(c: Canvas, e: String, cx: Float, cy: Float, size: Float, alpha: Float = 1f) {
         if (e.isBlank()) return
+        animoji[e.trim()]?.let { it.draw(c, cx, cy, size * 1.15f, now, alpha); return }
         emojiPaint.textSize = size
         emojiPaint.alpha = (alpha * 255).toInt().coerceIn(0, 255)
         val fm = emojiPaint.fontMetrics
@@ -202,6 +215,7 @@ class ScenePainter(
     }
 
     fun draw(c: Canvas, t: Double, captions: Boolean = true) {
+        now = t
         background(c, t)
         val span = timeline.sceneAt(t)
         manageMedia(span.index, t - span.start)
@@ -428,7 +442,7 @@ class ScenePainter(
         val g = timeline.captionAt(t) ?: return
         val style = look.captions
         val pop = outBack((t - g.start) / 0.18).toFloat()
-        tp.typeface = black
+        tp.typeface = display
         tp.textSize = if (style == 1) 86f else 82f
         val texts = g.words.map { upper(it.text.trim()) }
         val space = tp.measureText(" ")
@@ -514,7 +528,7 @@ class ScenePainter(
         if (hasEmoji) emoji(c, s.emoji, W / 2, 480f + (sin(4 * lt) * 12).toFloat(), (0.85 + 0.15 * spring(lt / 0.6)).toFloat() * 230f)
         val full = block(
             "hook", highlighted(words.joinToString(" "), words.lastOrNull() ?: "", palette.text, palette.accent),
-            black, 150f, zoneW, if (hasEmoji) 600f else 820f
+            display, 150f, zoneW, if (hasEmoji) 600f else 820f
         )
         val pop = (0.96 + 0.04 * spring(lt / 0.5)).toFloat()
         val cy = zoneMid + if (hasEmoji) 150f else 0f
@@ -546,8 +560,8 @@ class ScenePainter(
         rect.set(W / 2 - r, cy - r, W / 2 + r, cy + r)
         c.drawArc(rect, -90f, (360 * outCubic(lt / 1.0)).toFloat(), false, stroke)
         // Size the counting number by the final value so it does not jump while counting.
-        val size = block("statfinal", final, black, 220f, r * 1.6f, r * 1.1f, palette.accent).paint.textSize
-        drawBlock(c, block("stat", shown, black, size, r * 1.8f, r * 1.3f, palette.accent), W / 2, cy, 1f, outBack(lt / 0.4).toFloat())
+        val size = block("statfinal", final, display, 220f, r * 1.6f, r * 1.1f, palette.accent).paint.textSize
+        drawBlock(c, block("stat", shown, display, size, r * 1.8f, r * 1.3f, palette.accent), W / 2, cy, 1f, outBack(lt / 0.4).toFloat())
         if (s.label.isBlank()) return
         val a = clamp((lt - 0.35) / 0.3).toFloat()
         drawBlock(c, block("statlabel", s.label, bold, 64f, zoneW, 220f), W / 2, cy + r + 140f - 30f * a, a)
@@ -557,7 +571,7 @@ class ScenePainter(
         val items = s.items.take(4).ifEmpty { listOf(s.text.ifBlank { s.say }) }
         var top = ZONE_TOP + 20f
         if (s.text.isNotBlank() && s.items.isNotEmpty()) {
-            val title = block("listtitle", upper(s.text), black, 84f, zoneW, 210f, palette.accent)
+            val title = block("listtitle", upper(s.text), display, 84f, zoneW, 210f, palette.accent)
             drawBlock(c, title, W / 2, top + title.height / 2f, outCubic(lt / 0.3).toFloat())
             top += title.height + 50f
         }
@@ -644,7 +658,7 @@ class ScenePainter(
         val a = outCubic(lt / 0.4).toFloat()
         val text = block(
             "stmt", highlighted(upper(s.text.ifBlank { s.say }), upper(s.highlight), palette.text, palette.accent),
-            black, 118f, zoneW, 760f
+            display, 118f, zoneW, 760f
         )
         fill.shader = null
         fill.color = palette.accent2
@@ -666,7 +680,7 @@ class ScenePainter(
         val wobble = 1f + sin(6 * lt).toFloat() * 0.04f
         emoji(c, s.emoji.ifBlank { "💡" }, W / 2, cy, pop * 300f * wobble)
         if (s.text.isBlank()) return
-        drawBlock(c, block("emo", upper(s.text), black, 100f, zoneW, 300f), W / 2, cy + 360f, clamp((lt - 0.2) / 0.3).toFloat())
+        drawBlock(c, block("emo", upper(s.text), display, 100f, zoneW, 300f), W / 2, cy + 360f, clamp((lt - 0.2) / 0.3).toFloat())
     }
 
     private fun question(c: Canvas, s: Scene, lt: Double) {
@@ -683,7 +697,7 @@ class ScenePainter(
         tp.textAlign = Paint.Align.LEFT
         c.restore()
         val a = clamp((lt - 0.15) / 0.3).toFloat()
-        drawBlock(c, block("q", upper(s.text.ifBlank { s.say }), black, 104f, zoneW, 360f), W / 2, 950f, a)
+        drawBlock(c, block("q", upper(s.text.ifBlank { s.say }), display, 104f, zoneW, 360f), W / 2, 950f, a)
     }
 
     /** Full-screen stock video (or photo) with a slow zoom, a dark scrim for legibility, and its text. */
@@ -729,7 +743,26 @@ class ScenePainter(
         if (s.text.isBlank()) return
         val a = clamp((lt - 0.2) / 0.3).toFloat()
         val pop = spring((lt - 0.2) / 0.5).toFloat()
-        drawBlock(c, block("photo", upper(s.text), black, 96f, zoneW, 300f), W / 2, ZONE_TOP + 160f, a, 0.85f + 0.15f * pop)
+        // Pop-out: big text behind the subject, the subject lifted in front (only on the first picture).
+        val cut = cutouts[index]
+        val firstPicture = m is SceneMedia.Photo || (m is SceneMedia.Slideshow && prevFrame == null && frame === m.frameAt(0.0))
+        val dst = RectF(left, top, left + w, top + h)
+        val popLayout = if (cut != null && firstPicture) block("popout", upper(s.text), display, 130f, zoneW + 40f, 330f, palette.accent) else null
+        // Only the bottom fifth of the letters tucks behind the subject's head, so the words stay readable.
+        val ty = if (cut != null && popLayout != null) dst.top + cut.bounds.top * dst.height() - popLayout.height * 0.28f else 0f
+        if (cut != null && popLayout != null && ty >= 190f + popLayout.height / 2f) {
+            drawBlock(c, popLayout, W / 2, ty, a, 0.9f + 0.1f * pop)
+            val lift = 1f + 0.025f * pop
+            c.save()
+            c.scale(lift, lift, dst.centerX(), dst.top + cut.bounds.bottom * dst.height())
+            fill.alpha = (150 * a).toInt()
+            c.drawBitmap(cut.shadow, Rect(0, 0, cut.shadow.width, cut.shadow.height), RectF(dst.left, dst.top + 14f, dst.right, dst.bottom + 14f), fill)
+            fill.alpha = 255
+            c.drawBitmap(cut.bitmap, Rect(0, 0, cut.bitmap.width, cut.bitmap.height), dst, fill)
+            c.restore()
+            return
+        }
+        drawBlock(c, block("photo", upper(s.text), display, 96f, zoneW, 300f), W / 2, ZONE_TOP + 160f, a, 0.85f + 0.15f * pop)
     }
 
     // ---------------- Logos ----------------
@@ -840,7 +873,7 @@ class ScenePainter(
         c.restore()
         val name = s.brand.ifBlank { logo.title }
         val a = clamp((lt - 0.3) / 0.3).toFloat()
-        drawBlock(c, block("logoname", upper(name), black, 108f, zoneW, 160f), W / 2, cy + 400f, a)
+        drawBlock(c, block("logoname", upper(name), display, 108f, zoneW, 160f), W / 2, cy + 400f, a)
         if (s.text.isNotBlank() && !s.text.equals(name, true)) {
             val b = clamp((lt - 0.5) / 0.3).toFloat()
             drawBlock(c, block("logotext", s.text, bold, 60f, zoneW, 170f, palette.muted), W / 2, cy + 540f, b)
@@ -896,7 +929,7 @@ class ScenePainter(
         if (values.size < 2) { list(c, s, lt, dur, numbered = false); return }
         var top = ZONE_TOP + 20f
         if (s.text.isNotBlank()) {
-            val title = block("charttitle", upper(s.text), black, 80f, zoneW, 200f, palette.accent)
+            val title = block("charttitle", upper(s.text), display, 80f, zoneW, 200f, palette.accent)
             drawBlock(c, title, W / 2, top + title.height / 2f, outCubic(lt / 0.3).toFloat())
             top += title.height + 60f
         }
@@ -941,7 +974,7 @@ class ScenePainter(
         if (items.isEmpty()) { statement(c, s, lt); return }
         var top = ZONE_TOP + 20f
         if (s.text.isNotBlank()) {
-            val title = block("tltitle", upper(s.text), black, 80f, zoneW, 200f, palette.accent)
+            val title = block("tltitle", upper(s.text), display, 80f, zoneW, 200f, palette.accent)
             drawBlock(c, title, W / 2, top + title.height / 2f, outCubic(lt / 0.3).toFloat())
             top += title.height + 60f
         }
@@ -1026,7 +1059,7 @@ class ScenePainter(
         val e = s.emoji.ifBlank { scenes.firstOrNull()?.emoji ?: "" }.ifBlank { "💬" }
         emoji(c, e, W / 2, 490f + (sin(4 * lt) * 10).toFloat(), outBack(lt / 0.45).toFloat() * 220f)
         drawBlock(
-            c, block("outro", upper(s.text.ifBlank { s.say }), black, 112f, zoneW, 520f),
+            c, block("outro", upper(s.text.ifBlank { s.say }), display, 112f, zoneW, 520f),
             W / 2, zoneMid + 90f, clamp((lt - 0.1) / 0.3).toFloat()
         )
         val a = clamp((lt - 0.5) / 0.3).toFloat()
@@ -1051,6 +1084,9 @@ class ScenePainter(
 
     companion object {
         /** When each list, chart or timeline item appears (s into the scene); the sound design uses the same times. */
+        /** Per caption style: chip, colour-pop, boxed, glow. All SIL Open Font License (licences in assets/fonts). */
+        val DISPLAY_FONTS = listOf("Poppins-ExtraBold.ttf", "Anton-Regular.ttf", "ArchivoBlack-Regular.ttf", "BebasNeue-Regular.ttf")
+
         fun itemDelays(n: Int, dur: Double): List<Double> {
             if (n <= 1) return List(n) { 0.0 }
             val spread = min(0.65 * dur, n * 0.9)

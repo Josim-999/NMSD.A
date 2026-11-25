@@ -84,7 +84,7 @@ For every scene choose ONE visual from this list (the app animates them), and fi
 - {"type":"statement","text":"5-10 words on screen","highlight":"one word from text"}
 - {"type":"emoji","emoji":"one emoji","text":"2-5 words"}
 - {"type":"question","text":"short question"}
-- {"type":"photo","query":"2-4 word photo search in English","wiki":"exact English Wikipedia title if it shows a named person/place/thing, else empty","text":"2-6 words"}
+- {"type":"photo","query":"2-4 word photo search in English","wiki":"exact English Wikipedia title if it shows a named person/place/thing, else empty","text":"2-6 words","library":"nasa for space/planets/rockets/earth-from-space, museum for art/ancient history/artefacts, else empty"}
 - {"type":"logo","brand":"exact brand name","domain":"brand website, e.g. nvidia.com","text":"2-6 words"}   (when a company, product or app is the subject)
 - {"type":"chart","text":"short title","items":["Label: number", "2-5 items, numbers only after the colon"]}   (comparing amounts or growth)
 - {"type":"timeline","text":"short title","items":["Year — short event", "2-4 items in order"]}

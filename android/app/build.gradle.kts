@@ -65,7 +65,7 @@ android {
         targetSdk = 35
         // Always higher than the last build (1.2 was 3), see autoVersionCode above.
         versionCode = maxOf(4, autoVersionCode)
-        versionName = "1.8"
+        versionName = "1.9"
     }
 
     signingConfigs {
@@ -132,6 +132,10 @@ dependencies {
     implementation("androidx.browser:browser:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Animated emoji and motion graphics (Lottie, Apache-2.0).
+    implementation("com.airbnb.android:lottie:6.6.2")
+    // On-device subject cut-out for the "pop-out" photo look (free, runs on the phone).
+    implementation("com.google.android.gms:play-services-mlkit-subject-segmentation:16.0.0-beta1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
     testImplementation("androidx.test:core:1.6.1")

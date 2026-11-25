@@ -31,7 +31,7 @@ data class UploadResult(val id: String, val url: String)
  * Direct upload to YouTube with the user's own Google Cloud OAuth client ("Desktop app" type).
  * This is the advanced path; "Post everywhere" (SocialPost) needs no Google Cloud setup at all.
  */
-class YouTube(private val settings: Settings, private val tokenUrl: String = TOKEN_URL) {
+class YouTube(private val settings: Settings, private val tokenUrl: String = TOKEN_URL, private val uploadUrl: String = UPLOAD_URL) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.MINUTES)
@@ -210,6 +210,8 @@ a{display:inline-block;margin-top:28px;padding:16px 28px;border-radius:30px;back
         aiLabel: Boolean,
         madeForKids: Boolean = false,
         paidPromotion: Boolean = false,
+        /** Go public at this moment (YouTube does it on its servers: the phone can be offline). */
+        publishAt: java.time.Instant? = null,
         progress: (Float) -> Unit,
     ): UploadResult {
         if (!video.exists()) throw UploadError("Render the video first.")
@@ -225,7 +227,8 @@ a{display:inline-block;margin-top:28px;padding:16px 28px;border-radius:30px;back
             )
             .put(
                 "status", JSONObject()
-                    .put("privacyStatus", visibility)
+                    .put("privacyStatus", if (publishAt != null) "private" else visibility)
+                    .apply { if (publishAt != null) put("publishAt", publishAt.truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString()) }
                     .put("selfDeclaredMadeForKids", madeForKids)
                     .put("containsSyntheticMedia", aiLabel)
             )
@@ -234,7 +237,7 @@ a{display:inline-block;margin-top:28px;padding:16px 28px;border-radius:30px;back
             }
         val session = http.newCall(
             Request.Builder()
-                .url("$UPLOAD_URL?uploadType=resumable&part=snippet,status${if (paidPromotion) ",paidProductPlacementDetails" else ""}")
+                .url("$uploadUrl?uploadType=resumable&part=snippet,status${if (paidPromotion) ",paidProductPlacementDetails" else ""}")
                 .header("Authorization", "Bearer $token")
                 .header("X-Upload-Content-Length", length.toString())
                 .header("X-Upload-Content-Type", "video/mp4")

@@ -1,6 +1,9 @@
 package com.videostudio.app.work
 
 import com.videostudio.app.compliance.YouTubeCheck
+import com.videostudio.app.render.AnimatedEmoji
+import com.videostudio.app.render.Cutout
+import com.videostudio.app.render.Segmenter
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -46,7 +49,7 @@ class Pipeline(
     private val step: (String, Float?) -> Unit,
     private val cancelled: () -> Boolean,
 ) {
-    private fun gemini() = Gemini(settings.geminiKey, notice = log)
+    private fun gemini() = Gemini(settings.geminiKey, notice = log, autoSwitch = settings.autoSwitchModels)
 
     fun writeScript(p: Project, feedback: String = "") {
         if (p.research && p.researchNotes.isBlank()) {
@@ -72,7 +75,7 @@ class Pipeline(
         val current = if (feedback.isBlank()) "" else JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).toString(1)
         val prompt = Prompts.script(
             p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags, feedback, current,
-            stockFootage = settings.pexelsKey.isNotBlank(),
+            stockFootage = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank(),
             take = p.take,
         )
         val reply = gemini().generate(prompt, settings.scriptModel, json = true, fallbacks = listOf(settings.researchModel))
@@ -110,7 +113,7 @@ class Pipeline(
         val dir = p.dir(store.root)
         dir.mkdirs()
         // Old voice and photo files from an earlier render.
-        dir.listFiles()?.filter { it.name.startsWith("voice.") || it.name.startsWith("photo_") }?.forEach { it.delete() }
+        dir.listFiles()?.filter { it.name.startsWith("voice.") || it.name.startsWith("photo_") || it.name.startsWith("cutout_") }?.forEach { it.delete() }
 
         val script = p.scenes.joinToString(" ") { it.say.trim() }
         step("Recording the voice", null)
@@ -131,7 +134,7 @@ class Pipeline(
         val timeline = Timeline(p.scenes, voice.words, voice.seconds)
 
         // Pictures and logos, matched to the script. Free sources first need no key at all.
-        val finder = MediaFinder(File(context.cacheDir, "media"), settings.pexelsKey, log)
+        val finder = MediaFinder(File(context.cacheDir, "media"), settings.pexelsKey, log, pixabayKey = settings.pixabayKey)
         val media = LinkedHashMap<Int, SceneMedia.Lazy>()
         val logos = LinkedHashMap<Int, Logo>()
         val credits = ArrayList<String>()
@@ -145,9 +148,10 @@ class Pipeline(
             val query = scene.query.ifBlank { scene.text }
             val span = timeline.spans[i]
             val seconds = (span.end - span.start) + ScenePainter.TRANSITION
-            if (settings.pexelsKey.isNotBlank()) {
+            if ((settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank()) && scene.library.isBlank()) {
                 val clip = File(dir, "photo_$i.mp4")
                 val videoCredit = runCatching { Stock.pexelsVideo(settings.pexelsKey, query, clip, seconds) }.getOrNull()
+                    ?: runCatching { finder.pixabayVideo(query, clip, seconds) }.getOrNull()
                 if (videoCredit != null) {
                     credits.add(videoCredit)
                     clips++
@@ -156,7 +160,7 @@ class Pipeline(
                 }
             }
             val f = File(dir, "photo_$i.jpg")
-            val found = runCatching { finder.photo(query, scene.wiki, f) }.getOrNull()
+            val found = runCatching { finder.photo(query, scene.wiki, f, scene.library) }.getOrNull()
             if (found != null) {
                 credits.add(found.credit)
                 pictures++
@@ -169,7 +173,7 @@ class Pipeline(
                 val files = arrayListOf(f)
                 for (k in 1..extra) {
                     val g = File(dir, "photo_${i}_$k.jpg")
-                    val more = runCatching { finder.photo(query.ifBlank { scene.wiki }, "", g) }.getOrNull() ?: break
+                    val more = runCatching { finder.photo(query.ifBlank { scene.wiki }, "", g, scene.library) }.getOrNull() ?: break
                     credits.add(more.credit)
                     files.add(g)
                 }
@@ -232,7 +236,26 @@ class Pipeline(
         }
         val risers = if (timeline.spans.size >= 3) listOf(timeline.spans.last().start) else emptyList()
 
-        val painter = ScenePainter(context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media, logos, look, emphasisTimes)
+        // Animated emoji (Noto, free): the fire flickers, the bulb glows.
+        val emojis = (p.scenes.map { it.emoji.trim() } + "💬" + "💡").filter { it.isNotBlank() }.distinct()
+        val animated = emojis.mapNotNull { e -> AnimatedEmoji.load(e, File(context.cacheDir, "emoji"))?.let { e to it } }.toMap()
+        if (animated.isNotEmpty()) credits.add(AnimatedEmoji.CREDIT)
+        // Pop-out photos: cut the subject out on the phone, so the headline can sit behind it.
+        val cutouts = HashMap<Int, Cutout>()
+        for ((i, scene) in p.scenes.withIndex()) {
+            if (scene.type != "photo" || scene.text.isBlank() || cutouts.size >= 3) continue
+            val f = File(dir, "photo_$i.jpg")
+            if (!f.exists()) continue
+            val out = File(dir, "cutout_$i.png")
+            if (Segmenter.cut(context, f, out)) Cutout.load(out)?.let { cutouts[i] = it }
+        }
+        if (credits.isNotEmpty()) File(dir, "credits.txt").writeText(credits.joinToString("\n"))
+        log("Motion: ${animated.size} animated emoji, ${cutouts.size} pop-out photo(s).")
+
+        val painter = ScenePainter(
+            context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media, logos, look, emphasisTimes,
+            animated, cutouts,
+        )
         val (w, h) = if (settings.quality == "720") 720 to 1280 else 1080 to 1920
         val fps = if (settings.smooth60) 60 else 30
         val renderer = VideoRenderer(w, h, fps)
@@ -288,7 +311,42 @@ class Pipeline(
         log("Posted: ${result.url}")
     }
 
+    /**
+     * Uploads now as private with a publish time; YouTube makes it public at that time on its own
+     * servers, so nothing needs to run on the phone then.
+     */
+    fun uploadScheduled(p: Project) {
+        val video = p.video(store.root)
+        if (!video.exists()) throw IllegalStateException("Render the video first.")
+        if (p.scheduledAt <= System.currentTimeMillis() + 60_000) throw IllegalStateException("The scheduled time has passed. Pick a new time.")
+        step("Scheduling on YouTube", 0f)
+        log("Uploading to YouTube, to go public ${scheduleText(p.scheduledAt, p.scheduleZone)}…")
+        val result = YouTube(settings).upload(
+            video, p.ytTitle.ifBlank { p.displayTitle() }, publishText(p, settings, forYouTube = true, credits = credits(p.dir(store.root))),
+            p.hashtags, "private", settings.aiLabel, p.madeForKids, p.paidPromotion,
+            publishAt = java.time.Instant.ofEpochMilli(p.scheduledAt),
+        ) { step("Scheduling on YouTube", it) }
+        p.uploads.add(Upload("youtube", result.url, "scheduled " + scheduleText(p.scheduledAt, p.scheduleZone), System.currentTimeMillis()))
+        p.scheduleState = "uploaded"
+        p.status = Status.POSTED
+        store.save(p)
+        log("Scheduled: ${result.url}")
+    }
+
     companion object {
+        /** "Thu Nov 27, 7:00 PM ET" in the audience's zone. */
+        fun scheduleText(at: Long, zone: String): String {
+            val z = runCatching { java.time.ZoneId.of(zone) }.getOrDefault(java.time.ZoneId.of("America/New_York"))
+            val t = java.time.Instant.ofEpochMilli(at).atZone(z)
+            return java.time.format.DateTimeFormatter.ofPattern("EEE MMM d, h:mm a", java.util.Locale.US).format(t) + " " + zoneShort(zone)
+        }
+
+        fun zoneShort(zone: String) = when (zone) {
+            "America/New_York" -> "ET"; "America/Chicago" -> "CT"; "America/Denver" -> "MT"
+            "America/Phoenix" -> "Arizona"; "America/Los_Angeles" -> "PT"; "America/Anchorage" -> "AKT"; "Pacific/Honolulu" -> "HT"
+            else -> zone
+        }
+
         /** Caption / description text. YouTube also gets the sources; everything gets the hashtags. */
         fun publishText(p: Project, s: Settings, forYouTube: Boolean = false, credits: List<String> = emptyList()): String {
             val sb = StringBuilder()

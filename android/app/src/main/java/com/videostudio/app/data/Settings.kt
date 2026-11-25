@@ -126,4 +126,24 @@ class Settings(context: Context) {
     var defaultVisibility: String
         get() = str("visibility", "private")
         set(v) = put("visibility", v)
+
+    /** Try every free model on the key (Gemini Flash, then Gemma) when the usual ones run out. */
+    var autoSwitchModels: Boolean
+        get() = p.getBoolean("auto_switch_models", true)
+        set(v) = p.edit().putBoolean("auto_switch_models", v).apply()
+
+    /** Free Pixabay key (optional): HD photos and vertical stock video. */
+    var pixabayKey: String
+        get() = str("pixabay_key", "")
+        set(v) = put("pixabay_key", v.trim())
+
+    /** Time zone of the audience for scheduled posts (IANA id). */
+    var scheduleZone: String
+        get() = str("schedule_zone", "America/New_York")
+        set(v) = put("schedule_zone", v)
+
+    /** Last chosen posting time, minutes after midnight in [scheduleZone]. */
+    var scheduleMinutes: Int
+        get() = p.getInt("schedule_minutes", 19 * 60)
+        set(v) = p.edit().putInt("schedule_minutes", v).apply()
 }

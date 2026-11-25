@@ -37,13 +37,15 @@ data class Scene(
     var wiki: String = "",
     /** The one spoken word that gets a zoom punch, colour and a hit sound. */
     var emphasis: String = "",
+    /** Picture library hint for photo scenes: "nasa" (space, science), "museum" (art, history), or empty. */
+    var library: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("say", say).put("type", type).put("text", text).put("emoji", emoji)
         .put("value", value).put("label", label).put("items", JSONArray(items))
         .put("left", left).put("leftText", leftText).put("right", right).put("rightText", rightText)
         .put("highlight", highlight).put("query", query)
-        .put("brand", brand).put("domain", domain).put("wiki", wiki).put("emphasis", emphasis)
+        .put("brand", brand).put("domain", domain).put("wiki", wiki).put("emphasis", emphasis).put("library", library)
 
     companion object {
         /** Reads both the stored shape and the model's {"say", "visual": {...}} shape. */
@@ -67,6 +69,8 @@ data class Scene(
                 domain = v.optString("domain").ifBlank { o.optString("domain") },
                 wiki = v.optString("wiki").ifBlank { o.optString("wiki") },
                 emphasis = o.optString("emphasis").ifBlank { v.optString("emphasis") },
+                library = v.optString("library").ifBlank { o.optString("library") }.lowercase().trim()
+                    .takeIf { it == "nasa" || it == "museum" } ?: "",
             )
         }
     }
@@ -107,6 +111,12 @@ data class Project(
     var paidPromotion: Boolean = false,
     /** Sensitive area flagged by the script writer: health, finance, news, elections, or empty. */
     var sensitive: String = "",
+    /** When the video goes public on YouTube (epoch ms), 0 = not scheduled. */
+    var scheduledAt: Long = 0,
+    /** Audience time zone the schedule was chosen in, e.g. America/New_York. */
+    var scheduleZone: String = "",
+    /** Scheduled upload state: "", "queued" (waiting for a connection), "uploaded" (YouTube holds it). */
+    var scheduleState: String = "",
     val created: Long = System.currentTimeMillis(),
     var updated: Long = System.currentTimeMillis(),
 ) {
@@ -131,6 +141,7 @@ data class Project(
         .put("error", error).put("voiceUsed", voiceUsed).put("durationSec", durationSec)
         .put("take", take).put("mood", mood).put("style", style)
         .put("madeForKids", madeForKids).put("paidPromotion", paidPromotion).put("sensitive", sensitive)
+        .put("scheduledAt", scheduledAt).put("scheduleZone", scheduleZone).put("scheduleState", scheduleState)
         .put("created", created).put("updated", updated)
 
     companion object {
@@ -165,6 +176,9 @@ data class Project(
             madeForKids = o.optBoolean("madeForKids", false),
             paidPromotion = o.optBoolean("paidPromotion", false),
             sensitive = o.optString("sensitive"),
+            scheduledAt = o.optLong("scheduledAt", 0),
+            scheduleZone = o.optString("scheduleZone"),
+            scheduleState = o.optString("scheduleState"),
             created = o.optLong("created", System.currentTimeMillis()),
             updated = o.optLong("updated", System.currentTimeMillis()),
         )

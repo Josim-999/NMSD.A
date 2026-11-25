@@ -34,6 +34,8 @@ class MediaFinder(
     private val pexelsKey: String = "",
     private val log: (String) -> Unit = {},
     private val endpoints: Endpoints = Endpoints(),
+    /** Free Pixabay key (optional): HD photos and stock video. */
+    private val pixabayKey: String = "",
 ) {
     /** Base URLs, replaceable in tests. */
     data class Endpoints(
@@ -42,6 +44,9 @@ class MediaFinder(
         val wikipedia: String = "https://en.wikipedia.org/api/rest_v1/page/summary/",
         val openverse: String = "https://api.openverse.org/v1/images/",
         val commons: String = "https://commons.wikimedia.org/w/api.php",
+        val nasa: String = "https://images-api.nasa.gov/search",
+        val met: String = "https://collectionapi.metmuseum.org/public/collection/v1/",
+        val pixabay: String = "https://pixabay.com/api/",
     )
 
     private val http = OkHttpClient.Builder()
@@ -151,17 +156,118 @@ class MediaFinder(
      * Best free picture for a scene. [wiki] is a Wikipedia article title (a named person, place,
      * company, object); [query] a visual search phrase.
      */
-    fun photo(query: String, wiki: String, out: File): Found? {
+    fun photo(query: String, wiki: String, out: File, library: String = ""): Found? {
+        // Space and science: NASA's public-domain library. Art, history, artefacts: The Met (CC0).
+        val q = query.ifBlank { wiki }
+        if (library == "nasa" && q.isNotBlank()) nasa(q, out)?.let { return it }
+        if (library == "museum" && q.isNotBlank()) met(q, out)?.let { return it }
         if (pexelsKey.isNotBlank() && query.isNotBlank()) {
             runCatching { Stock.pexelsPhoto(pexelsKey, query, out) }.getOrNull()?.let { return Found(out, it) }
         }
         if (wiki.isNotBlank()) wikipedia(wiki, out)?.let { return it }
+        if (pixabayKey.isNotBlank() && query.isNotBlank()) pixabay(query, out)?.let { return it }
         if (query.isNotBlank()) {
             openverse(query, out)?.let { return it }
             commons(query, out)?.let { return it }
         }
         // A named thing with no visual query: try its name as the search.
         if (wiki.isNotBlank()) openverse(wiki, out)?.let { return it }
+        return null
+    }
+
+    /** NASA Image and Video Library: no key, NASA media is generally public domain. */
+    private fun nasa(query: String, out: File): Found? {
+        val url = endpoints.nasa.toHttpUrl().newBuilder().addQueryParameter("q", query.take(80))
+            .addQueryParameter("media_type", "image").build().toString()
+        val json = searches.getOrPut("nasa:$url") { text(url) ?: return null }
+        val items = runCatching { JSONObject(json).getJSONObject("collection").getJSONArray("items") }.getOrNull() ?: return null
+        for (i in 0 until minOf(items.length(), 10)) {
+            val item = items.optJSONObject(i) ?: continue
+            val data = item.optJSONArray("data")?.optJSONObject(0) ?: continue
+            val id = data.optString("nasa_id")
+            val thumb = item.optJSONArray("links")?.optJSONObject(0)?.optString("href") ?: continue
+            if (id.isBlank() || thumb.isBlank() || !used.add("nasa:$id")) continue
+            for (size in listOf("~large", "~medium", "~orig")) {
+                if (download(thumb.replace("~thumb", size), out)) {
+                    return Found(out, "\"${data.optString("title").take(80)}\", NASA (public domain) (https://images.nasa.gov/details/$id)")
+                }
+            }
+        }
+        return null
+    }
+
+    /** The Met's Open Access collection: no key, public-domain (CC0) pictures of art and history. */
+    private fun met(query: String, out: File): Found? {
+        val url = (endpoints.met + "search").toHttpUrl().newBuilder().addQueryParameter("hasImages", "true")
+            .addQueryParameter("q", query.take(80)).build().toString()
+        val json = searches.getOrPut("met:$url") { text(url) ?: return null }
+        val ids = runCatching { JSONObject(json).optJSONArray("objectIDs") }.getOrNull() ?: return null
+        for (i in 0 until minOf(ids.length(), 8)) {
+            val id = ids.optLong(i)
+            if (!used.add("met:$id")) continue
+            val body = text(endpoints.met + "objects/$id") ?: continue
+            val o = runCatching { JSONObject(body) }.getOrNull() ?: continue
+            if (!o.optBoolean("isPublicDomain")) continue
+            val img = o.optString("primaryImage").ifBlank { o.optString("primaryImageSmall") }
+            if (img.isBlank()) continue
+            if (download(img, out)) {
+                return Found(out, "\"${o.optString("title").take(80)}\", The Metropolitan Museum of Art (CC0) (${o.optString("objectURL")})")
+            }
+        }
+        return null
+    }
+
+    private fun pixabayUrl(path: String, query: String, extra: Map<String, String>): String {
+        val b = (endpoints.pixabay + path).toHttpUrl().newBuilder().addQueryParameter("key", pixabayKey)
+            .addQueryParameter("q", query.take(100)).addQueryParameter("safesearch", "true").addQueryParameter("per_page", "12")
+        extra.forEach { (k, v) -> b.addQueryParameter(k, v) }
+        return b.build().toString()
+    }
+
+    /** Pixabay photos (free key): portrait first. Pixabay asks apps to download, not hotlink: we do. */
+    private fun pixabay(query: String, out: File): Found? {
+        for (orientation in listOf("vertical", "all")) {
+            val url = pixabayUrl("", query, mapOf("image_type" to "photo", "orientation" to orientation))
+            val json = searches.getOrPut("pixabay:$url") { text(url) ?: return null }
+            val hits = runCatching { JSONObject(json).getJSONArray("hits") }.getOrNull() ?: continue
+            for (i in 0 until hits.length()) {
+                val h = hits.optJSONObject(i) ?: continue
+                if (!used.add("pixabay:${h.optLong("id")}")) continue
+                val img = h.optString("largeImageURL").ifBlank { h.optString("webformatURL") }
+                if (img.isNotBlank() && download(img, out)) {
+                    return Found(out, "Image by ${h.optString("user")} from Pixabay (${h.optString("pageURL")})")
+                }
+            }
+        }
+        return null
+    }
+
+    /** A Pixabay stock video clip (free key), portrait when there is one. Returns the credit line. */
+    fun pixabayVideo(query: String, out: File, minSeconds: Double): String? {
+        if (pixabayKey.isBlank() || query.isBlank()) return null
+        val url = pixabayUrl("videos/", query, emptyMap())
+        val hits = runCatching { JSONObject(text(url) ?: return null).getJSONArray("hits") }.getOrNull() ?: return null
+        data class Pick(val hit: JSONObject, val url: String, val portrait: Boolean)
+        val picks = (0 until hits.length()).mapNotNull { i ->
+            val h = hits.optJSONObject(i) ?: return@mapNotNull null
+            if (h.optDouble("duration", 0.0) < minSeconds * 0.8) return@mapNotNull null
+            val v = h.optJSONObject("videos") ?: return@mapNotNull null
+            val file = listOf("large", "medium").mapNotNull { v.optJSONObject(it) }
+                .firstOrNull { it.optString("url").isNotBlank() && maxOf(it.optInt("width"), it.optInt("height")) in 960..2160 }
+                ?: return@mapNotNull null
+            Pick(h, file.optString("url"), file.optInt("height") > file.optInt("width"))
+        }.sortedByDescending { it.portrait }
+        for (p in picks.take(3)) {
+            val ok = runCatching {
+                http.newCall(get(p.url)).execute().use { r ->
+                    if (!r.isSuccessful) return@use false
+                    out.parentFile?.mkdirs()
+                    out.outputStream().use { o -> r.body!!.byteStream().copyTo(o) }
+                    out.length() > 50_000
+                }
+            }.getOrDefault(false)
+            if (ok) return "Video by ${p.hit.optString("user")} from Pixabay (${p.hit.optString("pageURL")})"
+        }
         return null
     }
 

@@ -39,6 +39,8 @@ class GeminiQuotaTest {
     private fun serve(answers: Map<String, ArrayDeque<MockResponse>>) {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.path!!.startsWith("/list")) return MockResponse().setBody(modelList)
+                synchronized(bodies) { bodies.add(request.path!! to request.body.readUtf8()) }
                 val model = request.path!!.substringAfter("/models/").substringBefore(":")
                 synchronized(hits) { hits.add(model) }
                 return answers[model]?.removeFirstOrNull() ?: MockResponse().setResponseCode(404).setBody("{}")
@@ -46,12 +48,63 @@ class GeminiQuotaTest {
         }
     }
 
+    private var modelList = """{"models":[]}"""
+    private val bodies = ArrayList<Pair<String, String>>()
+
     private fun gemini(notes: MutableList<String> = ArrayList()) =
-        Gemini("key", server.url("/models/%s:generateContent").toString().replace("%25s", "%s"), notice = { notes.add(it) }, maxWaitMs = 5_000)
+        Gemini(
+            "key", server.url("/models/%s:generateContent").toString().replace("%25s", "%s"), notice = { notes.add(it) }, maxWaitMs = 5_000,
+            listUrl = server.url("/list").toString(),
+        )
+
+    private fun modelsJson(vararg names: String) =
+        """{"models":[""" + names.joinToString(",") { """{"name":"models/$it","supportedGenerationMethods":["generateContent"]}""" } + "]}"
+
+    @Test
+    fun ranksFlashThenLiteThenProThenGemmaAndDropsNonTextModels() {
+        val r = Gemini.rank(kotlin.collections.listOf(
+            "models/gemma-3-27b-it", "models/gemini-2.5-flash", "models/gemini-3.8-flash", "models/gemini-2.5-pro",
+            "models/gemini-3.1-flash-lite", "models/gemini-2.5-flash-preview-tts", "models/text-embedding-004",
+            "models/gemini-2.0-flash-001", "models/gemma-4-31b-it", "models/gemma-3-4b-it", "models/gemini-flash-latest",
+            "models/imagen-4.0-generate-001", "models/gemini-2.5-flash-image",
+        ))
+        assertEquals(
+            kotlin.collections.listOf("gemini-flash-latest", "gemini-3.8-flash", "gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-pro", "gemma-4-31b-it", "gemma-3-27b-it"),
+            r,
+        )
+    }
+
+    @Test
+    fun whenEveryGeminiIsUsedUpGemmaWritesTheScriptWithoutJsonMode() {
+        Gemini.forgetModels()
+        modelList = modelsJson("gemini-3.8-flash", "gemini-2.5-flash", "gemma-3-27b-it")
+        val q = { ArrayDeque(kotlin.collections.listOf(MockResponse().setResponseCode(429).setBody(dailyQuota))) }
+        serve(Gemini.FALLBACK_MODELS.associateWith { q() } + mapOf(
+            "gemini-3.8-flash" to q(), "gemini-3.1-flash-lite" to q(),
+            "gemma-3-27b-it" to ArrayDeque(kotlin.collections.listOf(MockResponse().setBody(ok("{}")))),
+        ))
+        val r = gemini().generate("p", "gemini-3.1-flash-lite", json = true)
+        assertEquals("gemma-3-27b-it", r.model)
+        val gemmaBody = bodies.last { it.first.contains("gemma") }.second
+        assertTrue(!gemmaBody.contains("responseMimeType"))
+        Gemini.forgetModels()
+    }
+
+    @Test
+    fun searchNeverGoesToGemma() {
+        Gemini.forgetModels()
+        modelList = modelsJson("gemini-3.8-flash", "gemma-3-27b-it")
+        val q = { ArrayDeque(kotlin.collections.listOf(MockResponse().setResponseCode(429).setBody(dailyQuota))) }
+        serve(Gemini.FALLBACK_MODELS.associateWith { q() } + mapOf("gemini-3.8-flash" to q(), "gemma-3-27b-it" to q()))
+        try { gemini().generate("p", "gemini-3.8-flash", search = true); fail("expected quota error") } catch (_: GeminiQuotaError) {}
+        assertTrue(hits.none { it.startsWith("gemma") })
+        Gemini.forgetModels()
+    }
 
     @Before
     fun setUp() {
         Gemini.forgetQuotas()
+        Gemini.forgetModels()
         server = MockWebServer()
         server.start()
     }

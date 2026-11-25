@@ -143,3 +143,13 @@ The application id `com.videostudio.app` must never change either.
 - **Pictures**: only licences that allow commercial use *and* changes (Openverse `commercial,modification`). Credits go into the YouTube description, and a short version goes into captions.
 - **Disclaimers** are added automatically: "not medical/financial advice" and "Includes paid promotion".
 - **Settings → Get monetized**: what the YouTube Partner Program asks for.
+
+## 1.9: never stuck, US scheduling, free motion graphics
+
+- **Auto-switch AI models.** The app lists every model the Gemini key can use and tries them in order: newest Gemini Flash, Flash-Lite, Pro, then **Gemma**, which has a much larger free daily quota on the same key. JSON mode and Google Search are only sent to models that support them. If every free model is used up, a background job (JobScheduler, survives restarts) writes the script again after the midnight-Pacific reset and sends a notification. Free tier only, so the cost stays the same.
+- **Schedule for US viewers.** Pick a zone (ET, CT, MT, PT), a day and a time; the best US Shorts times are preset. "Schedule on YouTube" (direct upload) sends the video private with `publishAt`, and YouTube makes it public on its own servers, so the phone can be offline at that time. With no connection when you tap, it uploads by itself once online. "Schedule in the YouTube app" opens YouTube with the video and the title copied, and shows the matching time on your phone for Visibility → Schedule. Note: API uploads from unaudited Google Cloud projects stay private until YouTube's free API audit passes.
+- **Animated emoji**: Google Noto Animated Emoji (Lottie, CC BY 4.0), cached on the phone.
+- **Pop-out photos**: ML Kit subject segmentation on the phone; the headline sits behind the subject.
+- **Display fonts** per caption style: Poppins ExtraBold, Anton, Archivo Black, Bebas Neue (OFL, licences in assets/fonts).
+- **More free pictures**: NASA Image Library (public domain) and The Met (CC0), chosen through the script's `library` hint. Optional Pixabay key for HD photos and stock video (Pexels has paused new keys).
+

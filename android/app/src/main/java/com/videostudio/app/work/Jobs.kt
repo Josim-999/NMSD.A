@@ -2,6 +2,7 @@ package com.videostudio.app.work
 
 import android.content.Context
 import android.content.Intent
+import com.videostudio.app.ai.GeminiQuotaError
 import com.videostudio.app.data.ProjectStore
 import com.videostudio.app.data.Settings
 import kotlinx.coroutines.CoroutineScope
@@ -59,7 +60,12 @@ class Jobs(private val context: Context, private val store: ProjectStore, privat
                 edit(projectId) { it.copy(step = if (stopped) "Stopped" else "Done", progress = null, running = false, cancelRequested = false) }
             } catch (t: Throwable) {
                 val stopped = _state.value[projectId]?.cancelRequested == true
-                val msg = if (stopped) null else (t.message ?: t.toString())
+                var msg = if (stopped) null else (t.message ?: t.toString())
+                // Never stuck: when every free model is used up, the script is written again by itself after the reset.
+                if (!stopped && t is GeminiQuotaError && kind == "script") {
+                    val at = BackgroundJob.scheduleScript(context, projectId)
+                    msg += " Video Studio will write it again by itself at ${BackgroundJob.localTime(at)} (your time), even if the app is closed."
+                }
                 if (msg != null) store.get(projectId)?.let { p ->
                     p.error = msg
                     store.save(p)
