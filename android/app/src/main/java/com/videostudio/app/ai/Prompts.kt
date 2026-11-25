@@ -76,10 +76,12 @@ For every scene choose ONE visual from this list (the app animates them), and fi
 - {"type":"statement","text":"5-10 words on screen","highlight":"one word from text"}
 - {"type":"emoji","emoji":"one emoji","text":"2-5 words"}
 - {"type":"question","text":"short question"}
-- {"type":"photo","query":"2-4 word stock photo search in English","text":"2-6 words"}
+- {"type":"photo","query":"2-4 word photo search in English","wiki":"exact English Wikipedia title if it shows a named person/place/thing, else empty","text":"2-6 words"}
+- {"type":"logo","brand":"exact brand name","domain":"brand website, e.g. nvidia.com","text":"2-6 words"}   (when a company, product or app is the subject)
 - {"type":"outro","text":"the comment question, short","emoji":"one emoji"}  (use for the last scene)
 Vary the visuals; never use the same type more than twice in a row. On-screen text must be short.
-${if (stockFootage) "Real stock video is available: use the \"photo\" visual for 2 or 3 scenes where real footage helps (places, objects, people doing things), with a concrete visual search query." else "No stock footage is available: use \"photo\" at most once."}
+Real pictures are found automatically: use "photo" for 2 or 3 scenes where a real image helps (people, places, objects, events), with a concrete visual query${if (stockFootage) "; these can play as real stock video" else ""}.
+Whenever a line names a company, product, app or organisation, either use the "logo" visual for it, or add "brand" and "domain" to that scene's visual so its logo appears as a badge. Use each brand's real name and website.
 
 Reply with one JSON object and nothing else, exactly this shape:
 {

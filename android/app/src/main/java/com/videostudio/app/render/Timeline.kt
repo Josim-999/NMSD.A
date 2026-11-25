@@ -28,6 +28,9 @@ object Palettes {
         Palette("mint", "Mint", Color.rgb(6, 32, 28), Color.rgb(11, 66, 56), Color.rgb(61, 255, 176), Color.rgb(182, 255, 61)),
         Palette("ocean", "Ocean", Color.rgb(3, 20, 46), Color.rgb(6, 64, 107), Color.rgb(79, 209, 255), Color.rgb(255, 224, 102)),
         Palette("mono", "Mono", Color.rgb(10, 10, 10), Color.rgb(34, 34, 34), Color.WHITE, Color.rgb(255, 59, 59)),
+        Palette("noir", "Noir Gold", Color.rgb(8, 8, 10), Color.rgb(28, 24, 18), Color.rgb(232, 190, 92), Color.rgb(255, 244, 214)),
+        Palette("aurora", "Aurora", Color.rgb(4, 18, 30), Color.rgb(38, 14, 64), Color.rgb(94, 255, 214), Color.rgb(176, 120, 255)),
+        Palette("crimson", "Crimson", Color.rgb(24, 4, 8), Color.rgb(70, 10, 22), Color.rgb(255, 92, 92), Color.rgb(255, 214, 165)),
     )
 
     fun find(id: String) = all.firstOrNull { it.id == id } ?: all.first()

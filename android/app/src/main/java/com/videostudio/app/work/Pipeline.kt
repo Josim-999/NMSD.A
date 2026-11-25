@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.videostudio.app.ai.Gemini
 import com.videostudio.app.ai.GeminiQuotaError
+import com.videostudio.app.ai.Logo
+import com.videostudio.app.ai.MediaFinder
 import com.videostudio.app.ai.Prompts
 import com.videostudio.app.ai.Stock
 import com.videostudio.app.ai.extractJson
@@ -119,44 +121,51 @@ class Pipeline(
 
         val timeline = Timeline(p.scenes, voice.words, voice.seconds)
 
-        // Photo scenes: a real stock video clip, else a stock photo, else a big emoji.
+        // Pictures and logos, matched to the script. Free sources first need no key at all.
+        val finder = MediaFinder(File(context.cacheDir, "media"), settings.pexelsKey, log)
         val media = LinkedHashMap<Int, SceneMedia.Lazy>()
+        val logos = LinkedHashMap<Int, Logo>()
+        val credits = ArrayList<String>()
         val photoScenes = p.scenes.withIndex().filter { it.value.type == "photo" }
-        if (photoScenes.isNotEmpty()) {
-            if (settings.pexelsKey.isBlank()) {
-                log("No Pexels key in Settings: photo scenes show an emoji instead.")
-            } else {
-                step("Finding stock footage", null)
-                val credits = ArrayList<String>()
-                var clips = 0
-                var stills = 0
-                for ((i, scene) in photoScenes) {
-                    if (cancelled()) return
-                    val query = scene.query.ifBlank { scene.text }
-                    val span = timeline.spans[i]
-                    val seconds = (span.end - span.start) + ScenePainter.TRANSITION
-                    val clip = File(dir, "photo_$i.mp4")
-                    val videoCredit = runCatching { Stock.pexelsVideo(settings.pexelsKey, query, clip, seconds) }.getOrNull()
-                    if (videoCredit != null) {
-                        credits.add(videoCredit)
-                        clips++
-                        media[i] = SceneMedia.Lazy { SceneMedia.Clip.load(clip, seconds) ?: loadBitmap(clip)?.let { SceneMedia.Photo(it) } }
-                        continue
-                    }
-                    val f = File(dir, "photo_$i.jpg")
-                    val credit = runCatching { Stock.pexelsPhoto(settings.pexelsKey, query, f) }.getOrNull()
-                    if (credit != null) {
-                        credits.add(credit)
-                        stills++
-                        media[i] = SceneMedia.Lazy { loadBitmap(f)?.let { SceneMedia.Photo(it) } }
-                    }
+        val brandScenes = p.scenes.withIndex().filter { it.value.type == "logo" || it.value.brand.isNotBlank() }
+        if (photoScenes.isNotEmpty() || brandScenes.isNotEmpty()) step("Finding pictures and logos", null)
+        var clips = 0
+        var pictures = 0
+        for ((i, scene) in photoScenes) {
+            if (cancelled()) return
+            val query = scene.query.ifBlank { scene.text }
+            val span = timeline.spans[i]
+            val seconds = (span.end - span.start) + ScenePainter.TRANSITION
+            if (settings.pexelsKey.isNotBlank()) {
+                val clip = File(dir, "photo_$i.mp4")
+                val videoCredit = runCatching { Stock.pexelsVideo(settings.pexelsKey, query, clip, seconds) }.getOrNull()
+                if (videoCredit != null) {
+                    credits.add(videoCredit)
+                    clips++
+                    media[i] = SceneMedia.Lazy { SceneMedia.Clip.load(clip, seconds) }
+                    continue
                 }
-                File(dir, "credits.txt").writeText(credits.joinToString("\n"))
-                log("Stock footage: $clips video clip(s), $stills photo(s) for ${photoScenes.size} scene(s).")
+            }
+            val f = File(dir, "photo_$i.jpg")
+            val found = runCatching { finder.photo(query, scene.wiki, f) }.getOrNull()
+            if (found != null) {
+                credits.add(found.credit)
+                pictures++
+                media[i] = SceneMedia.Lazy { loadBitmap(f)?.let { SceneMedia.Photo(it) } }
             }
         }
+        val logoCache = HashMap<String, Logo?>()
+        for ((i, scene) in brandScenes) {
+            if (cancelled()) return
+            val name = scene.brand.ifBlank { scene.text }
+            val logo = logoCache.getOrPut(MediaFinder.key(name + scene.domain)) { runCatching { finder.logo(name, scene.domain) }.getOrNull() }
+            if (logo != null) logos[i] = logo
+        }
+        if (credits.isNotEmpty()) File(dir, "credits.txt").writeText(credits.joinToString("\n"))
+        if (photoScenes.isNotEmpty()) log("Pictures: $clips video clip(s), $pictures photo(s) for ${photoScenes.size} photo scene(s).")
+        if (brandScenes.isNotEmpty()) log("Logos: ${logos.size} of ${brandScenes.size} brand scene(s).")
 
-        val painter = ScenePainter(context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media)
+        val painter = ScenePainter(context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media, logos)
         val (w, h) = if (settings.quality == "720") 720 to 1280 else 1080 to 1920
         val fps = if (settings.smooth60) 60 else 30
         val renderer = VideoRenderer(w, h, fps)

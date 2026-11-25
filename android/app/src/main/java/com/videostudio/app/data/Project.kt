@@ -29,12 +29,19 @@ data class Scene(
     var rightText: String = "",
     var highlight: String = "",
     var query: String = "",
+    /** Company, product or app named in this scene; its logo is shown. */
+    var brand: String = "",
+    /** The brand's website, e.g. "nvidia.com" (finds the logo when the name alone does not). */
+    var domain: String = "",
+    /** English Wikipedia article title of the person, place or thing shown, for a real photo. */
+    var wiki: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("say", say).put("type", type).put("text", text).put("emoji", emoji)
         .put("value", value).put("label", label).put("items", JSONArray(items))
         .put("left", left).put("leftText", leftText).put("right", right).put("rightText", rightText)
         .put("highlight", highlight).put("query", query)
+        .put("brand", brand).put("domain", domain).put("wiki", wiki)
 
     companion object {
         /** Reads both the stored shape and the model's {"say", "visual": {...}} shape. */
@@ -54,6 +61,9 @@ data class Scene(
                 rightText = v.optString("rightText"),
                 highlight = v.optString("highlight"),
                 query = v.optString("query"),
+                brand = v.optString("brand").ifBlank { o.optString("brand") },
+                domain = v.optString("domain").ifBlank { o.optString("domain") },
+                wiki = v.optString("wiki").ifBlank { o.optString("wiki") },
             )
         }
     }

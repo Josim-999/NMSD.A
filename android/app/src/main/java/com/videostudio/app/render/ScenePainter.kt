@@ -2,6 +2,7 @@ package com.videostudio.app.render
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
@@ -18,6 +19,7 @@ import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.style.ForegroundColorSpan
+import com.videostudio.app.ai.Logo
 import com.videostudio.app.data.Scene
 import java.util.Locale
 import kotlin.math.cos
@@ -35,6 +37,8 @@ class ScenePainter(
     private val seriesName: String,
     /** Stock photo or video clip per photo scene, loaded only while its scene is on screen. */
     private val media: Map<Int, SceneMedia.Lazy>,
+    /** Brand logos by scene index: the logo scene's subject, or a badge on any scene naming a brand. */
+    private val logos: Map<Int, Logo> = emptyMap(),
 ) {
     private val black: Typeface = runCatching { Typeface.createFromAsset(context.assets, "fonts/Inter-Black.otf") }
         .getOrElse { Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
@@ -230,9 +234,11 @@ class ScenePainter(
             "emoji" -> emojiScene(c, scene, lt)
             "question" -> question(c, scene, lt)
             "photo" -> photo(c, scene, index, lt, dur)
+            "logo" -> logoScene(c, scene, index, lt)
             "outro" -> outro(c, scene, lt)
             else -> statement(c, scene, lt)
         }
+        badge(c, scene, index, lt)
         c.restore()
     }
 
@@ -245,6 +251,7 @@ class ScenePainter(
     /** Frees every clip; call when rendering is finished. */
     fun release() {
         media.values.forEach { it.release() }
+        logoBitmaps.values.forEach { it?.recycle() }
         grainBitmap.recycle()
     }
 
@@ -532,7 +539,12 @@ class ScenePainter(
     private fun photo(c: Canvas, s: Scene, index: Int, lt: Double, dur: Double) {
         val m = media[index]?.get()
         if (m == null) {
-            emojiScene(c, s.copy(emoji = s.emoji.ifBlank { "📸" }), lt)
+            // No picture found: the brand's logo if there is one, else clean typography (never a stock emoji).
+            when {
+                logos[index] != null -> logoScene(c, s, index, lt)
+                s.emoji.isNotBlank() -> emojiScene(c, s, lt)
+                else -> statement(c, s.copy(text = s.text.ifBlank { s.say }), lt)
+            }
             return
         }
         val frame = m.frameAt(lt)
@@ -556,6 +568,153 @@ class ScenePainter(
         val a = clamp((lt - 0.2) / 0.3).toFloat()
         val pop = spring((lt - 0.2) / 0.5).toFloat()
         drawBlock(c, block("photo", upper(s.text), black, 96f, zoneW, 300f), W / 2, ZONE_TOP + 160f, a, 0.85f + 0.15f * pop)
+    }
+
+    // ---------------- Logos ----------------
+
+    private val logoPaths = HashMap<String, Path?>()
+    private val logoBitmaps = HashMap<String, Bitmap?>()
+    private val glow = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val shine = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    private fun luminance(c: Int) = (0.2126 * Color.red(c) + 0.7152 * Color.green(c) + 0.0722 * Color.blue(c)) / 255.0
+
+    private fun shade(c: Int, f: Float) = Color.rgb(
+        (Color.red(c) * f).toInt().coerceIn(0, 255), (Color.green(c) * f).toInt().coerceIn(0, 255), (Color.blue(c) * f).toInt().coerceIn(0, 255)
+    )
+
+    private fun brandColor(logo: Logo) = (logo as? Logo.Vector)?.color ?: palette.accent
+
+    /**
+     * An app-icon style tile: brand-colour gradient with the logo in white (dark logo on light
+     * brands), a soft glow behind it and a light sweep across it. [shineT] runs 0..1 for the sweep.
+     */
+    private fun drawLogoTile(c: Canvas, logo: Logo, cx: Float, cy: Float, size: Float, shineT: Float, alpha: Int = 255) {
+        val r = size * 0.24f
+        val half = size / 2
+        val brand = brandColor(logo)
+        // Glow.
+        glow.shader = RadialGradient(cx, cy, size * 0.95f, withAlpha(brand, (alpha * 0.55).toInt()), 0, Shader.TileMode.CLAMP)
+        c.drawCircle(cx, cy, size * 0.95f, glow)
+        // Tile.
+        rect.set(cx - half, cy - half, cx + half, cy + half)
+        val raster = logo is Logo.Raster
+        val top = if (raster) Color.WHITE else if (luminance(brand) < 0.12) Color.rgb(48, 50, 64) else shade(brand, 1.15f)
+        val bottom = if (raster) Color.rgb(232, 234, 240) else if (luminance(brand) < 0.12) Color.rgb(14, 15, 22) else shade(brand, 0.62f)
+        fill.shader = LinearGradient(cx, cy - half, cx, cy + half, top, bottom, Shader.TileMode.CLAMP)
+        fill.alpha = alpha
+        c.drawRoundRect(rect, r, r, fill)
+        fill.shader = null
+        stroke.shader = null
+        stroke.strokeWidth = size * 0.012f
+        stroke.color = Color.argb((alpha * 0.35).toInt(), 255, 255, 255)
+        c.drawRoundRect(rect, r, r, stroke)
+        // Mark.
+        val inner = size * 0.58f
+        when (logo) {
+            is Logo.Vector -> {
+                val path = logoPaths.getOrPut(logo.pathData) {
+                    runCatching { androidx.core.graphics.PathParser.createPathFromPathData(logo.pathData) }.getOrNull()
+                }
+                if (path != null) {
+                    c.save()
+                    c.translate(cx - inner / 2, cy - inner / 2)
+                    c.scale(inner / 24f, inner / 24f)
+                    fill.color = if (luminance(top) > 0.62) Color.rgb(17, 17, 17) else Color.WHITE
+                    fill.alpha = alpha
+                    c.drawPath(path, fill)
+                    c.restore()
+                }
+            }
+            is Logo.Raster -> {
+                val bmp = logoBitmaps.getOrPut(logo.file.absolutePath) { runCatching { BitmapFactory.decodeFile(logo.file.absolutePath) }.getOrNull() }
+                if (bmp != null) {
+                    val sc = inner / max(bmp.width, bmp.height)
+                    val w = bmp.width * sc
+                    val h = bmp.height * sc
+                    fill.alpha = alpha
+                    fill.isFilterBitmap = true
+                    c.drawBitmap(bmp, Rect(0, 0, bmp.width, bmp.height), RectF(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2), fill)
+                }
+            }
+        }
+        fill.alpha = 255
+        // Light sweep, clipped to the tile.
+        if (shineT in 0f..1f) {
+            c.save()
+            path.reset()
+            path.addRoundRect(rect, r, r, Path.Direction.CW)
+            c.clipPath(path)
+            val x = cx - size + 2 * size * shineT
+            shine.shader = LinearGradient(x - size * 0.25f, cy - half, x + size * 0.25f, cy + half,
+                intArrayOf(0, Color.argb((alpha * 0.45).toInt(), 255, 255, 255), 0), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+            c.drawRect(rect, shine)
+            c.restore()
+        }
+    }
+
+    /** A brand takes the stage: tile pops in on a spring, tilts upright, rings pulse, light sweeps. */
+    private fun logoScene(c: Canvas, s: Scene, index: Int, lt: Double) {
+        val logo = logos[index]
+        if (logo == null) {
+            statement(c, s.copy(text = s.text.ifBlank { s.brand.ifBlank { s.say } }), lt)
+            return
+        }
+        val cy = zoneMid - 120f
+        val brand = brandColor(logo)
+        for (i in 0 until 3) {
+            val ph = (0.6 * lt + i / 3.0) % 1.0
+            stroke.strokeWidth = 5f
+            stroke.shader = null
+            stroke.color = withAlpha(if (luminance(brand) < 0.12) palette.accent2 else brand, (110 * (1 - ph)).toInt())
+            c.drawCircle(W / 2, cy, (300 + 260 * ph).toFloat(), stroke)
+        }
+        val pop = spring(lt / 0.7).toFloat()
+        val tilt = (-10 * (1 - outCubic(lt / 0.6))).toFloat()
+        c.save()
+        c.rotate(tilt, W / 2, cy)
+        c.scale(pop, pop, W / 2, cy)
+        drawLogoTile(c, logo, W / 2, cy + (sin(2.2 * lt) * 6).toFloat(), 470f, ((lt - 0.45) / 0.8).toFloat())
+        c.restore()
+        val name = s.brand.ifBlank { logo.title }
+        val a = clamp((lt - 0.3) / 0.3).toFloat()
+        drawBlock(c, block("logoname", upper(name), black, 108f, zoneW, 160f), W / 2, cy + 400f, a)
+        if (s.text.isNotBlank() && !s.text.equals(name, true)) {
+            val b = clamp((lt - 0.5) / 0.3).toFloat()
+            drawBlock(c, block("logotext", s.text, bold, 60f, zoneW, 170f, palette.muted), W / 2, cy + 540f, b)
+        }
+    }
+
+    /** A small glass pill with the logo and name, for scenes that mention a brand. */
+    private fun badge(c: Canvas, s: Scene, index: Int, lt: Double) {
+        if (s.type == "logo" || s.brand.isBlank()) return
+        if (index == 0 && seriesName.isNotBlank()) return // the series badge sits there
+        if (s.type == "photo" && media[index]?.get() == null) return // that scene already became the logo scene
+        val logo = logos[index] ?: return
+        val pop = spring((lt - 0.15) / 0.6).toFloat()
+        if (pop <= 0.01f) return
+        tp.typeface = bold
+        tp.textSize = 40f
+        val name = s.brand.take(22)
+        val tw = tp.measureText(name)
+        val h = 92f
+        val w = h + 20f + tw + 36f
+        val cy = 244f
+        c.save()
+        c.scale(pop, pop, W / 2, cy)
+        fill.shader = null
+        fill.color = Color.argb(150, 10, 12, 22)
+        rect.set(W / 2 - w / 2, cy - h / 2, W / 2 + w / 2, cy + h / 2)
+        c.drawRoundRect(rect, h / 2, h / 2, fill)
+        stroke.shader = null
+        stroke.strokeWidth = 2f
+        stroke.color = Color.argb(70, 255, 255, 255)
+        c.drawRoundRect(rect, h / 2, h / 2, stroke)
+        drawLogoTile(c, logo, W / 2 - w / 2 + h / 2 + 6f, cy, h - 20f, -1f)
+        tp.color = Color.WHITE
+        tp.textAlign = Paint.Align.LEFT
+        c.drawText(name, W / 2 - w / 2 + h + 20f, cy + 14f, tp)
+        c.restore()
     }
 
     private fun outro(c: Canvas, s: Scene, lt: Double) {

@@ -3,6 +3,20 @@
 Turns a topic into a finished vertical Short on the phone: Gemini researches and writes the
 script, a Microsoft neural voice reads it, the app animates and renders the video, then posts it.
 
+## What's new in 1.6: real pictures and logos, no keys needed
+
+- **Pictures matched to the script, free and keyless** (`MediaFinder`): Pexels when a key is set,
+  then the Wikipedia image of the named person, place or thing, then Openverse (Creative Commons
+  photos from Flickr, Wikimedia and others), then Wikimedia Commons. Prefers large portrait images;
+  never repeats a picture in one video. Credits go to `credits.txt` in the project folder.
+- **Logos of every brand the video mentions:** Simple Icons vector logos in the brand's own
+  colour (3,000+ brands), else Google's 256 px site icon. A new **logo** scene (brand tile with
+  glow, light sweep, spring pop, pulsing rings) and a logo badge on any scene naming a brand.
+- Gemini (same single call) now marks brands, websites and Wikipedia topics per scene.
+- No more emoji fallback when no picture is found: the brand's logo, else clean typography.
+- New colour styles: Noir Gold, Aurora, Crimson.
+- Wikimedia and Openverse requests identify the app (User-Agent), as their API rules ask.
+
 ## What's new in 1.5
 
 - **Gemini quota (HTTP 429) no longer stops a video.** A per-minute limit waits the time Gemini
