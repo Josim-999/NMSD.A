@@ -159,3 +159,11 @@ The application id `com.videostudio.app` must never change either.
 - **Fix:** a per-minute Gemini limit used to mark a model as used up for the whole day. It now rests the model for 3 minutes only.
 - Research (Google Search) is skipped, not failed, when Gemini can't do it; the script is then written from general knowledge.
 
+## 2.1: never-stop script chain, Liquid glass look
+
+- **Ten free AI services, instant switching.** The order is Z.ai GLM Flash (free Chinese models, the most room), NVIDIA, every free Gemini/Gemma model, Groq, Alibaba Qwen (Singapore free quota), Mistral, OpenRouter free models, SiliconFlow, Cloudflare Workers AI, then Pollinations (new gen.pollinations.ai endpoint, key optional). With backups configured, a Gemini per-minute limit no longer waits: it switches at once. Used-up services rest and come back. If all of them fail, the background retry comes after 20 minutes, then after the daily reset. Settings shows a status for each service.
+- **Liquid glass look** (Settings → Video look: Mix / Liquid glass / Classic dark), built from a study of popular AI-tutorial Shorts:
+  - Pastel mesh light theme with frosted glass cards; problem, myth and data scenes switch to a midnight-violet dark theme with a radial wipe.
+  - Blur-in kinetic captions on a glass pill, with gradient-filled punch words.
+  - UI micro-events, each with a click sound: a cursor taps "send" on the hook card and clicks list items as they pop; a toggle flips from MYTH to FACT; percent stats fill a glass progress bar; photos play in a floating phone mock-up; the ending has a notification banner and a comment box.
+

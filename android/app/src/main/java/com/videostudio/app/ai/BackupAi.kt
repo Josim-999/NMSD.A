@@ -27,6 +27,8 @@ data class BackupProvider(
     /** Where the key is made (shown in Settings). */
     val keyPage: String = "",
     val needsKey: Boolean = true,
+    /** How many of its models to try before moving on (each model has its own quota on some services). */
+    val maxModels: Int = 3,
 ) {
     val usable: Boolean get() = !needsKey || key.isNotBlank()
 }
@@ -41,6 +43,14 @@ class BackupAi(
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
+    /** All the free keys from Settings. */
+    data class Keys(
+        val zai: String = "", val nvidia: String = "", val groq: String = "", val alibaba: String = "",
+        val mistral: String = "", val openRouter: String = "", val siliconFlow: String = "",
+        val cloudflareAccount: String = "", val cloudflareToken: String = "", val pollinations: String = "",
+        val keyless: Boolean = true,
+    )
+
     private class Busy(msg: String, val minutes: Long) : Exception(msg)
 
     /** Tries each provider in turn (up to 3 models each). Null when none could answer. */
@@ -48,7 +58,7 @@ class BackupAi(
         val problems = ArrayList<String>()
         for (p in providers.filter { it.usable }) {
             if (resting(p.id)) continue
-            for (model in models(p).take(3)) {
+            for (model in models(p).take(p.maxModels)) {
                 if (resting(p.id + "/" + model)) continue
                 try {
                     notice("Writing with ${p.name} ($model)…")
@@ -144,34 +154,73 @@ class BackupAi(
 
         fun forget() { modelCache.clear(); restingUntil.clear() }
 
-        /** The free services, in the order they are tried. */
-        fun providers(groq: String, openRouter: String, mistral: String, nvidia: String, keyless: Boolean) = listOf(
+
+        /** Services that have big free room: tried before Gemini so Gemini's small quota is kept for research. */
+        val BIG = setOf("zai", "nvidia")
+
+        /** Every free service, in the order they are tried. */
+        fun all(k: Keys) = listOf(
             BackupProvider(
-                "groq", "Groq", "https://api.groq.com/openai/v1", groq,
+                "zai", "Z.ai GLM", "https://api.z.ai/api/paas/v4", k.zai,
+                listOf("glm-4.7-flash", "glm-4.5-flash"), listFilter = { false },
+                keyPage = "https://z.ai/manage-apikey/apikey-list",
+            ),
+            BackupProvider(
+                "nvidia", "NVIDIA", "https://integrate.api.nvidia.com/v1", k.nvidia,
+                listOf("openai/gpt-oss-120b", "deepseek-ai/deepseek-v3.1", "qwen/qwen3-235b-a22b", "moonshotai/kimi-k2-instruct", "meta/llama-3.3-70b-instruct"),
+                keyPage = "https://build.nvidia.com", maxModels = 4,
+            ),
+            BackupProvider(
+                "groq", "Groq", "https://api.groq.com/openai/v1", k.groq,
                 listOf("openai/gpt-oss-120b", "moonshotai/kimi-k2-instruct", "qwen/qwen3-32b", "meta-llama/llama-4-maverick-17b-128e-instruct", "openai/gpt-oss-20b"),
-                keyPage = "https://console.groq.com/keys",
+                keyPage = "https://console.groq.com/keys", maxModels = 4,
             ),
             BackupProvider(
-                "nvidia", "NVIDIA", "https://integrate.api.nvidia.com/v1", nvidia,
-                listOf("openai/gpt-oss-120b", "deepseek-ai/deepseek-v3.1", "qwen/qwen3-235b-a22b", "meta/llama-3.3-70b-instruct"),
-                keyPage = "https://build.nvidia.com",
+                "alibaba", "Alibaba Qwen", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", k.alibaba,
+                listOf("qwen-plus", "qwen-turbo", "qwen-flash", "qwen-max", "qwen3-235b-a22b", "qwen3-32b"), listFilter = { false },
+                keyPage = "https://modelstudio.console.alibabacloud.com/", maxModels = 6,
             ),
             BackupProvider(
-                "mistral", "Mistral", "https://api.mistral.ai/v1", mistral,
-                listOf("mistral-medium-latest", "mistral-small-latest"),
-                listFilter = { false }, // its list is long and mixed; the two above are the free-plan workhorses
+                "mistral", "Mistral", "https://api.mistral.ai/v1", k.mistral,
+                listOf("mistral-medium-latest", "mistral-small-latest"), listFilter = { false },
                 keyPage = "https://console.mistral.ai/api-keys",
             ),
             BackupProvider(
-                "openrouter", "OpenRouter", "https://openrouter.ai/api/v1", openRouter,
+                "openrouter", "OpenRouter", "https://openrouter.ai/api/v1", k.openRouter,
                 listOf("openai/gpt-oss-120b:free", "deepseek/deepseek-chat-v3.1:free", "meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-235b-a22b:free"),
                 listFilter = { it.optString("id").endsWith(":free") },
                 keyPage = "https://openrouter.ai/keys",
             ),
             BackupProvider(
-                "pollinations", "Pollinations (no key)", "https://text.pollinations.ai/openai", "",
-                listOf("openai"), listFilter = { false }, needsKey = false,
+                "siliconflow", "SiliconFlow", "https://api.siliconflow.com/v1", k.siliconFlow,
+                listOf("Qwen/Qwen3-8B", "THUDM/GLM-4-9B-0414", "Qwen/Qwen2.5-7B-Instruct"), listFilter = { false },
+                keyPage = "https://cloud.siliconflow.com/account/ak",
             ),
-        ).filter { it.id != "pollinations" || keyless }
+            BackupProvider(
+                "cloudflare", "Cloudflare", "https://api.cloudflare.com/client/v4/accounts/${k.cloudflareAccount.trim()}/ai/v1",
+                if (k.cloudflareAccount.isBlank()) "" else k.cloudflareToken,
+                listOf("@cf/openai/gpt-oss-120b", "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/qwen/qwen3-30b-a3b-fp8"), listFilter = { false },
+                keyPage = "https://dash.cloudflare.com/profile/api-tokens",
+            ),
+            BackupProvider(
+                "pollinations", "Pollinations", "https://gen.pollinations.ai/v1", k.pollinations,
+                listOf("openai", "openai-fast"), listFilter = { false },
+                keyPage = "https://enter.pollinations.ai", needsKey = !k.keyless,
+            ),
+        )
+
+        /** Kept for older callers and tests. */
+        fun providers(groq: String, openRouter: String, mistral: String, nvidia: String, keyless: Boolean) =
+            all(Keys(groq = groq, openRouter = openRouter, mistral = mistral, nvidia = nvidia, keyless = keyless))
+                .filter { it.id in setOf("groq", "nvidia", "mistral", "openrouter", "pollinations") }
+                .sortedBy { listOf("groq", "nvidia", "mistral", "openrouter", "pollinations").indexOf(it.id) }
+
+        /** "ready", "resting until …" or "no key", for the Settings panel. */
+        fun status(p: BackupProvider): String {
+            if (!p.usable) return "no key"
+            val until = restingUntil[p.id] ?: return "ready"
+            return if (System.currentTimeMillis() >= until) "ready" else "resting until " +
+                java.time.format.DateTimeFormatter.ofPattern("h:mm a").format(java.time.Instant.ofEpochMilli(until).atZone(java.time.ZoneId.systemDefault()))
+        }
     }
 }

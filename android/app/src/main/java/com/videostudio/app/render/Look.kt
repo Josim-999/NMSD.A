@@ -8,18 +8,24 @@ package com.videostudio.app.render
 data class Look(val captions: Int, val transition: Int, val background: Int) {
     val id: Int get() = captions + CAPTIONS * (transition + TRANSITIONS * background)
 
+    val glass: Boolean get() = background == GLASS
+
     val description: String
-        get() = "${CAPTION_NAMES[captions]} captions, ${TRANSITION_NAMES[transition]} transitions, ${BACKGROUND_NAMES[background]} background"
+        get() = if (glass) "Liquid glass (light frosted UI, ${TRANSITION_NAMES[transition]} transitions)"
+        else "${CAPTION_NAMES[captions]} captions, ${TRANSITION_NAMES[transition]} transitions, ${BACKGROUND_NAMES[background]} background"
 
     companion object {
         const val CAPTIONS = 4
         const val TRANSITIONS = 4
-        const val BACKGROUNDS = 3
+        const val BACKGROUNDS = 4
         const val COUNT = CAPTIONS * TRANSITIONS * BACKGROUNDS
 
         val CAPTION_NAMES = listOf("chip", "colour-pop", "boxed", "glow")
         val TRANSITION_NAMES = listOf("zoom-push", "slide-up", "whip-pan", "iris")
-        val BACKGROUND_NAMES = listOf("soft-light", "grid", "aurora")
+        val BACKGROUND_NAMES = listOf("soft-light", "grid", "aurora", "liquid-glass")
+
+        /** The "liquid glass" family: light frosted UI, theme switches, blur-in captions. */
+        const val GLASS = 3
 
         fun of(id: Int): Look {
             val i = ((id % COUNT) + COUNT) % COUNT
@@ -27,11 +33,19 @@ data class Look(val captions: Int, val transition: Int, val background: Int) {
         }
 
         /** A look for a new video: every part differs from [last] (when there is one); [seed] picks among them. */
-        fun pick(seed: Int, last: Int): Int {
+        fun pick(seed: Int, last: Int, mode: String = "mix"): Int {
             val prev = if (last in 0 until COUNT) of(last) else null
-            val options = (0 until COUNT).map { of(it) }.filter { l ->
-                prev == null || (l.captions != prev.captions && l.transition != prev.transition && l.background != prev.background)
+            val allowed = (0 until COUNT).map { of(it) }.filter { l ->
+                when (mode) {
+                    "glass" -> l.background == GLASS
+                    "classic" -> l.background != GLASS
+                    else -> true
+                }
             }
+            val options = allowed.filter { l ->
+                prev == null || (l.captions != prev.captions && l.transition != prev.transition &&
+                    (l.background != prev.background || mode == "glass"))
+            }.ifEmpty { allowed }
             return options[((seed % options.size) + options.size) % options.size].id
         }
     }

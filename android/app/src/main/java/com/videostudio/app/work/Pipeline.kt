@@ -90,30 +90,33 @@ class Pipeline(
         log("Script ready with ${reply.model}: ${p.scenes.size} scenes, $words words.")
     }
 
-    private fun backup() = BackupAi(
-        BackupAi.providers(settings.groqKey, settings.openRouterKey, settings.mistralKey, settings.nvidiaKey, settings.keylessBackup),
-        notice = log,
-    )
-
     /**
-     * Gemini first (every free model on the key), then the free backup services (Groq, NVIDIA,
-     * Mistral, OpenRouter, then a keyless one). Only when all of them are out does it give up.
+     * Never stuck: the free services with the most room (Z.ai GLM, NVIDIA) go first, then every free
+     * Gemini/Gemma model, then Groq, Alibaba Qwen, Mistral, OpenRouter, SiliconFlow, Cloudflare and
+     * Pollinations. A used-up service is skipped at once (no waiting) while another one has room.
      */
     private fun scriptReply(prompt: String): GeminiReply {
         val isScript = { t: String -> runCatching { extractJson(t).optJSONArray("scenes")?.length() ?: 0 }.getOrDefault(0) >= 3 }
-        val quota: GeminiQuotaError = if (settings.geminiKey.isBlank()) {
-            GeminiQuotaError("No Gemini key is set.")
-        } else {
+        val all = BackupAi.all(settings.aiKeys())
+        val usable = all.filter { it.usable }
+        val first = BackupAi(usable.filter { it.id in BackupAi.BIG }, notice = log)
+        val rest = BackupAi(usable.filter { it.id !in BackupAi.BIG }, notice = log)
+        first.generate(prompt, isScript)?.let { log("Script written by ${it.model}."); return it }
+        var quota: GeminiQuotaError? = null
+        if (settings.geminiKey.isNotBlank()) {
             try {
-                return gemini().generate(prompt, settings.scriptModel, json = true, fallbacks = listOf(settings.researchModel))
-            } catch (e: GeminiQuotaError) { e }
+                // With backups ready, never sit waiting on a Gemini per-minute limit: switch at once.
+                val g = Gemini(settings.geminiKey, notice = log, autoSwitch = settings.autoSwitchModels,
+                    maxWaitMs = if (usable.isNotEmpty()) 0 else 65_000)
+                return g.generate(prompt, settings.scriptModel, json = true, fallbacks = listOf(settings.researchModel))
+            } catch (e: GeminiQuotaError) { quota = e }
+            log("Gemini is out of free quota; switching to the next free AI…")
         }
-        log("Gemini is out of free quota; trying the backup AI services…")
-        backup().generate(prompt, isScript)?.let { return it }
-        val anyKey = listOf(settings.groqKey, settings.openRouterKey, settings.mistralKey, settings.nvidiaKey).any { it.isNotBlank() }
+        rest.generate(prompt, isScript)?.let { log("Script written by ${it.model}."); return it }
+        val missing = all.filter { !it.usable }.map { it.name }
         throw GeminiQuotaError(
-            quota.message + " The backup AI services could not answer either." +
-                if (!anyKey) " Add a free Groq key in Settings → Backup AI for about 1,000 more scripts a day." else ""
+            (quota?.message ?: "No AI could write the script right now.") + " The free backup AI services could not answer either." +
+                if (missing.isNotEmpty()) " Add a free key for ${missing.take(3).joinToString()} in Settings → Backup AI (Z.ai GLM is free and has the most room)." else ""
         )
     }
 
@@ -238,7 +241,7 @@ class Pipeline(
 
         // A look of its own for every video (captions, transitions, background), different from the last one.
         if (p.style < 0) {
-            p.style = Look.pick(p.id.hashCode(), settings.lastStyle)
+            p.style = Look.pick(p.id.hashCode(), settings.lastStyle, settings.lookMode)
             settings.lastStyle = p.style
             store.save(p)
         }
@@ -262,6 +265,16 @@ class Pipeline(
                 }
                 "logo", "quote" -> pops.add(span.start + 0.12)
                 "stat" -> if (emphasisTimes.none { it in span.start..span.end }) hits.add(span.start + 0.15)
+            }
+        }
+        // Liquid glass look: a tactile click on every UI micro-event (cursor taps, toggle, notification).
+        if (look.glass) p.scenes.forEachIndexed { i, sc ->
+            val span = timeline.spans[i]
+            val d = span.end - span.start
+            when (sc.type) {
+                "hook" -> pops.add(span.start + ScenePainter.HOOK_CLICK)
+                "compare" -> pops.add(span.start + (d * 0.42).coerceIn(0.5, 2.2))
+                "outro" -> { pops.add(span.start + ScenePainter.OUTRO_BANNER + 0.1); pops.add(span.start + ScenePainter.OUTRO_CLICK) }
             }
         }
         val risers = if (timeline.spans.size >= 3) listOf(timeline.spans.last().start) else emptyList()

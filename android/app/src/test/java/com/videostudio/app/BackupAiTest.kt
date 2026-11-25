@@ -93,7 +93,8 @@ class BackupAiTest {
     @Test fun providerListIsInTheRightOrder() {
         val list = BackupAi.providers("g", "o", "m", "n", keyless = true)
         assertEquals(listOf("groq", "nvidia", "mistral", "openrouter", "pollinations"), list.map { it.id })
-        assertEquals(4, BackupAi.providers("g", "o", "m", "n", keyless = false).size)
+        // Keyless off: Pollinations stays listed but needs its own key.
+        assertEquals(4, BackupAi.providers("g", "o", "m", "n", keyless = false).count { it.usable })
         assertTrue(BackupAi.providers("", "", "", "", true).filter { it.usable }.map { it.id } == listOf("pollinations"))
     }
 

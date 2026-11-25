@@ -164,4 +164,34 @@ class Settings(context: Context) {
     var keylessBackup: Boolean
         get() = p.getBoolean("keyless_backup", true)
         set(v) = p.edit().putBoolean("keyless_backup", v).apply()
+
+    var zaiKey: String
+        get() = str("zai_key", "")
+        set(v) = put("zai_key", v.trim())
+    var alibabaKey: String
+        get() = str("alibaba_key", "")
+        set(v) = put("alibaba_key", v.trim())
+    var siliconFlowKey: String
+        get() = str("siliconflow_key", "")
+        set(v) = put("siliconflow_key", v.trim())
+    var cloudflareAccount: String
+        get() = str("cloudflare_account", "")
+        set(v) = put("cloudflare_account", v.trim())
+    var cloudflareToken: String
+        get() = str("cloudflare_token", "")
+        set(v) = put("cloudflare_token", v.trim())
+    var pollinationsKey: String
+        get() = str("pollinations_key", "")
+        set(v) = put("pollinations_key", v.trim())
+
+    fun aiKeys() = com.videostudio.app.ai.BackupAi.Keys(
+        zai = zaiKey, nvidia = nvidiaKey, groq = groqKey, alibaba = alibabaKey, mistral = mistralKey,
+        openRouter = openRouterKey, siliconFlow = siliconFlowKey, cloudflareAccount = cloudflareAccount,
+        cloudflareToken = cloudflareToken, pollinations = pollinationsKey, keyless = keylessBackup,
+    )
+
+    /** "mix" (all looks), "glass" (liquid glass only) or "classic" (dark looks only). */
+    var lookMode: String
+        get() = str("look_mode", "mix")
+        set(v) = put("look_mode", v)
 }

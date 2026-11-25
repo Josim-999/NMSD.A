@@ -18,6 +18,7 @@ import android.text.SpannableString
 import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
 import com.videostudio.app.ai.Logo
 import com.videostudio.app.data.Scene
@@ -33,7 +34,7 @@ class ScenePainter(
     context: Context,
     private val scenes: List<Scene>,
     private val timeline: Timeline,
-    private val palette: Palette,
+    palette: Palette,
     private val seriesName: String,
     /** Stock photo or video clip per photo scene, loaded only while its scene is on screen. */
     private val media: Map<Int, SceneMedia.Lazy>,
@@ -49,6 +50,19 @@ class ScenePainter(
     private val cutouts: Map<Int, Cutout> = emptyMap(),
 ) {
     private val animoji: Map<String, Animoji> = animated.mapValues { Animoji(it.value) }
+    private val basePalette = palette
+    /** The colours in use right now: in the glass look they switch between light and dark per scene. */
+    private var palette: Palette = if (look.glass) Palettes.GLASS_LIGHT else palette
+
+    /** Glass look: problems, myths, questions and data scenes go dark; the rest stay light. */
+    private fun darkScene(index: Int) = look.glass &&
+        scenes.getOrNull(index)?.type?.lowercase(Locale.ROOT) in setOf("compare", "question", "chart", "timeline", "logo", "quote")
+
+    private fun paletteFor(index: Int): Palette = when {
+        !look.glass -> basePalette
+        darkScene(index) -> Palettes.GLASS_DARK
+        else -> Palettes.GLASS_LIGHT
+    }
     /** The time of the frame being drawn, for animated emoji. */
     private var now = 0.0
 
@@ -139,7 +153,8 @@ class ScenePainter(
                 textSize = size
                 this.color = color
                 // Soft drop shadow: text stays readable over photos, video and bright colours.
-                setShadowLayer(size * 0.12f, 0f, size * 0.05f, Color.argb(150, 0, 0, 0))
+                if (luminance(color) < 0.4) setShadowLayer(size * 0.10f, 0f, size * 0.03f, Color.argb(110, 255, 255, 255))
+                else setShadowLayer(size * 0.12f, 0f, size * 0.05f, Color.argb(150, 0, 0, 0))
             }
             layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, maxWidth.toInt())
                 .setAlignment(Layout.Alignment.ALIGN_NORMAL)
@@ -208,6 +223,11 @@ class ScenePainter(
     }
 
     private fun card(c: Canvas, l: Float, t: Float, r: Float, b: Float, color: Int, radius: Float = 44f) {
+        // Neutral cards become frosted glass in the glass look.
+        if (look.glass && (color and 0xFFFFFF) == (palette.card and 0xFFFFFF)) {
+            glassCard(c, l, t, r, b, radius, Color.alpha(color) / Color.alpha(palette.card).coerceAtLeast(1).toFloat())
+            return
+        }
         fill.shader = null
         fill.color = color
         rect.set(l, t, r, b)
@@ -262,12 +282,13 @@ class ScenePainter(
             drawScene(c, 0, 0.0, timeline.spans[0].end - timeline.spans[0].start, 0.0, alpha = 1f, scale = 1f)
             c.restore()
         }
+        palette = paletteFor(span.index)
         chrome(c, t, span.index)
-        c.drawRect(0f, 0f, W, H, vignette)
+        if (!look.glass || darkScene(span.index)) c.drawRect(0f, 0f, W, H, vignette)
         grainShift.setTranslate(((t * 97) % 256).toFloat(), ((t * 61) % 256).toFloat())
         grainPaint.shader.setLocalMatrix(grainShift)
         c.drawRect(0f, 0f, W, H, grainPaint)
-        if (captions && loopK < 0.5f) captions(c, t)
+        if (captions && loopK < 0.5f) { if (look.glass) glassCaptions(c, t) else captions(c, t) }
     }
 
     /** Zoom punch on emphasis words: a quick push-in that eases back. */
@@ -299,6 +320,8 @@ class ScenePainter(
         if (alpha <= 0.01f) return
         val scene = scenes[index]
         val dur = durRaw.coerceAtLeast(0.3)
+        val savedPalette = palette
+        palette = paletteFor(index)
         val drift = (1f + 0.035f * clamp(lt / dur).toFloat()) * emphasisPunch(t) *
             (if (scene.type == "logo") 1f else cutIn(lt, dur))
         c.saveLayerAlpha(0f, 0f, W, H, (alpha * 255).toInt())
@@ -322,6 +345,7 @@ class ScenePainter(
         }
         badge(c, scene, index, lt)
         c.restore()
+        palette = savedPalette
     }
 
     /** Keeps only the clips of the scene on screen (and the one leaving) in memory. */
@@ -338,6 +362,7 @@ class ScenePainter(
     }
 
     private fun background(c: Canvas, t: Double) {
+        if (look.glass) { glassBackground(c, t); return }
         c.drawRect(0f, 0f, W, H, bgPaint)
         when (look.background) {
             1 -> { gridBackground(c, t); return }
@@ -413,7 +438,7 @@ class ScenePainter(
     private fun chrome(c: Canvas, t: Double, sceneIndex: Int) {
         val progress = clamp(t / timeline.duration).toFloat()
         fill.shader = null
-        fill.color = Color.argb(40, 255, 255, 255)
+        fill.color = withAlpha(palette.text, 40)
         c.drawRect(0f, 0f, W, 12f, fill)
         fill.color = palette.accent
         c.drawRect(0f, 0f, progress * W, 12f, fill)
@@ -532,6 +557,26 @@ class ScenePainter(
         )
         val pop = (0.96 + 0.04 * spring(lt / 0.5)).toFloat()
         val cy = zoneMid + if (hasEmoji) 150f else 0f
+        if (look.glass) {
+            // The hook sits in a frosted card; a cursor glides in and taps "send" (a UI micro-event).
+            val h = full.height + 140f
+            val k = spring(lt / 0.55).toFloat()
+            c.save()
+            c.scale(0.94f + 0.06f * k, 0.94f + 0.06f * k, W / 2, cy)
+            glassCard(c, SIDE - 30f, cy - h / 2, W - SIDE + 30f, cy + h / 2, 56f)
+            val bx = W - SIDE - 40f
+            val by = cy + h / 2 - 50f
+            fill.shader = LinearGradient(bx - 44f, by - 44f, bx + 44f, by + 44f, palette.accent, palette.accent2, Shader.TileMode.CLAMP)
+            c.drawCircle(bx, by, 44f, fill)
+            fill.shader = null
+            tp.typeface = black; tp.textSize = 50f; tp.color = Color.WHITE; tp.textAlign = Paint.Align.CENTER
+            c.drawText("↑", bx, by + 18f, tp)
+            tp.textAlign = Paint.Align.LEFT
+            c.restore()
+            drawBlock(c, full, W / 2, cy - 20f, 1f, pop)
+            cursorTo(c, lt, W * 0.9f, H * 0.95f, bx + 10f, by + 16f, HOOK_CLICK)
+            return
+        }
         drawBlock(c, full, W / 2, cy, 1f, pop)
     }
 
@@ -554,7 +599,7 @@ class ScenePainter(
         val r = 330f
         stroke.shader = null
         stroke.strokeWidth = 30f
-        stroke.color = Color.argb(40, 255, 255, 255)
+        stroke.color = withAlpha(palette.text, 34)
         c.drawCircle(W / 2, cy, r, stroke)
         stroke.color = palette.accent
         rect.set(W / 2 - r, cy - r, W / 2 + r, cy + r)
@@ -565,6 +610,21 @@ class ScenePainter(
         if (s.label.isBlank()) return
         val a = clamp((lt - 0.35) / 0.3).toFloat()
         drawBlock(c, block("statlabel", s.label, bold, 64f, zoneW, 220f), W / 2, cy + r + 140f - 30f * a, a)
+        // Glass look: a percentage also fills a frosted progress bar, like a UI meter.
+        val pct = Regex("([0-9]+(?:\\.[0-9]+)?)\\s*%").find(final)?.groupValues?.get(1)?.toDoubleOrNull()
+        if (look.glass && pct != null && pct <= 100) {
+            val k = outCubic((lt - 0.5) / 0.9).toFloat()
+            val top = cy + r + 178f
+            glassCard(c, SIDE, top, W - SIDE, top + 56f, 28f, clamp((lt - 0.4) / 0.25).toFloat())
+            val fillW = (zoneW - 16f) * (pct / 100.0).toFloat() * k
+            if (fillW > 4f) {
+                fill.color = Color.WHITE
+                fill.shader = LinearGradient(SIDE + 8f, 0f, W - SIDE - 8f, 0f, palette.accent, palette.accent2, Shader.TileMode.CLAMP)
+                rect.set(SIDE + 8f, top + 8f, SIDE + 8f + fillW, top + 48f)
+                c.drawRoundRect(rect, 20f, 20f, fill)
+                fill.shader = null
+            }
+        }
     }
 
     private fun list(c: Canvas, s: Scene, lt: Double, dur: Double, numbered: Boolean) {
@@ -610,6 +670,15 @@ class ScenePainter(
             c.restore()
             c.restore()
         }
+        // Glass look: a cursor hops to each item as it appears and clicks it.
+        if (look.glass) {
+            val shown = delays.indexOfLast { lt >= it }
+            if (shown >= 0) {
+                val y = y0 + shown * (rowH + gap) + rowH / 2
+                val fromY = if (shown == 0) H else y0 + (shown - 1) * (rowH + gap) + rowH / 2
+                cursorTo(c, lt - delays[shown], W - SIDE - 30f, fromY + 40f, W - SIDE - 90f, y + 20f, 0.3)
+            }
+        }
     }
 
     private fun compare(c: Canvas, s: Scene, lt: Double, dur: Double) {
@@ -618,6 +687,7 @@ class ScenePainter(
         val h = (ZONE_BOTTOM - ZONE_TOP - gap) / 2
         compareHalf(c, lt, h, second, ZONE_TOP, s.left.ifBlank { "Myth" }, s.leftText, palette.bad, "✕", 0.0, strike = true)
         compareHalf(c, lt, h, second, ZONE_TOP + h + gap, s.right.ifBlank { "Fact" }, s.rightText, palette.good, "✓", second, strike = false)
+        if (look.glass) toggle(c, W / 2, ZONE_TOP - 70f, outCubic((lt - second) / 0.25).toFloat(), clamp(lt / 0.3).toFloat())
     }
 
     private fun compareHalf(
@@ -713,6 +783,7 @@ class ScenePainter(
             return
         }
         val frame = m.frameAt(lt)
+        if (look.glass) { phoneMockup(c, s, frame, lt); return }
         // Slideshows change picture every couple of seconds with a quick crossfade.
         val prevFrame = (m as? SceneMedia.Slideshow)?.previousFrame(lt)
         val zoom = max(W / frame.width, H / frame.height) * (1.04f + 0.08f * clamp(lt / dur.coerceAtLeast(1.0)).toFloat())
@@ -1056,6 +1127,7 @@ class ScenePainter(
     }
 
     private fun outro(c: Canvas, s: Scene, lt: Double) {
+        if (look.glass) { glassOutro(c, s, lt); return }
         val e = s.emoji.ifBlank { scenes.firstOrNull()?.emoji ?: "" }.ifBlank { "💬" }
         emoji(c, e, W / 2, 490f + (sin(4 * lt) * 10).toFloat(), outBack(lt / 0.45).toFloat() * 220f)
         drawBlock(
@@ -1082,9 +1154,259 @@ class ScenePainter(
         }
     }
 
+    // ---------------- Liquid glass look ----------------
+
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { maskFilter = android.graphics.BlurMaskFilter(34f, android.graphics.BlurMaskFilter.Blur.NORMAL) }
+
+    /** Frosted glass panel: soft shadow, translucent body with a top highlight, bright hairline border. */
+    private fun glassCard(c: Canvas, l: Float, t: Float, r: Float, b: Float, radius: Float = 44f, k: Float = 1f) {
+        if (k <= 0.01f) return
+        val dark = luminance(palette.text) > 0.5
+        shadowPaint.color = if (dark) Color.argb((110 * k).toInt(), 0, 0, 0) else Color.argb((46 * k).toInt(), 90, 60, 170)
+        rect.set(l + 8f, t + 26f, r - 8f, b + 26f)
+        c.drawRoundRect(rect, radius, radius, shadowPaint)
+        rect.set(l, t, r, b)
+        fill.color = Color.WHITE
+        fill.shader = LinearGradient(
+            0f, t, 0f, b,
+            if (dark) Color.argb((52 * k).toInt(), 255, 255, 255) else Color.argb((215 * k).toInt(), 255, 255, 255),
+            if (dark) Color.argb((16 * k).toInt(), 255, 255, 255) else Color.argb((130 * k).toInt(), 255, 255, 255),
+            Shader.TileMode.CLAMP,
+        )
+        c.drawRoundRect(rect, radius, radius, fill)
+        fill.shader = null
+        stroke.shader = null
+        stroke.strokeWidth = 2.5f
+        stroke.color = if (dark) Color.argb((110 * k).toInt(), 200, 170, 255) else Color.argb((235 * k).toInt(), 255, 255, 255)
+        c.drawRoundRect(rect, radius, radius, stroke)
+    }
+
+    private val glassBlobs = listOf(
+        Color.rgb(232, 220, 255), Color.rgb(255, 214, 232), Color.rgb(208, 235, 255), Color.rgb(255, 243, 214),
+    )
+
+    private fun glassTheme(c: Canvas, t: Double, dark: Boolean) {
+        val p = if (dark) Palettes.GLASS_DARK else Palettes.GLASS_LIGHT
+        fill.color = Color.WHITE
+        fill.shader = LinearGradient(0f, 0f, 0f, H, p.bgTop, p.bgBottom, Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, W, H, fill)
+        val colors = if (dark) listOf(Color.argb(90, 124, 77, 255), Color.argb(60, 255, 77, 141)) else glassBlobs
+        colors.forEachIndexed { i, col ->
+            val a = 0.25 * t + i * 1.7
+            val x = (W * (0.2f + 0.6f * ((i % 2)))) + (160 * sin(a)).toFloat()
+            val y = (H * (0.18f + 0.22f * i)) + (140 * cos(0.8 * a)).toFloat()
+            val r = if (dark) 760f else 720f
+            fill.shader = RadialGradient(x, y, r, intArrayOf(if (dark) col else withAlpha(col, 245), withAlpha(col, 0)), null, Shader.TileMode.CLAMP)
+            c.drawCircle(x, y, r, fill)
+        }
+        fill.shader = null
+    }
+
+    /** Pastel mesh (light) or midnight violet (dark); a theme change sweeps in as a radial wipe. */
+    private fun glassBackground(c: Canvas, t: Double) {
+        val span = timeline.sceneAt(t)
+        val lt = t - span.start
+        val dark = darkScene(span.index)
+        val wipe = TRANSITION * 1.5
+        if (span.index > 0 && lt < wipe && darkScene(span.index - 1) != dark) {
+            glassTheme(c, t, !dark)
+            c.save()
+            path.reset()
+            path.addCircle(W / 2, H * 0.45f, 20f + outCubic(lt / wipe).toFloat() * H * 1.1f, Path.Direction.CW)
+            c.clipPath(path)
+            glassTheme(c, t, dark)
+            c.restore()
+        } else glassTheme(c, t, dark)
+    }
+
+    /** A pointer that glides from (fx, fy) to (tx, ty), presses at [clickAt] seconds and leaves a ripple. */
+    private fun cursorTo(c: Canvas, lt: Double, fx: Float, fy: Float, tx: Float, ty: Float, clickAt: Double) {
+        if (lt < 0) return
+        val k = outCubic(lt / clickAt).toFloat()
+        val x = fx + (tx - fx) * k
+        val y = fy + (ty - fy) * k
+        val since = lt - clickAt
+        if (since in 0.0..0.5) {
+            val rk = (since / 0.5).toFloat()
+            stroke.shader = null
+            stroke.strokeWidth = 5f
+            stroke.color = withAlpha(palette.accent, (200 * (1 - rk)).toInt())
+            c.drawCircle(tx, ty, 20f + 70f * rk, stroke)
+        }
+        val press = if (since in 0.0..0.15) 0.82f else 1f
+        c.save()
+        c.translate(x, y)
+        c.scale(press * 1.5f, press * 1.5f)
+        path.reset()
+        path.moveTo(0f, 0f); path.lineTo(0f, 44f); path.lineTo(11f, 34f); path.lineTo(19f, 52f)
+        path.lineTo(27f, 48f); path.lineTo(19f, 31f); path.lineTo(33f, 31f); path.close()
+        shadowPaint.color = Color.argb(70, 0, 0, 0)
+        c.save(); c.translate(3f, 5f); c.drawPath(path, shadowPaint); c.restore()
+        fill.shader = null
+        fill.color = Color.WHITE
+        c.drawPath(path, fill)
+        stroke.strokeWidth = 2.5f
+        stroke.color = Color.rgb(31, 26, 46)
+        c.drawPath(path, stroke)
+        c.restore()
+    }
+
+    /** iOS-style switch: [k] 0 = left (red), 1 = right (green), with a soft glow. */
+    private fun toggle(c: Canvas, cx: Float, cy: Float, k: Float, alpha: Float) {
+        if (alpha <= 0.01f) return
+        val w = 190f; val h = 92f
+        val col = blend(palette.bad, palette.good, k)
+        shadowPaint.color = withAlpha(col, (120 * alpha).toInt())
+        rect.set(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+        c.drawRoundRect(rect, h / 2, h / 2, shadowPaint)
+        fill.shader = null
+        fill.color = withAlpha(col, (255 * alpha).toInt())
+        c.drawRoundRect(rect, h / 2, h / 2, fill)
+        fill.color = withAlpha(Color.WHITE, (255 * alpha).toInt())
+        c.drawCircle(cx - w / 2 + h / 2 + (w - h) * k, cy, h / 2 - 9f, fill)
+    }
+
+    private fun blend(a: Int, b: Int, k: Float) = Color.rgb(
+        (Color.red(a) + (Color.red(b) - Color.red(a)) * k).toInt(),
+        (Color.green(a) + (Color.green(b) - Color.green(a)) * k).toInt(),
+        (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * k).toInt(),
+    )
+
+    /** The photo plays inside a floating phone, with the text on a glass pill above it. */
+    private fun phoneMockup(c: Canvas, s: Scene, frame: Bitmap, lt: Double) {
+        val k = spring(lt / 0.6).toFloat()
+        val pw = 500f; val ph = 880f
+        val cx = W / 2
+        val cy = 850f + (sin(2.2 * lt) * 14).toFloat() + (1 - k) * 260f
+        c.save()
+        c.rotate((sin(1.3 * lt) * 1.5).toFloat(), cx, cy)
+        shadowPaint.color = Color.argb(80, 70, 40, 140)
+        rect.set(cx - pw / 2 + 20f, cy - ph / 2 + 50f, cx + pw / 2 - 20f, cy + ph / 2 + 50f)
+        c.drawRoundRect(rect, 90f, 90f, shadowPaint)
+        fill.shader = null
+        fill.color = Color.rgb(20, 18, 30)
+        rect.set(cx - pw / 2, cy - ph / 2, cx + pw / 2, cy + ph / 2)
+        c.drawRoundRect(rect, 90f, 90f, fill)
+        val inset = 18f
+        rect.set(cx - pw / 2 + inset, cy - ph / 2 + inset, cx + pw / 2 - inset, cy + ph / 2 - inset)
+        c.save()
+        path.reset()
+        path.addRoundRect(rect, 74f, 74f, Path.Direction.CW)
+        c.clipPath(path)
+        val zoom = max(rect.width() / frame.width, rect.height() / frame.height) * (1.02f + 0.05f * clamp(lt / 3.0).toFloat())
+        val w = frame.width * zoom; val h = frame.height * zoom
+        fill.isFilterBitmap = true
+        c.drawBitmap(frame, Rect(0, 0, frame.width, frame.height), RectF(cx - w / 2, rect.centerY() - h / 2, cx + w / 2, rect.centerY() + h / 2), fill)
+        c.restore()
+        fill.color = Color.rgb(20, 18, 30)
+        rect.set(cx - 70f, cy - ph / 2 + 34f, cx + 70f, cy - ph / 2 + 70f)
+        c.drawRoundRect(rect, 18f, 18f, fill)
+        c.restore()
+        if (s.text.isNotBlank()) {
+            val text = block("phoneText", upper(s.text), display, 84f, zoneW - 60f, 220f)
+            val a = clamp((lt - 0.15) / 0.3).toFloat()
+            val top = 260f
+            glassCard(c, SIDE - 20f, top, W - SIDE + 20f, top + text.height + 70f, 40f, a)
+            drawBlock(c, text, W / 2, top + (text.height + 70f) / 2, a)
+        }
+    }
+
+    /** Ending: a notification drops in, then a comment box gets typed and sent by the cursor. */
+    private fun glassOutro(c: Canvas, s: Scene, lt: Double) {
+        val e = s.emoji.ifBlank { scenes.firstOrNull()?.emoji ?: "" }.ifBlank { "💬" }
+        emoji(c, e, W / 2, 600f + (sin(4 * lt) * 10).toFloat(), outBack((lt - 0.2) / 0.45).toFloat() * 190f)
+        drawBlock(c, block("outro", upper(s.text.ifBlank { s.say }), display, 100f, zoneW, 300f), W / 2, 870f, clamp((lt - 0.25) / 0.3).toFloat())
+        // Notification banner.
+        val drop = spring((lt - OUTRO_BANNER) / 0.5).toFloat()
+        if (lt >= OUTRO_BANNER) {
+            val top = -200f + 350f * drop
+            glassCard(c, 60f, top, W - 60f, top + 170f, 48f)
+            fill.shader = LinearGradient(100f, top + 40f, 190f, top + 130f, palette.accent, palette.accent2, Shader.TileMode.CLAMP)
+            rect.set(100f, top + 40f, 190f, top + 130f)
+            c.drawRoundRect(rect, 24f, 24f, fill)
+            fill.shader = null
+            emoji(c, "💬", 145f, top + 85f, 54f)
+            tp.typeface = bold; tp.textSize = 42f; tp.color = palette.text; tp.textAlign = Paint.Align.LEFT
+            c.drawText("New comment", 220f, top + 78f, tp)
+            tp.typeface = bold; tp.textSize = 34f; tp.color = palette.muted
+            c.drawText("now", W - 170f, top + 78f, tp)
+            tp.textSize = 38f; tp.color = palette.text
+            c.drawText(TextUtils.ellipsize(s.text.ifBlank { s.say }, tp, W - 320f, TextUtils.TruncateAt.END).toString(), 220f, top + 128f, tp)
+        }
+        // Comment box with the cursor tapping send.
+        val a = clamp((lt - 0.5) / 0.3).toFloat()
+        if (a > 0f) {
+            val top = 1070f
+            glassCard(c, SIDE - 20f, top, W - SIDE + 20f, top + 110f, 55f, a)
+            tp.typeface = bold; tp.textSize = 44f; tp.color = withAlpha(palette.muted, (Color.alpha(palette.muted) * a).toInt())
+            c.drawText("Add a comment…", SIDE + 30f, top + 70f, tp)
+            val bx = W - SIDE - 30f; val by = top + 55f
+            fill.color = withAlpha(palette.accent, (255 * a).toInt())
+            c.drawCircle(bx, by, 38f, fill)
+            tp.typeface = black; tp.textSize = 44f; tp.color = Color.WHITE; tp.textAlign = Paint.Align.CENTER
+            c.drawText("↑", bx, by + 16f, tp)
+            tp.textAlign = Paint.Align.LEFT
+            cursorTo(c, lt - 0.5, W * 0.6f, H * 0.98f, bx + 8f, by + 12f, OUTRO_CLICK - 0.5)
+        }
+    }
+
+    /** Blur-in kinetic captions on a glass pill: words slide up out of a blur; punch words get a gradient. */
+    private fun glassCaptions(c: Canvas, t: Double) {
+        val g = timeline.captionAt(t) ?: return
+        val texts = g.words.map { it.text.trim() }
+        tp.typeface = bold
+        tp.textSize = 76f
+        tp.style = Paint.Style.FILL
+        tp.clearShadowLayer()
+        val space = tp.measureText(" ")
+        var widths = texts.map { tp.measureText(it) }
+        var total = widths.sum() + (texts.size - 1) * space
+        if (total > zoneW - 40f) {
+            tp.textSize *= (zoneW - 40f) / total
+            widths = texts.map { tp.measureText(it) }
+            total = widths.sum() + (texts.size - 1) * space
+        }
+        val size = tp.textSize
+        val pillK = outCubic((t - g.start) / 0.2).toFloat()
+        glassCard(c, W / 2 - total / 2 - 44f, CAPTION_Y - size * 1.05f, W / 2 + total / 2 + 44f, CAPTION_Y + size * 0.5f, 40f, pillK)
+        var x = W / 2 - total / 2
+        texts.forEachIndexed { i, word ->
+            val start = g.words[i].start
+            val e = outCubic((t - start + 0.04) / 0.2).toFloat()
+            val emph = emphasisTimes.any { kotlin.math.abs(it - start) < 1e-6 }
+            val nextStart = g.words.getOrNull(i + 1)?.start ?: g.end
+            val active = t >= start && t < nextStart
+            if (e > 0f) {
+                val y = CAPTION_Y + 26f * (1 - e)
+                if (e < 0.95f) { // motion-blur ghosts while the word arrives
+                    tp.shader = null
+                    tp.color = withAlpha(palette.text, (60 * (1 - e)).toInt())
+                    c.drawText(word, x, y + 14f, tp)
+                    c.drawText(word, x, y - 10f, tp)
+                }
+                if (emph || active) {
+                    tp.color = Color.WHITE
+                    tp.shader = LinearGradient(x, 0f, x + widths[i], 0f, intArrayOf(palette.accent, Color.rgb(255, 122, 89), palette.accent2), null, Shader.TileMode.CLAMP)
+                } else {
+                    tp.shader = null
+                    tp.color = palette.text
+                }
+                tp.alpha = (255 * e).toInt()
+                c.drawText(word, x, y, tp)
+                tp.shader = null
+            }
+            x += widths[i] + space
+        }
+    }
+
     companion object {
         /** When each list, chart or timeline item appears (s into the scene); the sound design uses the same times. */
         /** Per caption style: chip, colour-pop, boxed, glow. All SIL Open Font License (licences in assets/fonts). */
+        /** Glass micro-event times (seconds into the scene); the sound mix puts a click on each. */
+        const val HOOK_CLICK = 0.75
+        const val OUTRO_BANNER = 0.35
+        const val OUTRO_CLICK = 1.25
+
         val DISPLAY_FONTS = listOf("Poppins-ExtraBold.ttf", "Anton-Regular.ttf", "ArchivoBlack-Regular.ttf", "BebasNeue-Regular.ttf")
 
         fun itemDelays(n: Int, dur: Double): List<Double> {

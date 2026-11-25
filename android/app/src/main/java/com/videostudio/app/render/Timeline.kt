@@ -34,6 +34,20 @@ object Palettes {
     )
 
     fun find(id: String) = all.firstOrNull { it.id == id } ?: all.first()
+
+    /** Liquid-glass light theme: pastel mesh, charcoal text, purple → coral accents. */
+    val GLASS_LIGHT = Palette(
+        "glass", "Glass light", Color.rgb(247, 245, 251), Color.rgb(239, 234, 248),
+        Color.rgb(124, 77, 255), Color.rgb(255, 92, 138), text = Color.rgb(31, 26, 46),
+        muted = Color.argb(170, 31, 26, 46), card = Color.argb(150, 255, 255, 255),
+        bad = Color.rgb(255, 77, 109), good = Color.rgb(34, 197, 94),
+    )
+
+    /** Liquid-glass dark theme for problems, myths and questions: midnight violet with neon accents. */
+    val GLASS_DARK = Palette(
+        "glassdark", "Glass dark", Color.rgb(14, 11, 26), Color.rgb(22, 17, 46),
+        Color.rgb(179, 136, 255), Color.rgb(255, 111, 168), card = Color.argb(40, 255, 255, 255),
+    )
 }
 
 data class TimedWord(val text: String, val start: Double, val end: Double, val scene: Int)

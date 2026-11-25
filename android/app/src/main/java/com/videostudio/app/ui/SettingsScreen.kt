@@ -110,32 +110,43 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 ) { auto = it; s.autoSwitchModels = it }
             }
 
-            Section("Backup AI for scripts (free, optional)") {
-                Hint("When Gemini's free limit runs out, scripts are written by these free services instead, in this order. Each key is free (sign in, create a key, paste it here) and adds its own daily allowance. Add one or more; the more you add, the less you ever wait.")
+            Section("Backup AI for scripts (free)") {
+                Hint("Scripts never stop: the app tries every free AI below and switches instantly when one runs out. Each key is free (sign in, create a key, paste it). Add as many as you can; Z.ai and NVIDIA have the most free room.")
+                Spacer(Modifier.height(6.dp))
+                val statuses = remember { com.videostudio.app.ai.BackupAi.all(s.aiKeys()).associate { it.id to com.videostudio.app.ai.BackupAi.status(it) } }
+                @Composable
+                fun KeyRow(id: String, title: String, page: String, value: String, onSet: (String) -> Unit) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        val st = statuses[id] ?: ""
+                        Text(st, fontSize = 12.sp, color = if (st == "ready") Good else Muted)
+                    }
+                    TextButton(onClick = { open(page) }) { Text("Get a free key") }
+                    SecretField("$title key", value, onSet)
+                }
+                KeyRow("zai", "Z.ai GLM — free Chinese models, the most room", "https://z.ai/manage-apikey/apikey-list", s.zaiKey) { s.zaiKey = it }
+                KeyRow("nvidia", "NVIDIA — big free models (phone check)", "https://build.nvidia.com", s.nvidiaKey) { s.nvidiaKey = it }
+                KeyRow("groq", "Groq — very fast, ~40 a day per model", "https://console.groq.com/keys", s.groqKey) { s.groqKey = it }
+                KeyRow("alibaba", "Alibaba Qwen — 1M free tokens per model (Singapore region)", "https://modelstudio.console.alibabacloud.com/", s.alibabaKey) { s.alibabaKey = it }
+                Hint("Alibaba: choose the Singapore region and turn on \"Free quota only\" so nothing is ever charged.")
+                KeyRow("mistral", "Mistral — free plan", "https://console.mistral.ai/api-keys", s.mistralKey) { s.mistralKey = it }
+                KeyRow("openrouter", "OpenRouter — free models, ~50 a day", "https://openrouter.ai/keys", s.openRouterKey) { s.openRouterKey = it }
+                KeyRow("siliconflow", "SiliconFlow — free small Qwen/GLM models", "https://cloud.siliconflow.com/account/ak", s.siliconFlowKey) { s.siliconFlowKey = it }
                 Spacer(Modifier.height(8.dp))
-                Text("Groq — about 1,000 scripts a day, very fast (best one to add)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = { open("https://console.groq.com/keys") }) { Text("Get a free Groq key") }
-                SecretField("Groq API key", s.groqKey) { s.groqKey = it }
-                Spacer(Modifier.height(8.dp))
-                Text("NVIDIA — free large models (sign-in with phone verification)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = { open("https://build.nvidia.com") }) { Text("Get a free NVIDIA key") }
-                SecretField("NVIDIA API key", s.nvidiaKey) { s.nvidiaKey = it }
-                Spacer(Modifier.height(8.dp))
-                Text("Mistral — free plan", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = { open("https://console.mistral.ai/api-keys") }) { Text("Get a free Mistral key") }
-                SecretField("Mistral API key", s.mistralKey) { s.mistralKey = it }
-                Spacer(Modifier.height(8.dp))
-                Text("OpenRouter — free models, about 50 a day", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = { open("https://openrouter.ai/keys") }) { Text("Get a free OpenRouter key") }
-                SecretField("OpenRouter API key", s.openRouterKey) { s.openRouterKey = it }
+                Text("Cloudflare Workers AI — ~20-40 a day", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = { open("https://dash.cloudflare.com/profile/api-tokens") }) { Text("Get a free token (Workers AI)") }
+                PlainField("Cloudflare account ID", s.cloudflareAccount) { s.cloudflareAccount = it }
+                SecretField("Cloudflare API token", s.cloudflareToken) { s.cloudflareToken = it }
+                KeyRow("pollinations", "Pollinations — optional key", "https://enter.pollinations.ai", s.pollinationsKey) { s.pollinationsKey = it }
                 Spacer(Modifier.height(8.dp))
                 var keyless by remember { mutableStateOf(s.keylessBackup) }
                 ToggleRow(
-                    "Last resort without a key",
-                    "If everything else is used up, try Pollinations, a free public AI that needs no key. It is not always available, and the script topic is sent to it.",
+                    "Try Pollinations without a key",
+                    "A last resort that may not answer (Pollinations now prefers a key). The script topic is sent to it.",
                     keyless,
                 ) { keyless = it; s.keylessBackup = it }
-                Hint("Free limits change often; the app notices a used-up service and moves on by itself. No billing is ever turned on.")
+                Hint("Order tried: Z.ai → NVIDIA → Gemini (all free models) → Groq → Alibaba → Mistral → OpenRouter → SiliconFlow → Cloudflare → Pollinations. Used-up services rest by themselves and come back. No billing is ever turned on.")
             }
 
             Section("Stock photos (optional)") {
@@ -195,6 +206,15 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 }
                 var sfx by remember { mutableStateOf(s.soundEffects) }
                 ToggleRow("Sound effects", "A light whoosh on every scene change.", sfx) { sfx = it; s.soundEffects = it }
+                Spacer(Modifier.height(10.dp))
+                Text("Video look")
+                var lookMode by remember { mutableStateOf(s.lookMode) }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for ((id, label) in listOf("mix" to "Mix of all", "glass" to "Liquid glass", "classic" to "Classic dark")) {
+                        FilterChip(selected = lookMode == id, onClick = { lookMode = id; s.lookMode = id }, label = { Text(label, fontSize = 12.sp) })
+                    }
+                }
+                Hint("Liquid glass: light frosted-UI cards, dark/light theme switches, blur-in captions, cursor clicks and pop-up notifications. Every video still differs from the last.")
             }
 
             YouTubeSettings(app)

@@ -92,7 +92,8 @@ class BackgroundJob : android.app.job.JobService() {
 
         /** Writes the script again a few minutes after the free quotas reset. Returns when, for the message. */
         fun scheduleScript(context: Context, id: String, tries: Int = 0): Long {
-            val at = Gemini.nextReset() + 5 * 60_000L
+            // First retry soon (per-minute limits and resting services clear in minutes), later ones after the daily reset.
+            val at = if (tries == 0) System.currentTimeMillis() + 20 * 60_000L else Gemini.nextReset() + 5 * 60_000L
             schedule(context, id, KIND_SCRIPT, tries, at - System.currentTimeMillis())
             return at
         }
