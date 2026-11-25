@@ -1,0 +1,38 @@
+package com.videostudio.app.render
+
+/**
+ * The visual style of one video. Channels whose videos all look the same risk being treated as
+ * "repetitive / mass-produced" by YouTube's monetization review, so every new video gets a look
+ * that differs from the previous one in captions, transition and background.
+ */
+data class Look(val captions: Int, val transition: Int, val background: Int) {
+    val id: Int get() = captions + CAPTIONS * (transition + TRANSITIONS * background)
+
+    val description: String
+        get() = "${CAPTION_NAMES[captions]} captions, ${TRANSITION_NAMES[transition]} transitions, ${BACKGROUND_NAMES[background]} background"
+
+    companion object {
+        const val CAPTIONS = 4
+        const val TRANSITIONS = 4
+        const val BACKGROUNDS = 3
+        const val COUNT = CAPTIONS * TRANSITIONS * BACKGROUNDS
+
+        val CAPTION_NAMES = listOf("chip", "colour-pop", "boxed", "glow")
+        val TRANSITION_NAMES = listOf("zoom-push", "slide-up", "whip-pan", "iris")
+        val BACKGROUND_NAMES = listOf("soft-light", "grid", "aurora")
+
+        fun of(id: Int): Look {
+            val i = ((id % COUNT) + COUNT) % COUNT
+            return Look(i % CAPTIONS, (i / CAPTIONS) % TRANSITIONS, i / (CAPTIONS * TRANSITIONS))
+        }
+
+        /** A look for a new video: every part differs from [last] (when there is one); [seed] picks among them. */
+        fun pick(seed: Int, last: Int): Int {
+            val prev = if (last in 0 until COUNT) of(last) else null
+            val options = (0 until COUNT).map { of(it) }.filter { l ->
+                prev == null || (l.captions != prev.captions && l.transition != prev.transition && l.background != prev.background)
+            }
+            return options[((seed % options.size) + options.size) % options.size].id
+        }
+    }
+}

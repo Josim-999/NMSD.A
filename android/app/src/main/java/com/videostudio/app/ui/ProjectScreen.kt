@@ -216,6 +216,19 @@ private fun ScriptTab(app: App, p: Project, job: JobState?, toVideo: () -> Unit)
     if (p.video(app.store.root).exists()) {
         TextButton(onClick = toVideo) { Text("Watch the current video →") }
     }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Hint(
+            if (p.style >= 0) "Look: ${com.videostudio.app.render.Look.of(p.style).description}"
+            else "Look: chosen when you make the video (different from your last video)",
+            Muted,
+        )
+    }
+    TextButton(enabled = !busy, onClick = {
+        val fresh = app.store.get(p.id) ?: p
+        fresh.style = com.videostudio.app.render.Look.pick((System.nanoTime() % 100000).toInt(), fresh.style.takeIf { it >= 0 } ?: app.settings.lastStyle)
+        app.settings.lastStyle = fresh.style
+        app.store.save(fresh)
+    }) { Text("Shuffle look (then make the video again)") }
 
     scenes.forEachIndexed { i, s ->
         Section("Scene ${i + 1}") {

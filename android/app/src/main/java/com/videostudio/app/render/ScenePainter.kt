@@ -39,6 +39,10 @@ class ScenePainter(
     private val media: Map<Int, SceneMedia.Lazy>,
     /** Brand logos by scene index: the logo scene's subject, or a badge on any scene naming a brand. */
     private val logos: Map<Int, Logo> = emptyMap(),
+    /** This video's style (captions, transition, background). */
+    private val look: Look = Look(0, 0, 0),
+    /** Times (s) of the emphasis words: zoom punch and coloured caption. */
+    private val emphasisTimes: List<Double> = emptyList(),
 ) {
     private val black: Typeface = runCatching { Typeface.createFromAsset(context.assets, "fonts/Inter-Black.otf") }
         .getOrElse { Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
@@ -155,9 +159,12 @@ class ScenePainter(
             val lw = layout.getLineWidth(i)
             c.save()
             c.translate(-lw / 2 - layout.getLineLeft(i), -h / 2)
+            // Clip to this line only: neighbouring lines must not bleed in. Extra room above the
+            // first and below the last line keeps shadows and descenders whole.
+            val last = layout.lineCount - 1
             c.clipRect(
-                layout.getLineLeft(i) - 40, layout.getLineTop(i) - 20f,
-                layout.getLineRight(i) + 40, layout.getLineBottom(i) + 20f
+                layout.getLineLeft(i) - 40, layout.getLineTop(i) - if (i == 0) 40f else 0f,
+                layout.getLineRight(i) + 40, layout.getLineBottom(i) + if (i == last) 40f else 0f
             )
             layout.draw(c)
             c.restore()
@@ -200,30 +207,88 @@ class ScenePainter(
         manageMedia(span.index, t - span.start)
         val lt = t - span.start
         if (span.index > 0 && lt < TRANSITION) {
-            // Zoom-push transition: the old scene grows and fades away, the new one settles in.
             val k = outCubic(lt / TRANSITION).toFloat()
             val prev = timeline.spans[span.index - 1]
-            drawScene(c, prev.index, t - prev.start, prev.end - prev.start, alpha = 1f - k, scale = 1f + 0.10f * k, dy = -70f * k)
-            drawScene(c, span.index, lt, span.end - span.start, alpha = k, scale = 0.90f + 0.10f * k, dy = 90f * (1 - k))
+            val pt = t - prev.start
+            val pd = prev.end - prev.start
+            val cd = span.end - span.start
+            when (look.transition) {
+                1 -> { // slide-up: the new scene pushes the old one up
+                    drawScene(c, prev.index, pt, pd, t, alpha = 1f - 0.6f * k, scale = 1f, dy = -H * 0.45f * k)
+                    drawScene(c, span.index, lt, cd, t, alpha = 1f, scale = 1f, dy = H * 0.45f * (1 - k))
+                }
+                2 -> { // whip-pan: fast sideways move with a motion-blur ghost
+                    drawScene(c, prev.index, pt, pd, t, alpha = 1f - k, scale = 1f, dx = -W * 0.7f * k)
+                    drawScene(c, span.index, lt, cd, t, alpha = 0.35f * (1 - k), scale = 1f, dx = W * 0.7f * (1 - k) + 60f)
+                    drawScene(c, span.index, lt, cd, t, alpha = k, scale = 1f, dx = W * 0.7f * (1 - k))
+                }
+                3 -> { // iris: the new scene opens in a growing circle
+                    drawScene(c, prev.index, pt, pd, t, alpha = 1f, scale = 1f + 0.05f * k)
+                    c.save()
+                    path.reset()
+                    path.addCircle(W / 2, H * 0.42f, 40f + k * H * 0.75f, Path.Direction.CW)
+                    c.clipPath(path)
+                    background(c, t)
+                    drawScene(c, span.index, lt, cd, t, alpha = 1f, scale = 1.06f - 0.06f * k)
+                    c.restore()
+                }
+                else -> { // zoom-push: the old scene grows and fades away, the new one settles in
+                    drawScene(c, prev.index, pt, pd, t, alpha = 1f - k, scale = 1f + 0.10f * k, dy = -70f * k)
+                    drawScene(c, span.index, lt, cd, t, alpha = k, scale = 0.90f + 0.10f * k, dy = 90f * (1 - k))
+                }
+            }
         } else {
-            drawScene(c, span.index, lt, span.end - span.start, alpha = 1f, scale = 1f, dy = 0f)
+            drawScene(c, span.index, lt, span.end - span.start, t, alpha = 1f, scale = 1f)
+        }
+        // Seamless loop: the last moments fade into the very first frame, so a replay feels continuous.
+        val loopK = clamp((t - (timeline.duration - LOOP)) / LOOP).toFloat()
+        if (loopK > 0f && scenes.isNotEmpty()) {
+            c.saveLayerAlpha(0f, 0f, W, H, (outCubic(loopK.toDouble()) * 255).toInt())
+            background(c, 0.0)
+            drawScene(c, 0, 0.0, timeline.spans[0].end - timeline.spans[0].start, 0.0, alpha = 1f, scale = 1f)
+            c.restore()
         }
         chrome(c, t, span.index)
         c.drawRect(0f, 0f, W, H, vignette)
         grainShift.setTranslate(((t * 97) % 256).toFloat(), ((t * 61) % 256).toFloat())
         grainPaint.shader.setLocalMatrix(grainShift)
         c.drawRect(0f, 0f, W, H, grainPaint)
-        if (captions) captions(c, t)
+        if (captions && loopK < 0.5f) captions(c, t)
+    }
+
+    /** Zoom punch on emphasis words: a quick push-in that eases back. */
+    private fun emphasisPunch(t: Double): Float {
+        var k = 0.0
+        for (e in emphasisTimes) {
+            val x = t - e
+            if (x < 0 || x > 0.6) continue
+            k = max(k, if (x < 0.07) x / 0.07 else kotlin.math.exp(-(x - 0.07) * 7))
+        }
+        return (1 + 0.065 * k).toFloat()
+    }
+
+    /** "Cut-in" every 2 s inside long scenes: the frame steps between wide and close, like an editor's cut. */
+    private fun cutIn(lt: Double, dur: Double): Float {
+        if (dur < 2.6) return 1f
+        val seg = (lt / 2.0).toInt()
+        val level = { n: Int -> if (n % 2 == 1) 1.075f else 1f }
+        if (seg == 0) return 1f
+        val e = outCubic((lt - seg * 2.0) / 0.12).toFloat()
+        return level(seg - 1) + (level(seg) - level(seg - 1)) * e
     }
 
     /** One scene, with a slow push-in "camera" over its whole length. */
-    private fun drawScene(c: Canvas, index: Int, lt: Double, durRaw: Double, alpha: Float, scale: Float, dy: Float) {
+    private fun drawScene(
+        c: Canvas, index: Int, lt: Double, durRaw: Double, t: Double,
+        alpha: Float, scale: Float, dy: Float = 0f, dx: Float = 0f,
+    ) {
         if (alpha <= 0.01f) return
         val scene = scenes[index]
         val dur = durRaw.coerceAtLeast(0.3)
-        val drift = 1f + 0.035f * clamp(lt / dur).toFloat()
+        val drift = (1f + 0.035f * clamp(lt / dur).toFloat()) * emphasisPunch(t) *
+            (if (scene.type == "logo") 1f else cutIn(lt, dur))
         c.saveLayerAlpha(0f, 0f, W, H, (alpha * 255).toInt())
-        c.translate(0f, dy)
+        c.translate(dx, dy)
         c.scale(scale * drift, scale * drift, W / 2, H * 0.42f)
         when (scene.type.lowercase(Locale.ROOT)) {
             "hook" -> hook(c, scene, lt)
@@ -235,6 +300,9 @@ class ScenePainter(
             "question" -> question(c, scene, lt)
             "photo" -> photo(c, scene, index, lt, dur)
             "logo" -> logoScene(c, scene, index, lt)
+            "chart" -> chart(c, scene, lt, dur)
+            "timeline" -> timelineScene(c, scene, lt, dur)
+            "quote" -> quote(c, scene, index, lt)
             "outro" -> outro(c, scene, lt)
             else -> statement(c, scene, lt)
         }
@@ -257,6 +325,10 @@ class ScenePainter(
 
     private fun background(c: Canvas, t: Double) {
         c.drawRect(0f, 0f, W, H, bgPaint)
+        when (look.background) {
+            1 -> { gridBackground(c, t); return }
+            2 -> { auroraBackground(c, t); return }
+        }
         val a = 0.35 * t
         c.save()
         c.translate((260 * sin(a) + W * 0.25).toFloat(), (180 * cos(0.8 * a) + H * 0.28).toFloat())
@@ -280,6 +352,50 @@ class ScenePainter(
         }
     }
 
+    /** Fine perspective grid drifting towards the viewer, with one soft light. */
+    private fun gridBackground(c: Canvas, t: Double) {
+        c.save()
+        c.translate((180 * sin(0.3 * t) + W * 0.5).toFloat(), (140 * cos(0.25 * t) + H * 0.35).toFloat())
+        c.drawCircle(0f, 0f, 700f, blob1)
+        c.restore()
+        stroke.shader = null
+        stroke.strokeWidth = 2f
+        val horizon = H * 0.18f
+        val off = ((t * 0.35) % 1.0).toFloat()
+        for (i in 0 until 14) {
+            val f = ((i + off) / 14f)
+            val y = horizon + (H - horizon) * f * f
+            stroke.color = Color.argb((10 + 40 * f).toInt(), 255, 255, 255)
+            c.drawLine(0f, y, W, y, stroke)
+        }
+        for (i in -6..6) {
+            stroke.color = Color.argb(22, 255, 255, 255)
+            c.drawLine(W / 2 + i * 40f, horizon, W / 2 + i * 260f, H, stroke)
+        }
+    }
+
+    /** Slow aurora ribbons in the palette's two accents. */
+    private fun auroraBackground(c: Canvas, t: Double) {
+        for (band in 0 until 3) {
+            path.reset()
+            val base = H * (0.25f + 0.22f * band)
+            val amp = 120f + 40f * band
+            path.moveTo(0f, H)
+            var x = 0f
+            while (x <= W) {
+                val y = base + amp * sin(x / 260.0 + t * (0.4 + 0.15 * band) + band).toFloat()
+                path.lineTo(x, y)
+                x += 30f
+            }
+            path.lineTo(W, H)
+            path.close()
+            val color = if (band % 2 == 0) palette.accent2 else palette.accent
+            fill.shader = LinearGradient(0f, base - amp, 0f, base + 500f, withAlpha(color, 46), 0, Shader.TileMode.CLAMP)
+            c.drawPath(path, fill)
+        }
+        fill.shader = null
+    }
+
     private fun chrome(c: Canvas, t: Double, sceneIndex: Int) {
         val progress = clamp(t / timeline.duration).toFloat()
         fill.shader = null
@@ -288,7 +404,7 @@ class ScenePainter(
         fill.color = palette.accent
         c.drawRect(0f, 0f, progress * W, 12f, fill)
         if (seriesName.isBlank() || sceneIndex != 0) return
-        val s = outBack(t / 0.4).toFloat()
+        val s = (0.92 + 0.08 * spring(t / 0.5)).toFloat()
         tp.typeface = black
         tp.textSize = 40f
         tp.color = Color.BLACK
@@ -302,12 +418,18 @@ class ScenePainter(
         c.restore()
     }
 
-    /** Word-by-word captions; the word being spoken sits on an accent-coloured chip. */
+    /**
+     * Word-by-word captions in this video's style:
+     * 0 chip (spoken word on an accent chip), 1 colour-pop (spoken word coloured and bigger),
+     * 2 boxed (the group on a dark box), 3 glow (soft glow, underline under the spoken word).
+     * The emphasis word always gets the second accent colour.
+     */
     private fun captions(c: Canvas, t: Double) {
         val g = timeline.captionAt(t) ?: return
+        val style = look.captions
         val pop = outBack((t - g.start) / 0.18).toFloat()
         tp.typeface = black
-        tp.textSize = 82f
+        tp.textSize = if (style == 1) 86f else 82f
         val texts = g.words.map { upper(it.text.trim()) }
         val space = tp.measureText(" ")
         var widths = texts.map { tp.measureText(it) }
@@ -317,57 +439,86 @@ class ScenePainter(
             widths = texts.map { tp.measureText(it) }
             total = widths.sum() + (texts.size - 1) * space
         }
+        val size = tp.textSize
         c.save()
         c.translate(W / 2, CAPTION_Y)
-        val s = 0.85f + 0.15f * pop
-        c.scale(s, s)
+        val sc = 0.85f + 0.15f * pop
+        c.scale(sc, sc)
+        if (style == 2) {
+            fill.shader = null
+            fill.color = Color.argb(175, 8, 9, 16)
+            rect.set(-total / 2 - 34f, -size * 1.05f, total / 2 + 34f, size * 0.45f)
+            c.drawRoundRect(rect, 28f, 28f, fill)
+        }
         var x = -total / 2
         texts.forEachIndexed { i, word ->
+            val start = g.words[i].start
             val nextStart = g.words.getOrNull(i + 1)?.start ?: g.end
-            val active = t >= g.words[i].start && t < nextStart
-            if (active) {
-                // The spoken word pops on its chip.
-                val pop = 1f + 0.12f * (1f - spring((t - g.words[i].start) / 0.25).toFloat()).coerceAtLeast(-0.2f)
-                c.save()
-                c.scale(pop, pop, x + widths[i] / 2, -0.28f * tp.textSize)
-                card(c, x - 18f, -0.86f * tp.textSize, x + widths[i] + 18f, tp.textSize * 0.3f, palette.accent, 22f)
-            } else {
-                tp.style = Paint.Style.STROKE
-                tp.strokeWidth = 14f
-                tp.strokeJoin = Paint.Join.ROUND
-                tp.color = Color.argb(200, 0, 0, 0)
-                c.drawText(word, x, 0f, tp)
+            val active = t >= start && t < nextStart
+            val emph = emphasisTimes.any { kotlin.math.abs(it - start) < 1e-6 }
+            val hot = if (emph) palette.accent2 else palette.accent
+            val wordPop = if (active) 1f + 0.12f * (1f - spring((t - start) / 0.25).toFloat()).coerceAtLeast(-0.2f) else 1f
+            c.save()
+            val grow = if (active && style == 1) 1.14f * wordPop else wordPop
+            c.scale(grow, grow, x + widths[i] / 2, -0.28f * size)
+            when (style) {
+                0 -> {
+                    if (active) card(c, x - 18f, -0.86f * size, x + widths[i] + 18f, size * 0.3f, hot, 22f) else outline(c, word, x)
+                    tp.style = Paint.Style.FILL
+                    tp.color = if (active) Color.BLACK else if (emph) palette.accent2 else Color.WHITE
+                    c.drawText(word, x, 0f, tp)
+                }
+                1 -> {
+                    outline(c, word, x)
+                    tp.style = Paint.Style.FILL
+                    tp.color = if (active) hot else Color.WHITE
+                    c.drawText(word, x, 0f, tp)
+                }
+                2 -> {
+                    tp.style = Paint.Style.FILL
+                    tp.color = if (active) hot else Color.WHITE
+                    c.drawText(word, x, 0f, tp)
+                }
+                else -> {
+                    tp.style = Paint.Style.FILL
+                    tp.setShadowLayer(26f, 0f, 0f, if (active) withAlpha(hot, 220) else Color.argb(170, 0, 0, 0))
+                    tp.color = Color.WHITE
+                    c.drawText(word, x, 0f, tp)
+                    tp.clearShadowLayer()
+                    if (active) {
+                        val w = widths[i] * outCubic((t - start) / 0.18).toFloat()
+                        fill.shader = null
+                        fill.color = hot
+                        c.drawRoundRect(x, size * 0.16f, x + w, size * 0.16f + 12f, 6f, 6f, fill)
+                    }
+                }
             }
-            tp.style = Paint.Style.FILL
-            tp.color = if (active) Color.BLACK else Color.WHITE
-            c.drawText(word, x, 0f, tp)
-            if (active) c.restore()
+            c.restore()
             x += widths[i] + space
         }
         c.restore()
     }
 
+    private fun outline(c: Canvas, word: String, x: Float) {
+        tp.style = Paint.Style.STROKE
+        tp.strokeWidth = 14f
+        tp.strokeJoin = Paint.Join.ROUND
+        tp.color = Color.argb(200, 0, 0, 0)
+        c.drawText(word, x, 0f, tp)
+    }
+
+    /** The hook is fully readable on the very first frame (the feed preview), then comes alive. */
     private fun hook(c: Canvas, s: Scene, lt: Double) {
         val words = upper(s.text.ifBlank { s.say }).trim().split(Regex("\\s+")).filter { it.isNotBlank() }
         val hasEmoji = s.emoji.isNotBlank()
-        if (hasEmoji) emoji(c, s.emoji, W / 2, 480f + (sin(4 * lt) * 12).toFloat(), outBack(lt / 0.45).toFloat() * 230f)
-        // Words appear one by one, 70 ms apart; the last word is highlighted.
-        val shown = words.indices.count { lt >= it * 0.07 }
+        if (hasEmoji) emoji(c, s.emoji, W / 2, 480f + (sin(4 * lt) * 12).toFloat(), (0.85 + 0.15 * spring(lt / 0.6)).toFloat() * 230f)
         val full = block(
             "hook", highlighted(words.joinToString(" "), words.lastOrNull() ?: "", palette.text, palette.accent),
             black, 150f, zoneW, if (hasEmoji) 600f else 820f
         )
-        val pop = outBack(lt / 0.35).toFloat()
+        val pop = (0.96 + 0.04 * spring(lt / 0.5)).toFloat()
         val cy = zoneMid + if (hasEmoji) 150f else 0f
-        if (shown >= words.size) {
-            drawBlock(c, full, W / 2, cy, 1f, 0.9f + 0.1f * pop)
-        } else {
-            val part = block(
-                "hookpart", highlighted(words.take(max(1, shown)).joinToString(" "), "", palette.text, palette.accent),
-                black, full.paint.textSize, zoneW, 820f
-            )
-            drawBlock(c, part, W / 2, cy, 1f, 0.9f + 0.1f * pop)
-        }
+        drawBlock(c, full, W / 2, cy, 1f, pop)
     }
 
     private fun stat(c: Canvas, s: Scene, lt: Double) {
@@ -414,9 +565,9 @@ class ScenePainter(
         val room = ZONE_BOTTOM - top
         val rowH = min((room - (items.size - 1) * gap) / items.size, 230f)
         val y0 = top + (room - (items.size * rowH + (items.size - 1) * gap)) / 2
-        val spread = min(0.65 * dur, items.size * 0.9)
+        val delays = itemDelays(items.size, dur)
         items.forEachIndexed { i, item ->
-            val delay = if (items.size == 1) 0.0 else i * spread / (items.size - 1).coerceAtLeast(1) * 0.9
+            val delay = delays[i]
             val a = outCubic((lt - delay) / 0.35).toFloat()
             if (a <= 0f) return@forEachIndexed
             val bounce = spring((lt - delay) / 0.45).toFloat()
@@ -548,6 +699,8 @@ class ScenePainter(
             return
         }
         val frame = m.frameAt(lt)
+        // Slideshows change picture every couple of seconds with a quick crossfade.
+        val prevFrame = (m as? SceneMedia.Slideshow)?.previousFrame(lt)
         val zoom = max(W / frame.width, H / frame.height) * (1.04f + 0.08f * clamp(lt / dur.coerceAtLeast(1.0)).toFloat())
         val w = frame.width * zoom
         val h = frame.height * zoom
@@ -556,7 +709,16 @@ class ScenePainter(
         fill.shader = null
         fill.alpha = 255
         fill.isFilterBitmap = true
+        if (prevFrame != null) {
+            val (pf, fade) = prevFrame
+            val pz = max(W / pf.width, H / pf.height) * 1.08f
+            val pw = pf.width * pz
+            val ph = pf.height * pz
+            c.drawBitmap(pf, Rect(0, 0, pf.width, pf.height), RectF((W - pw) / 2, (H - ph) / 2, (W + pw) / 2, (H + ph) / 2), fill)
+            fill.alpha = (255 * fade).toInt() // the new picture fades in over the old one
+        }
         c.drawBitmap(frame, Rect(0, 0, frame.width, frame.height), RectF(left, top, left + w, top + h), fill)
+        fill.alpha = 255
         // Darken top and bottom so the progress bar, text and captions read on any footage.
         scrim.shader = LinearGradient(
             0f, 0f, 0f, H,
@@ -717,6 +879,149 @@ class ScenePainter(
         c.restore()
     }
 
+    // ---------------- Data scenes ----------------
+
+    /** "Label: number" -> label and number (commas and units allowed). */
+    private fun parseItem(item: String): Pair<String, Double?> {
+        val i = item.lastIndexOf(':')
+        if (i <= 0) return item to null
+        val num = Regex("-?[0-9][0-9,]*\\.?[0-9]*").find(item.substring(i + 1))?.value?.replace(",", "")?.toDoubleOrNull()
+        return item.substring(0, i).trim() to num
+    }
+
+    /** Animated horizontal bar chart: bars grow one after another, numbers count up. */
+    private fun chart(c: Canvas, s: Scene, lt: Double, dur: Double) {
+        val parsed = s.items.take(5).map { parseItem(it) }
+        val values = parsed.mapNotNull { it.second }
+        if (values.size < 2) { list(c, s, lt, dur, numbered = false); return }
+        var top = ZONE_TOP + 20f
+        if (s.text.isNotBlank()) {
+            val title = block("charttitle", upper(s.text), black, 80f, zoneW, 200f, palette.accent)
+            drawBlock(c, title, W / 2, top + title.height / 2f, outCubic(lt / 0.3).toFloat())
+            top += title.height + 60f
+        }
+        val maxV = values.maxOf { kotlin.math.abs(it) }.coerceAtLeast(1e-9)
+        val rowH = min((ZONE_BOTTOM - top) / parsed.size, 240f)
+        val delays = itemDelays(parsed.size, dur)
+        val barLeft = SIDE
+        val barMax = W - 2 * SIDE
+        parsed.forEachIndexed { i, (label, v) ->
+            val grow = outCubic((lt - delays[i]) / 0.7).toFloat()
+            if (grow <= 0f) return@forEachIndexed
+            val y = top + i * rowH
+            tp.typeface = bold
+            tp.textSize = 56f
+            tp.color = withAlpha(Color.WHITE, (255 * min(1f, grow * 2)).toInt())
+            tp.textAlign = Paint.Align.LEFT
+            c.drawText(label.take(26), barLeft, y + 54f, tp)
+            val frac = ((v ?: 0.0) / maxV).toFloat().coerceIn(0.03f, 1f)
+            val bw = barMax * frac * grow
+            val by = y + 76f
+            val bh = (rowH - 104f).coerceIn(56f, 110f)
+            fill.color = Color.WHITE // full opacity; earlier drawing may have left the paint translucent
+            fill.shader = LinearGradient(barLeft, 0f, barLeft + barMax, 0f, palette.accent, palette.accent2, Shader.TileMode.CLAMP)
+            rect.set(barLeft, by, barLeft + bw, by + bh)
+            c.drawRoundRect(rect, 18f, 18f, fill)
+            fill.shader = null
+            val shown = (v ?: 0.0) * grow
+            val txt = if ((v ?: 0.0) % 1.0 == 0.0) String.format(Locale.US, "%,d", shown.toLong()) else String.format(Locale.US, "%.1f", shown)
+            tp.typeface = black
+            tp.textSize = 58f
+            tp.color = Color.WHITE
+            val tw = tp.measureText(txt)
+            val inside = bw > tw + 40f
+            tp.color = if (inside) Color.BLACK else Color.WHITE
+            c.drawText(txt, if (inside) barLeft + bw - tw - 20f else barLeft + bw + 16f, by + bh / 2 + 20f, tp)
+        }
+    }
+
+    /** Vertical timeline drawn downwards; each event pops in on its dot. */
+    private fun timelineScene(c: Canvas, s: Scene, lt: Double, dur: Double) {
+        val items = s.items.take(4)
+        if (items.isEmpty()) { statement(c, s, lt); return }
+        var top = ZONE_TOP + 20f
+        if (s.text.isNotBlank()) {
+            val title = block("tltitle", upper(s.text), black, 80f, zoneW, 200f, palette.accent)
+            drawBlock(c, title, W / 2, top + title.height / 2f, outCubic(lt / 0.3).toFloat())
+            top += title.height + 60f
+        }
+        val step = min((ZONE_BOTTOM - top) / items.size, 230f)
+        val lineX = SIDE + 50f
+        val delays = itemDelays(items.size, dur)
+        val lineEnd = top + step * (items.size - 1) * outCubic(lt / (delays.last() + 0.5)).toFloat()
+        stroke.shader = null
+        stroke.strokeWidth = 8f
+        stroke.color = withAlpha(palette.accent2, 160)
+        c.drawLine(lineX, top + 30f, lineX, lineEnd + 30f, stroke)
+        items.forEachIndexed { i, item ->
+            val k = spring((lt - delays[i]) / 0.5).toFloat()
+            if (k <= 0.01f) return@forEachIndexed
+            val y = top + i * step + 30f
+            fill.shader = null
+            fill.color = palette.accent
+            c.drawCircle(lineX, y, 22f * k, fill)
+            val parts = item.split(Regex("\\s+[—–-]\\s+|:\\s+"), limit = 2)
+            val when_ = parts[0].trim()
+            val what = parts.getOrElse(1) { "" }.trim()
+            c.save()
+            c.translate((1 - k) * 80f, 0f)
+            tp.typeface = black
+            tp.textSize = 70f
+            tp.color = palette.accent
+            tp.textAlign = Paint.Align.LEFT
+            c.drawText(when_.take(16), lineX + 60f, y + 24f, tp)
+            if (what.isNotBlank()) {
+                val body = block("tl$i", what, bold, 62f, W - lineX - 60f - SIDE, step - 90f)
+                c.save()
+                c.translate(lineX + 60f, y + 50f)
+                body.draw(c)
+                c.restore()
+            }
+            c.restore()
+        }
+    }
+
+    /** A quote card: big quote marks, the words, and the speaker with their photo in a ring. */
+    private fun quote(c: Canvas, s: Scene, index: Int, lt: Double) {
+        val m = media[index]?.get()
+        val cy = zoneMid - 60f
+        if (m != null) {
+            val k = spring(lt / 0.6).toFloat()
+            val r = 150f * k
+            val f = m.frameAt(lt)
+            c.save()
+            path.reset()
+            path.addCircle(W / 2, ZONE_TOP + 170f, r, Path.Direction.CW)
+            c.clipPath(path)
+            val sc = max(2 * r / f.width, 2 * r / f.height)
+            val w = f.width * sc
+            val h = f.height * sc
+            fill.shader = null
+            fill.alpha = 255
+            fill.isFilterBitmap = true
+            // Faces sit in the upper part of portraits: anchor a little above centre.
+            c.drawBitmap(f, Rect(0, 0, f.width, f.height), RectF(W / 2 - w / 2, ZONE_TOP + 170f - h * 0.38f, W / 2 + w / 2, ZONE_TOP + 170f + h * 0.62f), fill)
+            c.restore()
+            stroke.shader = null
+            stroke.strokeWidth = 8f
+            stroke.color = palette.accent
+            c.drawCircle(W / 2, ZONE_TOP + 170f, r + 6f, stroke)
+        }
+        tp.typeface = black
+        tp.textSize = 260f
+        tp.color = withAlpha(palette.accent, 90)
+        tp.textAlign = Paint.Align.CENTER
+        c.drawText("\u201C", W / 2, cy - 40f, tp)
+        tp.textAlign = Paint.Align.LEFT
+        val a = clamp((lt - 0.15) / 0.35).toFloat()
+        val textCy = if (m != null) cy + 160f else cy + 60f
+        drawBlock(c, block("quote", s.text.ifBlank { s.say }, black, 96f, zoneW, 440f), W / 2, textCy, a)
+        if (s.label.isNotBlank()) {
+            val b = clamp((lt - 0.45) / 0.3).toFloat()
+            drawBlock(c, block("quoteby", "— " + s.label, bold, 52f, zoneW, 100f, palette.accent), W / 2, textCy + 270f, b)
+        }
+    }
+
     private fun outro(c: Canvas, s: Scene, lt: Double) {
         val e = s.emoji.ifBlank { scenes.firstOrNull()?.emoji ?: "" }.ifBlank { "💬" }
         emoji(c, e, W / 2, 490f + (sin(4 * lt) * 10).toFloat(), outBack(lt / 0.45).toFloat() * 220f)
@@ -745,6 +1050,16 @@ class ScenePainter(
     }
 
     companion object {
+        /** When each list, chart or timeline item appears (s into the scene); the sound design uses the same times. */
+        fun itemDelays(n: Int, dur: Double): List<Double> {
+            if (n <= 1) return List(n) { 0.0 }
+            val spread = min(0.65 * dur, n * 0.9)
+            return (0 until n).map { it * spread / (n - 1) * 0.9 }
+        }
+
+        /** Length of the fade from the last frame back into the first, for seamless loops. */
+        const val LOOP = 0.45
+
         const val W = 1080f
         const val H = 1920f
         // Safe zones for TikTok, Reels and Shorts on 1080x1920: their buttons cover roughly the

@@ -65,7 +65,7 @@ android {
         targetSdk = 35
         // Always higher than the last build (1.2 was 3), see autoVersionCode above.
         versionCode = maxOf(4, autoVersionCode)
-        versionName = "1.6"
+        versionName = "1.7"
     }
 
     signingConfigs {

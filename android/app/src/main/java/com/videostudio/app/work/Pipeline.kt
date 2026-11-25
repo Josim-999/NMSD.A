@@ -20,6 +20,7 @@ import com.videostudio.app.data.Upload
 import com.videostudio.app.data.objects
 import com.videostudio.app.data.strings
 import com.videostudio.app.render.AudioMix
+import com.videostudio.app.render.Look
 import com.videostudio.app.render.Palettes
 import com.videostudio.app.render.SceneMedia
 import com.videostudio.app.render.ScenePainter
@@ -71,6 +72,7 @@ class Pipeline(
         val prompt = Prompts.script(
             p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags, feedback, current,
             stockFootage = settings.pexelsKey.isNotBlank(),
+            take = p.take,
         )
         val reply = gemini().generate(prompt, settings.scriptModel, json = true, fallbacks = listOf(settings.researchModel))
         applyScript(p, extractJson(reply.text))
@@ -88,6 +90,7 @@ class Pipeline(
         if (p.scenes.first().type != "hook" && p.scenes.first().text.isBlank()) p.scenes.first().type = "hook"
         p.title = o.optString("title").ifBlank { p.topic }
         p.commentQuestion = o.optString("comment_question")
+        p.mood = o.optString("mood").lowercase().trim()
         p.sources = objects(o.optJSONArray("sources")).map { Source(it.optString("claim"), it.optString("url")) }
             .filter { it.url.startsWith("http") }
         val publish = o.optJSONObject("publish")
@@ -151,6 +154,34 @@ class Pipeline(
             if (found != null) {
                 credits.add(found.credit)
                 pictures++
+                // Long scenes get one or two more pictures, so the image changes every ~2 seconds.
+                val extra = when {
+                    seconds >= 5.5 -> 2
+                    seconds >= 3.6 -> 1
+                    else -> 0
+                }
+                val files = arrayListOf(f)
+                for (k in 1..extra) {
+                    val g = File(dir, "photo_${i}_$k.jpg")
+                    val more = runCatching { finder.photo(query.ifBlank { scene.wiki }, "", g) }.getOrNull() ?: break
+                    credits.add(more.credit)
+                    files.add(g)
+                }
+                media[i] = SceneMedia.Lazy {
+                    val bmps = files.mapNotNull { loadBitmap(it) }
+                    when {
+                        bmps.size > 1 -> SceneMedia.Slideshow(bmps)
+                        bmps.size == 1 -> SceneMedia.Photo(bmps[0])
+                        else -> null
+                    }
+                }
+            }
+        }
+        // Quote scenes: the speaker's photo from Wikipedia.
+        for ((i, scene) in p.scenes.withIndex().filter { it.value.type == "quote" && it.value.wiki.isNotBlank() }) {
+            val f = File(dir, "photo_$i.jpg")
+            runCatching { finder.photo("", scene.wiki, f) }.getOrNull()?.let { found ->
+                credits.add(found.credit)
                 media[i] = SceneMedia.Lazy { loadBitmap(f)?.let { SceneMedia.Photo(it) } }
             }
         }
@@ -165,7 +196,37 @@ class Pipeline(
         if (photoScenes.isNotEmpty()) log("Pictures: $clips video clip(s), $pictures photo(s) for ${photoScenes.size} photo scene(s).")
         if (brandScenes.isNotEmpty()) log("Logos: ${logos.size} of ${brandScenes.size} brand scene(s).")
 
-        val painter = ScenePainter(context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media, logos)
+        // A look of its own for every video (captions, transitions, background), different from the last one.
+        if (p.style < 0) {
+            p.style = Look.pick(p.id.hashCode(), settings.lastStyle)
+            settings.lastStyle = p.style
+            store.save(p)
+        }
+        val look = Look.of(p.style)
+        log("Style: ${look.description}${if (p.mood.isNotBlank()) ", ${p.mood} music" else ""}.")
+
+        // Emphasis words: when each is spoken (zoom punch, coloured caption, hit sound).
+        val emphasisTimes = p.scenes.withIndex().mapNotNull { (i, sc) ->
+            val k = MediaFinder.key(sc.emphasis)
+            if (k.isEmpty()) null else timeline.words.firstOrNull { it.scene == i && MediaFinder.key(it.text) == k }?.start
+        }
+        // Sound design cues from the scenes.
+        val pops = ArrayList<Double>()
+        val hits = ArrayList<Double>(emphasisTimes)
+        p.scenes.forEachIndexed { i, sc ->
+            val span = timeline.spans[i]
+            when (sc.type) {
+                "list", "steps", "chart", "timeline" -> {
+                    val n = if (sc.type == "chart") sc.items.take(5).size else sc.items.take(4).size
+                    ScenePainter.itemDelays(n, span.end - span.start).forEach { pops.add(span.start + it + 0.05) }
+                }
+                "logo", "quote" -> pops.add(span.start + 0.12)
+                "stat" -> if (emphasisTimes.none { it in span.start..span.end }) hits.add(span.start + 0.15)
+            }
+        }
+        val risers = if (timeline.spans.size >= 3) listOf(timeline.spans.last().start) else emptyList()
+
+        val painter = ScenePainter(context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media, logos, look, emphasisTimes)
         val (w, h) = if (settings.quality == "720") 720 to 1280 else 1080 to 1920
         val fps = if (settings.smooth60) 60 else 30
         val renderer = VideoRenderer(w, h, fps)
@@ -175,6 +236,10 @@ class Pipeline(
             music = settings.music,
             sfx = settings.soundEffects,
             seed = p.id.hashCode(),
+            mood = p.mood,
+            pops = pops,
+            hits = hits,
+            risers = risers,
         )
         step("Rendering the video", 0f)
         log(String.format("Rendering ${w}x$h at $fps fps, %.1f s…", timeline.duration))

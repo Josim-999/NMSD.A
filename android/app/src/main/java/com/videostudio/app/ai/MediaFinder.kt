@@ -144,6 +144,9 @@ class MediaFinder(
 
     private val used = HashSet<String>()
 
+    /** Search answers already fetched: extra pictures for a scene reuse them (Openverse allows ~200 searches a day). */
+    private val searches = HashMap<String, String>()
+
     /**
      * Best free picture for a scene. [wiki] is a Wikipedia article title (a named person, place,
      * company, object); [query] a visual search phrase.
@@ -185,7 +188,8 @@ class MediaFinder(
                 .addQueryParameter("license_type", "commercial")
                 .addQueryParameter("mature", "false")
             if (aspect.isNotEmpty()) b.addQueryParameter("aspect_ratio", aspect)
-            val json = text(b.build().toString()) ?: continue
+            val url = b.build().toString()
+            val json = searches[url] ?: text(url)?.also { searches[url] = it } ?: continue
             val results = runCatching { JSONObject(json).getJSONArray("results") }.getOrNull() ?: continue
             val list = (0 until results.length()).mapNotNull { results.optJSONObject(it) }
                 .filter { it.optInt("width") >= 640 || it.optInt("height") >= 900 }

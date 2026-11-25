@@ -22,6 +22,28 @@ sealed class SceneMedia {
         override fun release() = bmp.recycle()
     }
 
+    /** Several photos for one long scene, changing every [EVERY] seconds. */
+    class Slideshow(private val photos: List<Bitmap>) : SceneMedia() {
+        override val width get() = photos[0].width
+        override val height get() = photos[0].height
+        private fun at(t: Double) = ((t.coerceAtLeast(0.0) / EVERY).toInt()) % photos.size
+        override fun frameAt(t: Double) = photos[at(t)]
+
+        /** The picture being faded out just after a change, with how far the fade has gone (0..1). */
+        fun previousFrame(t: Double): Pair<Bitmap, Float>? {
+            val since = t - (t / EVERY).toInt() * EVERY
+            if (t < EVERY || since >= FADE) return null
+            return photos[(at(t) - 1 + photos.size) % photos.size] to (since / FADE).toFloat()
+        }
+
+        override fun release() = photos.forEach { it.recycle() }
+
+        companion object {
+            const val EVERY = 1.9
+            const val FADE = 0.25
+        }
+    }
+
     /**
      * A clip decoded to frames on the phone ([FPS] a second, about 540 px wide, RGB 565 to keep
      * memory low). Plays forward then backward so a short clip never jumps.

@@ -35,13 +35,15 @@ data class Scene(
     var domain: String = "",
     /** English Wikipedia article title of the person, place or thing shown, for a real photo. */
     var wiki: String = "",
+    /** The one spoken word that gets a zoom punch, colour and a hit sound. */
+    var emphasis: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("say", say).put("type", type).put("text", text).put("emoji", emoji)
         .put("value", value).put("label", label).put("items", JSONArray(items))
         .put("left", left).put("leftText", leftText).put("right", right).put("rightText", rightText)
         .put("highlight", highlight).put("query", query)
-        .put("brand", brand).put("domain", domain).put("wiki", wiki)
+        .put("brand", brand).put("domain", domain).put("wiki", wiki).put("emphasis", emphasis)
 
     companion object {
         /** Reads both the stored shape and the model's {"say", "visual": {...}} shape. */
@@ -64,6 +66,7 @@ data class Scene(
                 brand = v.optString("brand").ifBlank { o.optString("brand") },
                 domain = v.optString("domain").ifBlank { o.optString("domain") },
                 wiki = v.optString("wiki").ifBlank { o.optString("wiki") },
+                emphasis = o.optString("emphasis").ifBlank { v.optString("emphasis") },
             )
         }
     }
@@ -92,6 +95,12 @@ data class Project(
     var error: String = "",
     var voiceUsed: String = "",
     var durationSec: Double = 0.0,
+    /** The creator's own view, worked into the script (original insight, not a template). */
+    var take: String = "",
+    /** Mood of the music and pacing, chosen by the script writer: energetic, calm, dramatic, playful. */
+    var mood: String = "",
+    /** Visual style of this video (captions, transitions, background); -1 = not chosen yet. */
+    var style: Int = -1,
     val created: Long = System.currentTimeMillis(),
     var updated: Long = System.currentTimeMillis(),
 ) {
@@ -114,6 +123,7 @@ data class Project(
             JSONObject().put("platform", it.platform).put("url", it.url).put("visibility", it.visibility).put("at", it.at)
         }))
         .put("error", error).put("voiceUsed", voiceUsed).put("durationSec", durationSec)
+        .put("take", take).put("mood", mood).put("style", style)
         .put("created", created).put("updated", updated)
 
     companion object {
@@ -142,6 +152,9 @@ data class Project(
             error = o.optString("error"),
             voiceUsed = o.optString("voiceUsed"),
             durationSec = o.optDouble("durationSec", 0.0),
+            take = o.optString("take"),
+            mood = o.optString("mood"),
+            style = o.optInt("style", -1),
             created = o.optLong("created", System.currentTimeMillis()),
             updated = o.optLong("updated", System.currentTimeMillis()),
         )

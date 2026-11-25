@@ -36,6 +36,7 @@ Do not invent anything; leave out any fact you could not find a source for.
         feedback: String = "",
         current: String = "",
         stockFootage: Boolean = false,
+        take: String = "",
     ): String {
         val maxWords = (p.lengthSec * WORDS_PER_SECOND).toInt()
         val research = if (p.researchNotes.isNotBlank())
@@ -59,12 +60,13 @@ $rewrite
 $research
 
 Rules that make a short spread; follow every one:
-1. Hook in the first second. Scene 1 opens a curiosity gap: a question (strongest), a claim that sounds wrong, or a stake. Under 12 words. No greeting, no intro, no "in this video".
+1. Hook in the first second. Say the main keyword in the first line (platforms read speech for search). Scene 1 opens a curiosity gap: a question (strongest), a claim that sounds wrong, or a stake. Under 12 words. No greeting, no intro, no "in this video".
 2. One idea, paid off fast. By scene 2 the viewer knows what they get by the end. No list of five tips.
 3. Tight pacing: each scene is one spoken line of 4 to 12 words, so the picture changes every 1.5 to 4 seconds.
 4. Follow these beats in order:
 $beats
 5. Honest: every number or factual claim must be listed in "sources" with its URL. Make the viewer feel one thing and end on a question viewers will want to answer in the comments. The last line loops back to the hook.
+Originality matters (platforms refuse to pay for template-like videos): include one line that gives a clear, reasoned take or insight in the creator's voice, not just facts.${if (take.isNotBlank()) " The creator's own take, to work in faithfully: \"$take\"." else ""}
 Write the way a person talks to a friend. Write numbers in "say" as they are spoken ("seventy percent"), but in the visual use digits ("70%").
 
 For every scene choose ONE visual from this list (the app animates them), and fill only its fields:
@@ -78,6 +80,9 @@ For every scene choose ONE visual from this list (the app animates them), and fi
 - {"type":"question","text":"short question"}
 - {"type":"photo","query":"2-4 word photo search in English","wiki":"exact English Wikipedia title if it shows a named person/place/thing, else empty","text":"2-6 words"}
 - {"type":"logo","brand":"exact brand name","domain":"brand website, e.g. nvidia.com","text":"2-6 words"}   (when a company, product or app is the subject)
+- {"type":"chart","text":"short title","items":["Label: number", "2-5 items, numbers only after the colon"]}   (comparing amounts or growth)
+- {"type":"timeline","text":"short title","items":["Year — short event", "2-4 items in order"]}
+- {"type":"quote","text":"the quote, under 15 words","label":"who said it","wiki":"their English Wikipedia title"}   (only real, accurately quoted words)
 - {"type":"outro","text":"the comment question, short","emoji":"one emoji"}  (use for the last scene)
 Vary the visuals; never use the same type more than twice in a row. On-screen text must be short.
 Real pictures are found automatically: use "photo" for 2 or 3 scenes where a real image helps (people, places, objects, events), with a concrete visual query${if (stockFootage) "; these can play as real stock video" else ""}.
@@ -88,12 +93,13 @@ Reply with one JSON object and nothing else, exactly this shape:
   "title": "working title",
   "one_idea": "the single idea of the video, in one sentence",
   "comment_question": "the question that invites comments",
-  "scenes": [ {"say": "the spoken words of this scene", "visual": { ...one of the visuals above... }} ],
+  "mood": "one of: energetic, calm, dramatic, playful (sets the music)",
+  "scenes": [ {"say": "the spoken words of this scene", "emphasis": "the one most important word of say, copied exactly", "visual": { ...one of the visuals above... }} ],
   "sources": [ {"claim": "...", "url": "..."} ],
   "publish": {
-    "titles": ["three title options under 60 characters"],
+    "titles": ["three title options of 4 to 6 words (20-40 characters), main keyword first"],
     "description": "two or three sentences, the search phrase people type in the first one",
-    "hashtags": ["five to eight, without the # sign"]
+    "hashtags": ["three to five, one broad and the rest specific, without the # sign"]
   }
 }
 Hashtags the channel always likes (use if they fit): $extraHashtags

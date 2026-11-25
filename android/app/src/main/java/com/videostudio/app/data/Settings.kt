@@ -106,6 +106,11 @@ class Settings(context: Context) {
         get() = p.getBoolean("sfx", true)
         set(v) = p.edit().putBoolean("sfx", v).apply()
 
+    /** Style of the previous video, so the next one looks different. */
+    var lastStyle: Int
+        get() = p.getInt("last_style", -1)
+        set(v) = p.edit().putInt("last_style", v).apply()
+
     var defaultHashtags: String
         get() = str("hashtags", "ai shorts learnai tech")
         set(v) = put("hashtags", v)

@@ -3,6 +3,31 @@
 Turns a topic into a finished vertical Short on the phone: Gemini researches and writes the
 script, a Microsoft neural voice reads it, the app animates and renders the video, then posts it.
 
+## What's new in 1.7: edited like a pro team (same Gemini cost)
+
+Built from research on what Shorts, Reels and TikTok reward: few swipe-aways in the first
+2-3 seconds, completion, rewatches, a visual change every ~2 seconds, and channels that do not
+look mass-produced (YouTube will not monetize templated, repetitive content).
+
+- **Hook readable on frame 1** (the feed preview), then it comes alive.
+- **A different look for every video** (`Look`): 4 caption styles (chip, colour-pop, boxed,
+  glow) x 4 transitions (zoom-push, slide-up, whip-pan, iris) x 3 backgrounds (soft light, grid,
+  aurora). Each new video differs from the previous one in all three; "Shuffle look" per video.
+- **Your take:** an optional sentence of your own opinion on New video; the script always carries
+  one reasoned take or insight (originality protects monetization).
+- **Emphasis words:** Gemini marks the key word of each line; it gets a zoom punch, its own
+  caption colour and an impact hit.
+- **A visual change every ~2 s:** cut-ins inside long scenes; long photo scenes become 2-3 photo
+  slideshows (Openverse searches are cached, so this spends no extra quota).
+- **Seamless loop:** the last 0.45 s fade into the first frame.
+- **Sound design:** pops when items appear, hits on emphasis words and numbers, a riser into the
+  final scene; music follows the script's mood (energetic, calm, dramatic, playful) with
+  plucked arpeggios for upbeat moods.
+- **New scenes:** animated bar charts, timelines, and quote cards with the speaker's photo.
+- **Packaging:** titles of 4-6 words with the keyword first, 3-5 hashtags, keyword spoken in the
+  first line.
+- Fixed: lines of multi-line text could bleed into each other (visible with lower-case text).
+
 ## What's new in 1.6: real pictures and logos, no keys needed
 
 - **Pictures matched to the script, free and keyless** (`MediaFinder`): Pexels when a key is set,

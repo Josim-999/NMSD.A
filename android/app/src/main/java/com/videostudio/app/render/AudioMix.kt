@@ -31,6 +31,14 @@ object AudioMix {
         val sfx: Boolean,
         /** Picks the key and chord progression, so videos don't all sound the same. */
         val seed: Int,
+        /** energetic, calm, dramatic or playful: tempo, harmony and instruments of the music. */
+        val mood: String = "",
+        /** Soft pops when items appear on screen. */
+        val pops: List<Double> = emptyList(),
+        /** Impact hits on emphasis words and big numbers. */
+        val hits: List<Double> = emptyList(),
+        /** Risers that build into a moment (the payoff scene). */
+        val risers: List<Double> = emptyList(),
     )
 
     /** Mono 48 kHz 16-bit PCM of the finished soundtrack. */
@@ -42,7 +50,7 @@ object AudioMix {
         if (plan.music) {
             // Levels relative to the voice's own loudness, so they hold for quiet and loud voices.
             val voiceLufs = loudness(v).takeIf { it > -69 } ?: -20.0
-            val bed = music(n, plan.seed)
+            val bed = music(n, plan.seed, plan.mood)
             val bedLufs = loudness(bed).takeIf { it > -69 } ?: -20.0
             val underSpeech = db(voiceLufs - 16 - bedLufs)
             val inPauses = db(voiceLufs - 8 - bedLufs)
@@ -57,6 +65,9 @@ object AudioMix {
         if (plan.sfx) {
             val rnd = Random(plan.seed)
             for (t in plan.sceneStarts.drop(1)) addWhoosh(out, t, rnd)
+            for (t in plan.pops) addPop(out, t)
+            for (t in plan.hits) addHit(out, t, rnd)
+            for (t in plan.risers) addRiser(out, t, rnd)
         }
         normalizeLoudness(out, targetLufs = -14.0)
         limit(out, ceiling = db(-1.0).toFloat())
@@ -228,11 +239,24 @@ object AudioMix {
         listOf(intArrayOf(-3, 0, 4), intArrayOf(-7, -3, 0), intArrayOf(0, 4, 7), intArrayOf(-5, -1, 2)),
     )
 
-    fun music(n: Int, seed: Int): FloatArray {
+    fun music(n: Int, seed: Int, mood: String = ""): FloatArray {
         val rnd = Random(seed)
-        val prog = progressions[abs(seed) % progressions.size]
+        // Mood sets harmony and tempo: minor and slow for dramatic, major and quick for playful/energetic.
+        val prog = when (mood) {
+            "dramatic" -> progressions[0]
+            "playful", "energetic" -> progressions[1]
+            "calm" -> progressions[2]
+            else -> progressions[abs(seed) % progressions.size]
+        }
         val rootMidi = 45 + rnd.nextInt(0, 7) // A2..E3
-        val bpm = 84 + rnd.nextInt(0, 17) // 84-100 BPM
+        val bpm = when (mood) {
+            "energetic" -> 108 + rnd.nextInt(0, 13)
+            "playful" -> 98 + rnd.nextInt(0, 11)
+            "dramatic" -> 72 + rnd.nextInt(0, 11)
+            "calm" -> 70 + rnd.nextInt(0, 13)
+            else -> 84 + rnd.nextInt(0, 17)
+        }
+        val arps = mood == "energetic" || mood == "playful"
         val beat = 60.0 / bpm
         val bar = beat * 4
         val out = FloatArray(n)
@@ -274,6 +298,24 @@ object AudioMix {
             }
             start += chordLen
             ci++
+        }
+        // Plucked arpeggio in eighth notes for energetic and playful moods.
+        if (arps) {
+            val eighth = beat / 2
+            val steps = (n / (eighth * RATE)).toInt()
+            for (k in 0 until steps) {
+                val chord = prog[((k * eighth) / bar).toInt() % prog.size]
+                val note = chord[k % chord.size] + 24 + (if (k % 8 >= 4) 12 else 0)
+                val f = hz(rootMidi.toDouble() + note)
+                val s0 = (k * eighth * RATE).toInt()
+                val dur = (0.22 * RATE).toInt()
+                for (i in 0 until dur) {
+                    val idx = s0 + i
+                    if (idx >= n) break
+                    val env = exp(-i.toDouble() / (0.07 * RATE)) * min(1.0, i / (0.003 * RATE))
+                    out[idx] += ((sin(2 * PI * f * i / RATE) + 0.3 * sin(4 * PI * f * i / RATE)) * env * 0.05).toFloat()
+                }
+            }
         }
         // Drums: soft kick on 1 and 3, brushed hat on the off-beats.
         val beats = (n / (beat * RATE)).toInt() + 1
@@ -323,6 +365,58 @@ object AudioMix {
     }
 
     private fun smooth(t: Double) = t * t * (3 - 2 * t)
+
+    // ---- Pop: a short, round blip for things appearing on screen ----
+
+    private fun addPop(out: FloatArray, at: Double) {
+        val s0 = (at * RATE).toInt()
+        val len = (0.07 * RATE).toInt()
+        var ph = 0.0
+        for (i in 0 until len) {
+            val idx = s0 + i
+            if (idx < 0 || idx >= out.size) continue
+            val f = 1100 - 500 * (i.toDouble() / len)
+            ph += 2 * PI * f / RATE
+            val env = exp(-i.toDouble() / (0.018 * RATE)) * min(1.0, i / (0.002 * RATE))
+            out[idx] += (sin(ph) * env * db(-24.0)).toFloat()
+        }
+    }
+
+    // ---- Hit: deep boom plus a click, for emphasis words and big numbers ----
+
+    private fun addHit(out: FloatArray, at: Double, rnd: Random) {
+        val s0 = (at * RATE).toInt()
+        val len = (0.45 * RATE).toInt()
+        var ph = 0.0
+        for (i in 0 until len) {
+            val idx = s0 + i
+            if (idx < 0 || idx >= out.size) continue
+            val f = 48 + 90 * exp(-i.toDouble() / (0.04 * RATE))
+            ph += 2 * PI * f / RATE
+            val boom = sin(ph) * exp(-i.toDouble() / (0.16 * RATE))
+            val click = if (i < 0.004 * RATE) (rnd.nextFloat() * 2 - 1) * (1 - i / (0.004 * RATE)) else 0.0
+            out[idx] += ((boom * db(-16.0)) + click * db(-24.0)).toFloat()
+        }
+    }
+
+    // ---- Riser: noise and a rising tone that swell into a moment ----
+
+    private fun addRiser(out: FloatArray, at: Double, rnd: Random) {
+        val len = (1.1 * RATE).toInt()
+        val s0 = (at * RATE).toInt() - len
+        var ph = 0.0
+        var lp = 0f
+        for (i in 0 until len) {
+            val idx = s0 + i
+            if (idx < 0 || idx >= out.size) continue
+            val t = i.toDouble() / len
+            ph += 2 * PI * (220 + 660 * t * t) / RATE
+            val noise = rnd.nextFloat() * 2 - 1
+            lp += (0.05f + 0.5f * t.toFloat()) * (noise - lp) // opens up as it rises
+            val env = t.pow(2.2)
+            out[idx] += ((0.6 * sin(ph) + lp) * env * db(-23.0)).toFloat()
+        }
+    }
 
     // ---- Whoosh: band-passed noise that sweeps up and fades, peaking on the cut ----
 

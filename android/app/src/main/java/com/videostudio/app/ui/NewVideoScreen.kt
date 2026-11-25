@@ -63,6 +63,7 @@ fun NewVideoScreen(app: App, onBack: () -> Unit, onCreated: (String) -> Unit, on
     val s = app.settings
     var topic by rememberSaveable { mutableStateOf("") }
     var audience by rememberSaveable { mutableStateOf("") }
+    var take by rememberSaveable { mutableStateOf("") }
     var length by rememberSaveable { mutableIntStateOf(45) }
     var language by rememberSaveable { mutableStateOf(s.language) }
     var voice by rememberSaveable { mutableStateOf(Voices.find(s.voice).let { if (it.language == s.language) it.id else Voices.forLanguage(s.language).first().id }) }
@@ -110,6 +111,14 @@ fun NewVideoScreen(app: App, onBack: () -> Unit, onCreated: (String) -> Unit, on
                     placeholder = { Text("e.g. beginners learning AI") },
                     singleLine = true,
                 )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    take, { take = it }, Modifier.fillMaxWidth(),
+                    label = { Text("Your take (optional)") },
+                    placeholder = { Text("e.g. I think this is overhyped, because…") },
+                    minLines = 2,
+                )
+                Hint("One sentence of your own opinion. It goes into the script, and original views keep a channel monetizable.")
             }
             Section("Length") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -169,6 +178,7 @@ fun NewVideoScreen(app: App, onBack: () -> Unit, onCreated: (String) -> Unit, on
                         voice = voice,
                         palette = palette,
                         research = research,
+                        take = take.trim(),
                     )
                     app.store.save(p)
                     s.language = language
