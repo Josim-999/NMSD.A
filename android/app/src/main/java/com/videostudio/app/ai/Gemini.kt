@@ -44,7 +44,8 @@ class Gemini(
         .build()
 
     private class ModelMissing(msg: String) : Exception(msg)
-    private class OutOfQuota(msg: String) : Exception(msg)
+    /** [daily] false = only a per-minute limit: the model is rested for a few minutes, not the whole day. */
+    private class OutOfQuota(msg: String, val daily: Boolean = true) : Exception(msg)
 
     /** Tries [model], then [fallbacks], then the built-in list, skipping models known to be out of quota today. */
     fun generate(
@@ -70,8 +71,8 @@ class Gemini(
             try {
                 return call(prompt, m, json, search).copy(model = m)
             } catch (e: OutOfQuota) {
-                markExhausted(m)
-                lastProblem = "$m: free quota used up"
+                if (e.daily) markExhausted(m) else markResting(m)
+                lastProblem = if (e.daily) "$m: free daily quota used up" else "$m: busy for a minute"
             } catch (e: ModelMissing) {
                 lastProblem = "$m is not available"
             }
@@ -130,7 +131,7 @@ class Gemini(
                         Thread.sleep(q.retryMs)
                         continue
                     }
-                    throw OutOfQuota(reason(text))
+                    throw OutOfQuota(reason(text), daily = q.daily)
                 }
                 code == 400 && (text.contains("not supported", true) || text.contains("not enabled", true) ||
                     text.contains("not found", true)) -> throw ModelMissing(reason(text))
@@ -288,6 +289,11 @@ class Gemini(
             exhausted[model] = nextReset()
         }
 
+        /** A per-minute limit: skip this model for three minutes only. */
+        fun markResting(model: String) {
+            exhausted[model] = System.currentTimeMillis() + 3 * 60_000L
+        }
+
         fun exhaustedToday(model: String): Boolean {
             val until = exhausted[model] ?: return false
             if (System.currentTimeMillis() >= until) {
@@ -299,6 +305,9 @@ class Gemini(
 
         /** For tests. */
         fun forgetQuotas() = exhausted.clear()
+
+        /** For tests: when [model] may be tried again (0 = now). */
+        fun skippedUntil(model: String): Long = exhausted[model] ?: 0
     }
 }
 

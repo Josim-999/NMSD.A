@@ -1,6 +1,8 @@
 package com.videostudio.app.work
 
 import com.videostudio.app.compliance.YouTubeCheck
+import com.videostudio.app.ai.BackupAi
+import com.videostudio.app.ai.GeminiReply
 import com.videostudio.app.render.AnimatedEmoji
 import com.videostudio.app.render.Cutout
 import com.videostudio.app.render.Segmenter
@@ -8,6 +10,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.videostudio.app.ai.Gemini
+import com.videostudio.app.ai.GeminiError
 import com.videostudio.app.ai.GeminiQuotaError
 import com.videostudio.app.ai.Logo
 import com.videostudio.app.ai.MediaFinder
@@ -58,8 +61,8 @@ class Pipeline(
             // Research is a bonus: if no model has quota left for it, write the script without it.
             val reply = try {
                 gemini().generate(Prompts.research(p), settings.researchModel, search = true, fallbacks = listOf(settings.scriptModel))
-            } catch (e: GeminiQuotaError) {
-                log("Research skipped: Gemini's free search quota is used up for today. Writing from general knowledge instead.")
+            } catch (e: GeminiError) {
+                log("Research skipped (${e.message?.take(120)}). Writing from general knowledge instead.")
                 null
             }
             if (reply != null) {
@@ -78,13 +81,40 @@ class Pipeline(
             stockFootage = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank(),
             take = p.take,
         )
-        val reply = gemini().generate(prompt, settings.scriptModel, json = true, fallbacks = listOf(settings.researchModel))
+        val reply = scriptReply(prompt)
         applyScript(p, extractJson(reply.text))
         p.status = Status.SCRIPTED
         p.error = ""
         store.save(p)
         val words = p.scenes.sumOf { it.say.split(Regex("\\s+")).size }
         log("Script ready with ${reply.model}: ${p.scenes.size} scenes, $words words.")
+    }
+
+    private fun backup() = BackupAi(
+        BackupAi.providers(settings.groqKey, settings.openRouterKey, settings.mistralKey, settings.nvidiaKey, settings.keylessBackup),
+        notice = log,
+    )
+
+    /**
+     * Gemini first (every free model on the key), then the free backup services (Groq, NVIDIA,
+     * Mistral, OpenRouter, then a keyless one). Only when all of them are out does it give up.
+     */
+    private fun scriptReply(prompt: String): GeminiReply {
+        val isScript = { t: String -> runCatching { extractJson(t).optJSONArray("scenes")?.length() ?: 0 }.getOrDefault(0) >= 3 }
+        val quota: GeminiQuotaError = if (settings.geminiKey.isBlank()) {
+            GeminiQuotaError("No Gemini key is set.")
+        } else {
+            try {
+                return gemini().generate(prompt, settings.scriptModel, json = true, fallbacks = listOf(settings.researchModel))
+            } catch (e: GeminiQuotaError) { e }
+        }
+        log("Gemini is out of free quota; trying the backup AI services…")
+        backup().generate(prompt, isScript)?.let { return it }
+        val anyKey = listOf(settings.groqKey, settings.openRouterKey, settings.mistralKey, settings.nvidiaKey).any { it.isNotBlank() }
+        throw GeminiQuotaError(
+            quota.message + " The backup AI services could not answer either." +
+                if (!anyKey) " Add a free Groq key in Settings → Backup AI for about 1,000 more scripts a day." else ""
+        )
     }
 
     private fun applyScript(p: Project, o: JSONObject) {

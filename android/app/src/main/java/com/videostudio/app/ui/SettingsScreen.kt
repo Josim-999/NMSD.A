@@ -110,6 +110,34 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 ) { auto = it; s.autoSwitchModels = it }
             }
 
+            Section("Backup AI for scripts (free, optional)") {
+                Hint("When Gemini's free limit runs out, scripts are written by these free services instead, in this order. Each key is free (sign in, create a key, paste it here) and adds its own daily allowance. Add one or more; the more you add, the less you ever wait.")
+                Spacer(Modifier.height(8.dp))
+                Text("Groq — about 1,000 scripts a day, very fast (best one to add)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = { open("https://console.groq.com/keys") }) { Text("Get a free Groq key") }
+                SecretField("Groq API key", s.groqKey) { s.groqKey = it }
+                Spacer(Modifier.height(8.dp))
+                Text("NVIDIA — free large models (sign-in with phone verification)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = { open("https://build.nvidia.com") }) { Text("Get a free NVIDIA key") }
+                SecretField("NVIDIA API key", s.nvidiaKey) { s.nvidiaKey = it }
+                Spacer(Modifier.height(8.dp))
+                Text("Mistral — free plan", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = { open("https://console.mistral.ai/api-keys") }) { Text("Get a free Mistral key") }
+                SecretField("Mistral API key", s.mistralKey) { s.mistralKey = it }
+                Spacer(Modifier.height(8.dp))
+                Text("OpenRouter — free models, about 50 a day", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = { open("https://openrouter.ai/keys") }) { Text("Get a free OpenRouter key") }
+                SecretField("OpenRouter API key", s.openRouterKey) { s.openRouterKey = it }
+                Spacer(Modifier.height(8.dp))
+                var keyless by remember { mutableStateOf(s.keylessBackup) }
+                ToggleRow(
+                    "Last resort without a key",
+                    "If everything else is used up, try Pollinations, a free public AI that needs no key. It is not always available, and the script topic is sent to it.",
+                    keyless,
+                ) { keyless = it; s.keylessBackup = it }
+                Hint("Free limits change often; the app notices a used-up service and moves on by itself. No billing is ever turned on.")
+            }
+
             Section("Stock photos (optional)") {
                 Hint("Optional. A Pexels key (if you already have one) lets photo scenes play real stock video clips.")
                 Spacer(Modifier.height(6.dp))

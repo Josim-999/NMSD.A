@@ -146,4 +146,22 @@ class Settings(context: Context) {
     var scheduleMinutes: Int
         get() = p.getInt("schedule_minutes", 19 * 60)
         set(v) = p.edit().putInt("schedule_minutes", v).apply()
+
+    // Backup AI for scripts when Gemini's free quota is used up (all optional, all free).
+    var groqKey: String
+        get() = str("groq_key", "")
+        set(v) = put("groq_key", v.trim())
+    var openRouterKey: String
+        get() = str("openrouter_key", "")
+        set(v) = put("openrouter_key", v.trim())
+    var mistralKey: String
+        get() = str("mistral_key", "")
+        set(v) = put("mistral_key", v.trim())
+    var nvidiaKey: String
+        get() = str("nvidia_key", "")
+        set(v) = put("nvidia_key", v.trim())
+    /** A keyless public AI as the very last resort. */
+    var keylessBackup: Boolean
+        get() = p.getBoolean("keyless_backup", true)
+        set(v) = p.edit().putBoolean("keyless_backup", v).apply()
 }

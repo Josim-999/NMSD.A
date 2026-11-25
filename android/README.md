@@ -153,3 +153,9 @@ The application id `com.videostudio.app` must never change either.
 - **Display fonts** per caption style: Poppins ExtraBold, Anton, Archivo Black, Bebas Neue (OFL, licences in assets/fonts).
 - **More free pictures**: NASA Image Library (public domain) and The Met (CC0), chosen through the script's `library` hint. Optional Pixabay key for HD photos and stock video (Pexels has paused new keys).
 
+## 2.0: more free AI for scripts
+
+- **Backup AI chain.** Scripts are written by Gemini first, using every free model on the key. When all of them are out, the app moves on to free OpenAI-compatible services, each with its own optional free key: Groq (about 1,000 requests a day), NVIDIA, Mistral, and OpenRouter (free models only). The last resort is the keyless Pollinations endpoint, which can be turned off. A service that hits its daily limit is rested and skipped; an answer that isn't a usable script moves on to the next model.
+- **Fix:** a per-minute Gemini limit used to mark a model as used up for the whole day. It now rests the model for 3 minutes only.
+- Research (Google Search) is skipped, not failed, when Gemini can't do it; the script is then written from general knowledge.
+
