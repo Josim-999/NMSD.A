@@ -249,6 +249,12 @@ class ScenePainter(
         val span = timeline.sceneAt(t)
         manageMedia(span.index, t - span.start)
         val lt = t - span.start
+        hookBackdrop(c, t)
+        // Impact shake in the opening (and on early punch words).
+        val (sx, sy) = shake(t)
+        c.save()
+        c.translate(sx, sy)
+        if (t in GLITCH_A || (timeline.spans.size > 1 && t - timeline.spans[1].start in GLITCH_CUT)) glitch(c, span.index, lt, span.end - span.start, t)
         if (span.index > 0 && lt < TRANSITION) {
             val k = outCubic(lt / TRANSITION).toFloat()
             val prev = timeline.spans[span.index - 1]
@@ -291,6 +297,8 @@ class ScenePainter(
             drawScene(c, 0, 0.0, timeline.spans[0].end - timeline.spans[0].start, 0.0, alpha = 1f, scale = 1f)
             c.restore()
         }
+        c.restore()
+        hookOverlay(c, t)
         palette = paletteFor(span.index)
         chrome(c, t, span.index)
         if (!look.paper && (!look.glass || darkScene(span.index))) c.drawRect(0f, 0f, W, H, vignette)
@@ -1180,6 +1188,186 @@ class ScenePainter(
         }
     }
 
+    // ---------------- Hook intro (first ~5 seconds) ----------------
+
+    private val hookColors: List<Int> = run {
+        val base = listOf(
+            Color.rgb(255, 61, 113), Color.rgb(255, 214, 10), Color.rgb(0, 229, 255),
+            Color.rgb(124, 255, 107), Color.rgb(179, 136, 255), Color.rgb(255, 138, 0),
+        )
+        val k = Math.floorMod(scenes.firstOrNull()?.say?.hashCode() ?: 0, base.size)
+        base.drop(k) + base.take(k)
+    }
+
+    /** When the hook's key word is spoken (its emphasis word, else its last word). */
+    private val hookWordAt: Double = run {
+        val end = timeline.spans.firstOrNull()?.end ?: 0.0
+        emphasisTimes.firstOrNull { it < end } ?: timeline.words.lastOrNull { it.scene == 0 }?.start ?: 0.6
+    }
+
+    private val hookWord: String = run {
+        val w = timeline.words.firstOrNull { it.scene == 0 && kotlin.math.abs(it.start - hookWordAt) < 1e-6 }?.text
+            ?: scenes.firstOrNull()?.emphasis ?: ""
+        upper(w.trim(',', '.', '!', '?', ';', ':', '"'))
+    }
+
+    private data class Bit(val angle: Double, val speed: Double, val size: Float, val color: Int, val shape: Int, val spin: Double)
+
+    private val confetti: List<Bit> = run {
+        val r = java.util.Random((scenes.firstOrNull()?.say?.hashCode() ?: 1).toLong())
+        List(42) {
+            Bit(r.nextDouble() * 2 * Math.PI, 900 + r.nextDouble() * 1500, 14f + r.nextFloat() * 22f,
+                hookColors[it % hookColors.size], it % 3, (r.nextDouble() - 0.5) * 14)
+        }
+    }
+
+    private fun shake(t: Double): Pair<Float, Float> {
+        var a = 0.0
+        if (t in 0.03..0.5) a = 22 * kotlin.math.exp(-(t - 0.03) * 9)
+        val w = t - hookWordAt
+        if (w in 0.0..0.35) a = max(a, 14 * kotlin.math.exp(-w * 11))
+        if (a < 0.3) return 0f to 0f
+        return (a * sin(t * 97)).toFloat() to (a * cos(t * 83)).toFloat()
+    }
+
+    /** Vivid rotating sunburst behind the hook: loud colour in the first frames, fading out by ~5 s. */
+    private fun hookBackdrop(c: Canvas, t: Double) {
+        if (t > HOOK_FX_END) return
+        val fade = (1 - clamp((t - 1.6) / (HOOK_FX_END - 1.6))).toFloat()
+        val strength = (if (look.glass || look.paper) 0.55f else 0.75f) * fade
+        if (strength <= 0.01f) return
+        val cx = W / 2
+        val cy = zoneMid - 60f
+        val rays = 16
+        val rot = (t * 22).toFloat()
+        fill.shader = null
+        for (i in 0 until rays) {
+            val a0 = Math.toRadians((i * 360.0 / rays) + rot)
+            val a1 = Math.toRadians(((i + 0.5) * 360.0 / rays) + rot)
+            path.reset()
+            path.moveTo(cx, cy)
+            path.lineTo(cx + (2400 * kotlin.math.cos(a0)).toFloat(), cy + (2400 * sin(a0)).toFloat())
+            path.lineTo(cx + (2400 * kotlin.math.cos(a1)).toFloat(), cy + (2400 * sin(a1)).toFloat())
+            path.close()
+            fill.color = withAlpha(hookColors[i % 3], (70 * strength).toInt())
+            c.drawPath(path, fill)
+        }
+        // A soft colour bloom at the centre so the text stays readable.
+        fill.shader = RadialGradient(cx, cy, 700f, intArrayOf(withAlpha(palette.bgTop, (230 * strength).toInt()), withAlpha(palette.bgTop, 0)), null, Shader.TileMode.CLAMP)
+        c.drawCircle(cx, cy, 700f, fill)
+        fill.shader = null
+    }
+
+    /** RGB split: the scene drawn again in red and cyan, offset sideways, for a few frames. */
+    private fun glitch(c: Canvas, index: Int, lt: Double, dur: Double, t: Double) {
+        val off = 16f
+        for ((dx, matrix) in listOf(
+            -off to floatArrayOf(1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0.55f, 0f),
+            off to floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 0f, 0f, 0.55f, 0f),
+        )) {
+            val p = Paint().apply { colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix(matrix)) }
+            c.saveLayer(0f, 0f, W, H, p)
+            c.translate(dx, 0f)
+            drawScene(c, index, lt, dur, t, alpha = 1f, scale = 1f)
+            c.restore()
+        }
+    }
+
+    private fun hookOverlay(c: Canvas, t: Double) {
+        if (t > HOOK_FX_END + 0.5) return
+        val cx = W / 2
+        val cy = zoneMid - 60f
+        // Confetti burst.
+        val ct = t - 0.05
+        if (ct in 0.0..1.8) {
+            val a = (1 - clamp((ct - 1.1) / 0.7)).toFloat()
+            for (b in confetti) {
+                val d = b.speed * (1 - kotlin.math.exp(-ct * 3.2)) / 3.2
+                val x = cx + (d * kotlin.math.cos(b.angle)).toFloat()
+                val y = cy + (d * sin(b.angle)).toFloat() + (380 * ct * ct).toFloat()
+                fill.shader = null
+                fill.color = withAlpha(b.color, (255 * a).toInt())
+                c.save()
+                c.translate(x, y)
+                c.rotate((b.spin * ct * 60).toFloat())
+                when (b.shape) {
+                    0 -> c.drawCircle(0f, 0f, b.size / 2, fill)
+                    1 -> c.drawRect(-b.size / 2, -b.size / 4, b.size / 2, b.size / 4, fill)
+                    else -> { path.reset(); path.moveTo(0f, -b.size / 2); path.lineTo(b.size / 2, b.size / 2); path.lineTo(-b.size / 2, b.size / 2); path.close(); c.drawPath(path, fill) }
+                }
+                c.restore()
+            }
+        }
+        // Shockwave rings: at the start and when the key word lands.
+        for ((at, col) in listOf(0.05 to hookColors[0], hookWordAt to hookColors[1])) {
+            val rt = t - at
+            if (rt !in 0.0..0.6) continue
+            val k = (rt / 0.6).toFloat()
+            stroke.shader = null
+            stroke.strokeWidth = 26f * (1 - k) + 2f
+            stroke.color = withAlpha(col, (230 * (1 - k)).toInt())
+            c.drawCircle(cx, cy, 120f + 900f * outCubic(k.toDouble()).toFloat(), stroke)
+        }
+        // Key-word sticker: slams in, tilted, in a loud colour, and stays through the hook.
+        val st = t - hookWordAt
+        val hookEnd = timeline.spans.firstOrNull()?.end ?: 0.0
+        if (hookWord.isNotBlank() && st >= 0 && t < hookEnd + 0.1) {
+            val k = outBack(st / 0.22).toFloat()
+            tp.typeface = black
+            tp.textSize = 96f
+            tp.shader = null
+            tp.clearShadowLayer()
+            val w = tp.measureText(hookWord) + 70f
+            val h = 140f
+            c.save()
+            c.translate(cx, ZONE_TOP + 40f)
+            c.rotate(-7f + 3f * sin(t * 3).toFloat())
+            val sc = 2.2f - 1.2f * k
+            c.scale(sc, sc)
+            shadowPaint.color = Color.argb(120, 0, 0, 0)
+            rect.set(-w / 2 + 10f, -h / 2 + 14f, w / 2 + 10f, h / 2 + 14f)
+            c.drawRoundRect(rect, 26f, 26f, shadowPaint)
+            fill.shader = null
+            fill.color = hookColors[1]
+            rect.set(-w / 2, -h / 2, w / 2, h / 2)
+            c.drawRoundRect(rect, 26f, 26f, fill)
+            stroke.strokeWidth = 8f
+            stroke.color = Color.rgb(20, 20, 20)
+            c.drawRoundRect(rect, 26f, 26f, stroke)
+            tp.color = Color.rgb(20, 20, 20)
+            tp.textAlign = Paint.Align.CENTER
+            c.drawText(hookWord, 0f, 34f, tp)
+            tp.textAlign = Paint.Align.LEFT
+            c.restore()
+        }
+        // Impact flash on the second frame (frame 1 stays clean for the feed preview).
+        if (t in 0.03..0.2) {
+            fill.shader = null
+            fill.color = Color.argb((150 * (1 - (t - 0.03) / 0.17)).toInt(), 255, 255, 255)
+            c.drawRect(0f, 0f, W, H, fill)
+        }
+        // Colour-stripe wipe across the cut from the hook to the next scene.
+        if (timeline.spans.size > 1) {
+            val wt = t - (timeline.spans[1].start - 0.14)
+            val dur = 0.42
+            if (wt in 0.0..dur) {
+                val k = (wt / dur).toFloat()
+                for (i in 0 until 3) {
+                    val lag = i * 0.12f
+                    val p = ((k - lag) / (1 - 0.24f)).coerceIn(0f, 1f)
+                    if (p <= 0f || p >= 1f) continue
+                    val x = -W * 1.2f + p * W * 3.2f
+                    c.save()
+                    c.rotate(-18f, W / 2, H / 2)
+                    fill.shader = null
+                    fill.color = hookColors[i + 2]
+                    c.drawRect(x - 260f, -400f, x + 260f, H + 400f, fill)
+                    c.restore()
+                }
+            }
+        }
+    }
+
     // ---------------- Paper sketch look ----------------
 
     /** Repeatable "hand" wobble: the same shape wobbles the same way every frame (no flicker). */
@@ -1680,6 +1868,11 @@ class ScenePainter(
         /** Per caption style: chip, colour-pop, boxed, glow. All SIL Open Font License (licences in assets/fonts). */
         /** Glass micro-event times (seconds into the scene); the sound mix puts a click on each. */
         const val HOOK_CLICK = 0.75
+
+        /** The hook intro effects run over the first seconds; frames 1+ get the impact glitch. */
+        const val HOOK_FX_END = 5.0
+        val GLITCH_A = 0.03..0.17
+        val GLITCH_CUT = -0.05..0.08
 
         /** Scenes the kinetic look turns into slamming word stacks. */
         val KINETIC_TYPES = setOf("statement", "question", "emoji")

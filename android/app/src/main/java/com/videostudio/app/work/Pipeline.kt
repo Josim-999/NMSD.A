@@ -316,7 +316,10 @@ class Pipeline(
                 "outro" -> { pops.add(span.start + ScenePainter.OUTRO_BANNER + 0.1); pops.add(span.start + ScenePainter.OUTRO_CLICK) }
             }
         }
-        val risers = if (timeline.spans.size >= 3) listOf(timeline.spans.last().start) else emptyList()
+        // Hook intro: an impact boom right at the start (a sharp sound in the first second stops the scroll).
+        hits.add(0, 0.03)
+        if (timeline.spans.size > 1) pops.add(timeline.spans[1].start - 0.05)
+                val risers = if (timeline.spans.size >= 3) listOf(timeline.spans.last().start) else emptyList()
 
         // Animated emoji (Noto, free): the fire flickers, the bulb glows.
         val emojis = (p.scenes.map { it.emoji.trim() } + "💬" + "💡").filter { it.isNotBlank() }.distinct()

@@ -181,3 +181,13 @@ The application id `com.videostudio.app` must never change either.
 - Settings → Video look: Mix / Liquid glass / Paper sketch / Kinetic type / Classic dark.
 - **60 seconds is the default length.** Scripts under 85% of the word target are lengthened once. If the recorded voice is more than about 5 s off the target, it is re-recorded slightly slower or faster (at most ±12 points).
 
+## 2.4: hook intro (first ~5 seconds)
+
+Every look now opens the way top Shorts do:
+- Frame 1 stays clean and readable (the feed preview), on a vivid rotating colour sunburst.
+- From the second frame: an impact flash, RGB-split glitch and screen shake, with a boom sound.
+- A colourful confetti burst and a shockwave ring come out of the hook.
+- The hook's key word slams in as a tilted colour sticker when it is spoken, with a second shockwave and shake.
+- Three bright diagonal stripes wipe across the cut to the second scene, with a whoosh.
+- The colour fades out gradually by 5 s. Colours rotate per video.
+
