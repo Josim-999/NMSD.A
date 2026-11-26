@@ -54,8 +54,6 @@ class PostAll(private val store: ProjectStore) {
             val target = Share.target(key)
             val v = video
             val text = captions[key] ?: if (key == "youtube") title else caption
-            // Auto-fill: the accessibility helper types this app's caption into its caption box.
-            if (target != null) AutoCaption.arm(key, target.packages, text)
             if (target != null && v != null && Share.open(context, target, v, text, title)) {
                 _state.value = s.copy(waiting = true)
                 return

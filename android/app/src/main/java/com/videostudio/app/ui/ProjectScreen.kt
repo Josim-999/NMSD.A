@@ -467,16 +467,7 @@ private fun PostToAll(app: App, p: Project, freshProject: () -> Project) {
     val posted = p.uploads.map { it.platform }.toSet()
 
     Section("Post to all your apps") {
-        Hint("Uses the apps on this phone, where you are already signed in. Each app opens with the video and its own caption and hashtags (made for that app); tap Post there, come back, and the next app opens.")
-        val autoOn = remember { com.videostudio.app.upload.AutoCaption.isEnabled(ctx) }
-        if (!autoOn) {
-            Spacer(Modifier.height(8.dp))
-            Text("Turn on auto-fill captions", fontWeight = FontWeight.SemiBold, color = Accent)
-            Hint("TikTok, Instagram and Facebook ignore captions sent with a video. Switch on \"Video Studio auto-fill captions\" once, and the caption and hashtags are typed in for you. If Android says it is restricted: App info → ⋮ → Allow restricted settings, then try again.")
-            TextButton(onClick = { runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) {
-                Text("Open accessibility settings")
-            }
-        } else Hint("Auto-fill captions is on: the caption and hashtags are typed in for you.", Good)
+        Hint("Uses the apps on this phone, where you are already signed in. Each app opens with the video, and its own caption and hashtags (made for that app) are copied: long-press the caption box → Paste, tap Post, come back, and the next app opens.")
         var showCaps by remember { mutableStateOf(false) }
         TextButton(onClick = { showCaps = !showCaps }) { Text(if (showCaps) "Hide captions for each app" else "See the caption for each app") }
         if (showCaps) {

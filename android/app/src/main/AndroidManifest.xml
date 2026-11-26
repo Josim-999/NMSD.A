@@ -72,18 +72,6 @@
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="subject_segment" />
         <service
-            android:name=".upload.AutoCaptionService"
-            android:exported="false"
-            android:label="Video Studio auto-fill captions"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/auto_caption" />
-        </service>
-        <service
             android:name=".work.BackgroundJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />

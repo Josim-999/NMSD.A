@@ -20,11 +20,11 @@ object Share {
     val targets = listOf(
         ShareTarget(
             "tiktok", "TikTok", listOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill", "com.zhiliaoapp.musically.go"),
-            "Tap Next: the caption is typed in for you (or long-press the text box → Paste), then Post."
+            "Tap Next, long-press the caption box → Paste (caption and hashtags are copied), then Post."
         ),
         ShareTarget(
             "instagram", "Instagram", listOf("com.instagram.android"),
-            "Choose Reels, tap Next: the caption is typed in for you (or long-press → Paste), then Share."
+            "Choose Reels, tap Next, long-press the caption box → Paste, then Share."
         ),
         ShareTarget(
             "youtube", "YouTube", listOf("com.google.android.youtube"),
@@ -32,11 +32,11 @@ object Share {
         ),
         ShareTarget(
             "facebook", "Facebook", listOf("com.facebook.katana", "com.facebook.lite"),
-            "Choose Reel: the caption is typed in for you (or paste it), then Share."
+            "Choose Reel, long-press the text box → Paste, then Share."
         ),
-        ShareTarget("x", "X", listOf("com.twitter.android"), "The caption is typed in for you (or paste it), then Post."),
-        ShareTarget("threads", "Threads", listOf("com.instagram.barcelona"), "The caption is typed in for you (or paste it), then Post."),
-        ShareTarget("linkedin", "LinkedIn", listOf("com.linkedin.android"), "The caption is typed in for you (or paste it), then Post."),
+        ShareTarget("x", "X", listOf("com.twitter.android"), "Long-press the text box → Paste if it is empty, then Post."),
+        ShareTarget("threads", "Threads", listOf("com.instagram.barcelona"), "Long-press the text box → Paste if it is empty, then Post."),
+        ShareTarget("linkedin", "LinkedIn", listOf("com.linkedin.android"), "Long-press the text box → Paste if it is empty, then Post."),
         ShareTarget("whatsapp", "WhatsApp", listOf("com.whatsapp"), "Choose My status or a chat, then Send."),
     )
 

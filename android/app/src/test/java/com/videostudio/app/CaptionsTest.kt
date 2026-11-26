@@ -3,7 +3,6 @@ package com.videostudio.app
 import androidx.test.core.app.ApplicationProvider
 import com.videostudio.app.data.Project
 import com.videostudio.app.data.Settings
-import com.videostudio.app.upload.AutoCaption
 import com.videostudio.app.upload.Captions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -43,23 +42,5 @@ class CaptionsTest {
         assertTrue(all.getValue("instagram").contains("Here is how it works."))
         assertTrue(!all.getValue("facebook").contains("Here is how it works."))
         assertTrue(!all.getValue("tiktok").contains("#shorts"))
-    }
-
-    @Test fun findsTheCaptionBoxButNeverSearchOrComments() {
-        assertTrue(AutoCaption.score("Write a caption...", "", "", "", true) > 0)
-        assertTrue(AutoCaption.score("Add description", "", "", "com.zhiliaoapp.musically:id/desc", true) > 0)
-        assertTrue(AutoCaption.score("Describe your reel", "", "", "", false) > 0)
-        assertTrue(AutoCaption.score("Caption your Short", "", "", "", false) > 0)
-        assertEquals(0, AutoCaption.score("Search", "", "", "search_box", false))
-        assertEquals(0, AutoCaption.score("Add a comment…", "", "", "", true))
-        assertEquals(0, AutoCaption.score("", "", "", "username", false))
-    }
-
-    @Test fun armExpiresAndTargetsOnlyThatApp() {
-        AutoCaption.arm("instagram", listOf("com.instagram.android"), "hello")
-        val pnd = AutoCaption.pending!!
-        assertEquals(setOf("com.instagram.android"), pnd.packages)
-        assertTrue(pnd.until > System.currentTimeMillis())
-        AutoCaption.pending = null
     }
 }

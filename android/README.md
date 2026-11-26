@@ -199,6 +199,10 @@ Every look now opens the way top Shorts do:
   - YouTube app: the title plus #shorts within 100 characters
   - X: fits 280 characters; Threads: 1 tag
   - Disclaimers, picture credits and the AI label are included where there is room.
-- **Auto-fill captions** (`upload/AutoCaptionService.kt`, an accessibility service switched on once). TikTok, Instagram and Facebook ignore captions sent with a shared video. When "Post to all" opens an app, the helper types that app's caption into its EMPTY caption box. It only acts in the app Video Studio just opened, only once, never in search or comment boxes, and never presses Post. The caption is also on the clipboard as a fallback.
-- The Post-to-all card shows every app's caption with a Copy button, plus the auto-fill on/off status.
+- The Post-to-all card shows every app's caption with a Copy button. Each app's caption is on the clipboard when that app opens.
+
+## 2.6: installable again
+
+- Removed the accessibility "auto-fill captions" helper added in 2.5. Google Play Protect blocks sideloaded APKs that ask for accessibility access, so 2.5 could not be installed. The per-app captions and hashtags stay: each app's caption is copied as it opens.
+- Rule for future versions: no accessibility, SMS or notification-listener permissions; Play Protect blocks those in sideloaded apps.
 

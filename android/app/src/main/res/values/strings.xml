@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Video Studio</string>
-    <string name="auto_caption_description">Video Studio types the caption and hashtags into TikTok, Instagram, Facebook and the YouTube app when "Post to all" opens them. It only fills an empty caption box in the app Video Studio just opened, and never posts anything by itself.</string>
 </resources>
