@@ -294,6 +294,7 @@ class ScenePainter(
         if (loopK > 0f && scenes.isNotEmpty()) {
             c.saveLayerAlpha(0f, 0f, W, H, (outCubic(loopK.toDouble()) * 255).toInt())
             background(c, 0.0)
+            hookBackdrop(c, 0.0)
             drawScene(c, 0, 0.0, timeline.spans[0].end - timeline.spans[0].start, 0.0, alpha = 1f, scale = 1f)
             c.restore()
         }
