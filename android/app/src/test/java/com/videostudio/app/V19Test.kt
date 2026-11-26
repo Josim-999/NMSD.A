@@ -222,7 +222,7 @@ class V19Test {
                         """{"isPublicDomain":true,"title":"Armor of Henry II","primaryImage":"${server.url("/img/armor.jpg")}","objectURL":"https://www.metmuseum.org/art/collection/search/2"}"""
                     )
                     p.startsWith("/pix/?") -> MockResponse().setBody(
-                        """{"hits":[{"id":7,"user":"Ann","pageURL":"https://pixabay.com/photos/7","largeImageURL":"${server.url("/img/pix.jpg")}"}]}"""
+                        """{"hits":[{"id":7,"user":"Ann","tags":"coffee, cup, mug","pageURL":"https://pixabay.com/photos/7","largeImageURL":"${server.url("/img/pix.jpg")}"}]}"""
                     )
                     p.startsWith("/img/as11~large") || p.startsWith("/img/armor") || p.startsWith("/img/pix") -> MockResponse().setBody(png(800, 1000))
                     else -> MockResponse().setResponseCode(404)

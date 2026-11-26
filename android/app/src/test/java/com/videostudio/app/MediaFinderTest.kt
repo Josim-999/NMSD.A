@@ -45,6 +45,8 @@ class MediaFinderTest {
             wikipedia = server.url("/wiki/").toString(),
             openverse = server.url("/ov/").toString(),
             commons = server.url("/commons").toString(),
+            wikidata = server.url("/wd").toString(),
+            commonsFile = server.url("/file/").toString(),
         ),
     )
 
@@ -68,7 +70,7 @@ class MediaFinderTest {
                     path.startsWith("/ov/?") -> MockResponse().setBody(
                         """{"results":[
                           {"id":"small","width":300,"height":200,"url":"${server.url("/img/small.jpg")}","title":"tiny","creator":"x","license":"by"},
-                          {"id":"wide","width":2000,"height":1000,"url":"${server.url("/img/wide.jpg")}","title":"Wide","creator":"A","license":"by"},
+                          {"id":"wide","width":2000,"height":1000,"url":"${server.url("/img/wide.jpg")}","title":"Wide server room","creator":"A","license":"by"},
                           {"id":"tall","width":1080,"height":1500,"url":"${server.url("/img/tall.jpg")}","title":"Tall servers","creator":"B","license":"by-sa","license_version":"2.0","foreign_landing_url":"https://flickr.com/x"}]}"""
                     )
                     path.startsWith("/ov/") && path.contains("/thumb/") -> MockResponse().setBody(png(900, 1300))

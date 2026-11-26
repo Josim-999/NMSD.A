@@ -47,6 +47,8 @@ class MediaFinder(
         val nasa: String = "https://images-api.nasa.gov/search",
         val met: String = "https://collectionapi.metmuseum.org/public/collection/v1/",
         val pixabay: String = "https://pixabay.com/api/",
+        val wikidata: String = "https://www.wikidata.org/w/api.php",
+        val commonsFile: String = "https://commons.wikimedia.org/wiki/Special:FilePath/",
     )
 
     private val http = OkHttpClient.Builder()
@@ -79,7 +81,7 @@ class MediaFinder(
 
     // ---------------- Logos ----------------
 
-    private data class Icon(val slug: String, val title: String, val hex: String)
+    private data class Icon(val slug: String, val title: String, val hex: String, val source: String = "")
 
     private var index: Map<String, Icon>? = null
 
@@ -100,7 +102,7 @@ class MediaFinder(
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             val title = o.optString("title")
-            val icon = Icon(o.optString("slug").ifBlank { slug(title) }, title, o.optString("hex"))
+            val icon = Icon(o.optString("slug").ifBlank { slug(title) }, title, o.optString("hex"), o.optString("source"))
             map.putIfAbsent(key(title), icon)
             map.putIfAbsent(icon.slug, icon)
             o.optJSONObject("aliases")?.optJSONArray("aka")?.let { aka ->
@@ -111,25 +113,40 @@ class MediaFinder(
         return map
     }
 
-    /** Logo for [brand] (website [domain] helps). Null when no source has one. */
-    fun logo(brand: String, domain: String): Logo? {
+    /**
+     * The brand's real logo, or null. Never a guess: a logo is used only when it is verified.
+     * 1. Simple Icons (crisp vector): the name must match exactly AND, when the official website is
+     *    known, the icon's own source site must be on the same domain.
+     * 2. Wikidata (the logo on the brand's Wikidata entry, via Wikimedia Commons): the entry's official
+     *    website must match the domain (or, without a domain, its name must match exactly).
+     * 3. The site icon of the official domain, only when that domain is confirmed to be the brand's.
+     * No match: no logo (the scene shows the name in clean type) instead of a wrong one.
+     */
+    fun logo(brand: String, domain: String, wiki: String = ""): Logo? {
         if (brand.isBlank() && domain.isBlank()) return null
-        val cleanDomain = domain.lowercase(Locale.ROOT).removePrefix("https://").removePrefix("http://").removePrefix("www.").substringBefore('/')
-        val idx = icons()
-        val candidates = listOf(key(brand), slug(brand), key(cleanDomain.substringBefore('.')), key(brand.substringBefore(' ')))
-            .filter { it.isNotEmpty() }
-        for (k in candidates) {
-            val icon = idx[k] ?: continue
-            val svg = text("${endpoints.simpleIcons}/icons/${icon.slug}.svg") ?: continue
-            val d = Regex("""\sd="([^"]+)"""").find(svg)?.groupValues?.get(1) ?: continue
-            val color = runCatching { android.graphics.Color.parseColor("#" + icon.hex) }.getOrDefault(android.graphics.Color.WHITE)
-            return Logo.Vector(icon.title, d, color)
+        val d = cleanHost(domain)
+        val reg = registrable(d)
+        findIcon(brand, d)?.let { icon ->
+            val svg = text("${endpoints.simpleIcons}/icons/${icon.slug}.svg")
+            val path = svg?.let { Regex("""\sd="([^"]+)"""").find(it)?.groupValues?.get(1) }
+            if (path != null) {
+                val color = runCatching { android.graphics.Color.parseColor("#" + icon.hex) }.getOrDefault(android.graphics.Color.WHITE)
+                log("Logo: ${icon.title} (Simple Icons, matched ${if (d.isNotBlank()) "name and website" else "exact name"}).")
+                return Logo.Vector(icon.title, path, color)
+            }
         }
-        // Google's site icon (up to 256 px). Unknown sites get a tiny globe, which the size check rejects.
-        val site = cleanDomain.ifBlank { guessDomain(brand) }
-        if (site.isNotBlank()) {
-            val f = File(cacheDir, "logo_${key(site)}.png")
-            val url = endpoints.favicon.toHttpUrl().newBuilder().addQueryParameter("domain", site).addQueryParameter("sz", "256").build().toString()
+        val wd = runCatching { wikidataLogo(brand, d, wiki) }.getOrNull()
+        if (wd != null) return wd
+        // Site icon only for a domain we know belongs to the brand.
+        val confirmed = when {
+            reg.isBlank() -> confirmedDomain ?: ""
+            brandMatchesDomain(brand, reg) || confirmedDomain?.let { registrable(it) == reg } == true -> d
+            else -> ""
+        }
+        confirmedDomain = null
+        if (confirmed.isNotBlank()) {
+            val f = File(cacheDir, "logo_${key(confirmed)}.png")
+            val url = endpoints.favicon.toHttpUrl().newBuilder().addQueryParameter("domain", confirmed).addQueryParameter("sz", "256").build().toString()
             val ok = runCatching {
                 http.newCall(get(url)).execute().use { r ->
                     if (!r.isSuccessful) return@use false
@@ -137,12 +154,103 @@ class MediaFinder(
                     f.outputStream().use { o -> r.body!!.byteStream().copyTo(o) }
                     val opt = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     BitmapFactory.decodeFile(f.absolutePath, opt)
-                    opt.outWidth >= 64
+                    opt.outWidth >= 96 // Google's "unknown site" globe is 16 px; tiny icons look blurry
                 }
             }.getOrDefault(false)
-            if (ok) return Logo.Raster(brand.ifBlank { site }, f)
+            if (ok) { log("Logo: ${brand.ifBlank { confirmed }} (site icon of $confirmed)."); return Logo.Raster(brand.ifBlank { confirmed }, f) }
+        }
+        log("No verified logo for \"$brand\"${if (d.isNotBlank()) " ($d)" else ""}: showing the name instead of a guess.")
+        return null
+    }
+
+    /** A domain Wikidata confirmed for the brand (when the script gave none), for the site-icon step. */
+    private var confirmedDomain: String? = null
+
+    private fun findIcon(brand: String, d: String): Icon? {
+        val idx = icons()
+        val reg = registrable(d)
+        val label = reg.substringBefore('.')
+        // Exact names only: the brand, the brand with its parent ("Gemini" + google.com -> "Google Gemini"), or its slug.
+        val candidates = listOfNotNull(
+            key(brand).takeIf { it.isNotEmpty() },
+            if (label.isNotBlank() && !key(brand).startsWith(label)) key("$label $brand") else null,
+            slug(brand).takeIf { it.isNotEmpty() },
+            if (brand.isBlank() && label.isNotBlank()) label else null,
+        ).distinct()
+        for (k in candidates) {
+            val icon = idx[k] ?: continue
+            val src = registrable(cleanHost(icon.source))
+            if (reg.isNotBlank()) {
+                // The icon's own source site must be the brand's site (stops "Gemini" the exchange for Google Gemini).
+                if (src.isNotBlank() && src == reg) return icon
+                if (src.isBlank() && key(icon.title) == key(brand)) return icon
+            } else if (key(icon.title) == key(brand) || k == key(brand)) {
+                return icon
+            }
         }
         return null
+    }
+
+    /** The logo on the brand's Wikidata entry, checked against its official website. */
+    private fun wikidataLogo(brand: String, d: String, wiki: String): Logo? {
+        val reg = registrable(d)
+        val ids = ArrayList<String>()
+        // A Wikipedia title from the script points at exactly one entry.
+        if (wiki.isNotBlank()) {
+            val sum = text(endpoints.wikipedia + java.net.URLEncoder.encode(wiki.trim().replace(' ', '_'), "UTF-8").replace("+", "_"))
+            runCatching { JSONObject(sum ?: "").optString("wikibase_item") }.getOrNull()?.takeIf { it.startsWith("Q") }?.let { ids += it }
+        }
+        if (brand.isNotBlank()) {
+            val url = endpoints.wikidata.toHttpUrl().newBuilder().addQueryParameter("action", "wbsearchentities")
+                .addQueryParameter("search", brand.take(60)).addQueryParameter("language", "en").addQueryParameter("type", "item")
+                .addQueryParameter("limit", "6").addQueryParameter("format", "json").build().toString()
+            val res = runCatching { JSONObject(text(url) ?: "{}").optJSONArray("search") }.getOrNull()
+            if (res != null) for (i in 0 until res.length()) res.optJSONObject(i)?.optString("id")?.let { if (it !in ids) ids += it }
+        }
+        if (ids.isEmpty()) return null
+        val url = endpoints.wikidata.toHttpUrl().newBuilder().addQueryParameter("action", "wbgetentities")
+            .addQueryParameter("ids", ids.take(7).joinToString("|")).addQueryParameter("props", "claims|labels|aliases")
+            .addQueryParameter("languages", "en").addQueryParameter("format", "json").build().toString()
+        val entities = runCatching { JSONObject(text(url) ?: "{}").optJSONObject("entities") }.getOrNull() ?: return null
+        for (id in ids) {
+            val e = entities.optJSONObject(id) ?: continue
+            val claims = e.optJSONObject("claims") ?: continue
+            val label = e.optJSONObject("labels")?.optJSONObject("en")?.optString("value").orEmpty()
+            val aliases = e.optJSONObject("aliases")?.optJSONArray("en")?.let { a -> (0 until a.length()).map { a.optJSONObject(it)?.optString("value").orEmpty() } }.orEmpty()
+            val sites = claimStrings(claims, "P856").map { registrable(cleanHost(it)) }.filter { it.isNotBlank() }
+            val nameMatch = (listOf(label) + aliases).any { key(it) == key(brand) }
+            val fromWiki = wiki.isNotBlank() && id == ids.first()
+            val ok = when {
+                reg.isNotBlank() -> reg in sites || (sites.isEmpty() && nameMatch && fromWiki)
+                else -> nameMatch && (fromWiki || sites.isNotEmpty())
+            }
+            if (!ok) continue
+            if (reg.isBlank()) confirmedDomain = sites.firstOrNull()
+            val file = claimStrings(claims, "P154").firstOrNull() ?: continue
+            val f = File(cacheDir, "wdlogo_${key(file)}.png")
+            val img = endpoints.commonsFile + java.net.URLEncoder.encode(file.replace(' ', '_'), "UTF-8").replace("+", "_") + "?width=640"
+            if (download(img, f, minBytes = 600) || looksLikeLogo(f)) {
+                log("Logo: ${label.ifBlank { brand }} (Wikidata, official site ${sites.firstOrNull() ?: "-"}).")
+                return Logo.Raster(label.ifBlank { brand }, f)
+            }
+        }
+        return null
+    }
+
+    /** Logos are often small or wide; accept anything at least 120 px on its long side. */
+    private fun looksLikeLogo(f: File): Boolean {
+        if (!f.exists()) return false
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(f.absolutePath, o)
+        return maxOf(o.outWidth, o.outHeight) >= 120
+    }
+
+    private fun claimStrings(claims: JSONObject, prop: String): List<String> {
+        val arr = claims.optJSONArray(prop) ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val v = arr.optJSONObject(i)?.optJSONObject("mainsnak")?.optJSONObject("datavalue")?.opt("value")
+            (v as? String)?.takeIf { it.isNotBlank() }
+        }
     }
 
     // ---------------- Photos ----------------
@@ -232,6 +340,7 @@ class MediaFinder(
             val hits = runCatching { JSONObject(json).getJSONArray("hits") }.getOrNull() ?: continue
             for (i in 0 until hits.length()) {
                 val h = hits.optJSONObject(i) ?: continue
+                if (relevance(query, h.optString("tags")) < minRelevance(query)) continue
                 if (!used.add("pixabay:${h.optLong("id")}")) continue
                 val img = h.optString("largeImageURL").ifBlank { h.optString("webformatURL") }
                 if (img.isNotBlank() && download(img, out)) {
@@ -299,9 +408,16 @@ class MediaFinder(
             val url = b.build().toString()
             val json = searches[url] ?: text(url)?.also { searches[url] = it } ?: continue
             val results = runCatching { JSONObject(json).getJSONArray("results") }.getOrNull() ?: continue
+            // Only pictures whose title or tags mention the subject, the closest match first.
             val list = (0 until results.length()).mapNotNull { results.optJSONObject(it) }
                 .filter { it.optInt("width") >= 640 || it.optInt("height") >= 900 }
-                .sortedByDescending { score(it.optInt("width"), it.optInt("height")) }
+                .map { r ->
+                    val tags = r.optJSONArray("tags")?.let { a -> (0 until a.length()).joinToString(" ") { a.optJSONObject(it)?.optString("name").orEmpty() } }.orEmpty()
+                    r to relevance(q, r.optString("title") + " " + tags)
+                }
+                .filter { it.second >= minRelevance(q) }
+                .sortedWith(compareByDescending<Pair<JSONObject, Int>> { it.second }.thenByDescending { score(it.first.optInt("width"), it.first.optInt("height")) })
+                .map { it.first }
             for (r in list) {
                 val id = r.optString("id")
                 if (!used.add("ov:$id")) continue
@@ -330,7 +446,8 @@ class MediaFinder(
         val pages = runCatching { JSONObject(json).getJSONObject("query").getJSONArray("pages") }.getOrNull() ?: return null
         val infos = (0 until pages.length()).mapNotNull { pages.optJSONObject(it) }
             .mapNotNull { p -> p.optJSONArray("imageinfo")?.optJSONObject(0)?.let { p.optString("title") to it } }
-            .sortedByDescending { score(it.second.optInt("width"), it.second.optInt("height")) }
+            .filter { relevance(q, it.first) >= minRelevance(q) }
+            .sortedWith(compareByDescending<Pair<String, JSONObject>> { relevance(q, it.first) }.thenByDescending { score(it.second.optInt("width"), it.second.optInt("height")) })
         for ((title, info) in infos) {
             val u = info.optString("thumburl").ifBlank { info.optString("url") }
             if (!used.add(u)) continue
@@ -375,6 +492,40 @@ class MediaFinder(
         fun key(s: String): String =
             Normalizer.normalize(s.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(Regex("[^a-z0-9]"), "")
 
-        private fun guessDomain(brand: String): String = key(brand).takeIf { it.length >= 2 }?.let { "$it.com" } ?: ""
+        private val STOP = setOf("the", "and", "for", "with", "from", "into", "your", "you", "this", "that", "how", "why", "what", "photo", "image", "picture")
+
+        /** Meaningful words of a search, singular-ish ("robots" -> "robot"). */
+        fun keywords(q: String): List<String> = q.lowercase(Locale.ROOT).split(Regex("[^\\p{L}\\p{N}]+"))
+            .filter { it.length >= 3 && it !in STOP }.map { it.removeSuffix("s") }.distinct()
+
+        /** How many of the search's words a picture's title/tags contain. */
+        fun relevance(q: String, text: String): Int {
+            val t = text.lowercase(Locale.ROOT)
+            return keywords(q).count { t.contains(it) }
+        }
+
+        /** One word must match for a short search, half of them for a long one. */
+        fun minRelevance(q: String): Int { val n = keywords(q).size; return if (n <= 2) minOf(1, n) else (n + 1) / 2 }
+
+        /** "https://www.Gemini.Google.com/app" -> "gemini.google.com". */
+        fun cleanHost(s: String): String = s.lowercase(Locale.ROOT).trim().removePrefix("https://").removePrefix("http://")
+            .removePrefix("www.").substringBefore('/').substringBefore('?').substringBefore(':')
+
+        private val SECOND_LEVEL = setOf("co", "com", "org", "net", "gov", "ac", "edu")
+
+        /** The part of a host a company actually owns: "gemini.google.com" -> "google.com", "bbc.co.uk" -> "bbc.co.uk". */
+        fun registrable(host: String): String {
+            val parts = host.split('.').filter { it.isNotBlank() }
+            if (parts.size < 2) return host
+            val n = if (parts.size >= 3 && parts[parts.size - 2] in SECOND_LEVEL && parts.last().length == 2) 3 else 2
+            return parts.takeLast(n).joinToString(".")
+        }
+
+        /** "OpenAI" and "openai.com": the brand's own name is the domain's name. */
+        fun brandMatchesDomain(brand: String, registrable: String): Boolean {
+            val b = key(brand)
+            val l = key(registrable.substringBefore('.'))
+            return b.isNotEmpty() && l.length >= 3 && (b == l || b.startsWith(l) || l.startsWith(b))
+        }
     }
 }

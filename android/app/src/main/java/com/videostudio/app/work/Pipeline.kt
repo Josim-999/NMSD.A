@@ -284,7 +284,7 @@ class Pipeline(
         for ((i, scene) in brandScenes) {
             if (cancelled()) return
             val name = scene.brand.ifBlank { scene.text }
-            val logo = logoCache.getOrPut(MediaFinder.key(name + scene.domain)) { runCatching { finder.logo(name, scene.domain) }.getOrNull() }
+            val logo = logoCache.getOrPut(MediaFinder.key(name + scene.domain)) { runCatching { finder.logo(name, scene.domain, if (scene.type == "logo") scene.wiki else "") }.getOrNull() }
             if (logo != null) logos[i] = logo
         }
         if (credits.isNotEmpty()) File(dir, "credits.txt").writeText(credits.joinToString("\n"))

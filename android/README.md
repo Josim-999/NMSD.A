@@ -219,3 +219,14 @@ Every look now opens the way top Shorts do:
 - **Best free writers first:** Kimi K2 and DeepSeek on NVIDIA and Groq, GLM on Z.ai, DeepSeek/Kimi first on OpenRouter.
 - **Built-in writer:** bold-claim hooks from numeric facts, plus a re-hook line.
 
+## 2.8: verified logos, relevant pictures
+
+- **Logos are verified, never guessed** (`MediaFinder.logo`):
+  1. Simple Icons only on an exact name match, and the icon's own source site must be the brand's official domain ("Gemini" on gemini.google.com becomes Google Gemini, never the Gemini crypto exchange).
+  2. Otherwise the logo from the brand's Wikidata entry (Wikimedia Commons), only if that entry's official website matches the domain. A Wikipedia title from the script picks the exact entry.
+  3. Otherwise the site icon of the official domain, only when that domain is confirmed to be the brand's.
+  4. Otherwise no logo: the scene shows the brand name in clean type.
+- Removed the guesses that caused wrong logos: first word of the brand, start of the domain, and invented "brand.com" domains.
+- **The script must give** the exact official brand name and product domain, plus a Wikipedia title for logo scenes, and leave brands out when unsure.
+- **Photos must match the scene:** Openverse, Commons and Pixabay results are kept only if their title or tags contain the search words (at least half of them for longer searches), and the closest match wins.
+

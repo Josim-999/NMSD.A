@@ -105,7 +105,7 @@ For every scene choose ONE visual from this list (the app animates them), and fi
 - {"type":"emoji","emoji":"one emoji","text":"2-5 words"}
 - {"type":"question","text":"short question"}
 - {"type":"photo","query":"2-4 word photo search in English","wiki":"exact English Wikipedia title if it shows a named person/place/thing, else empty","text":"2-6 words","library":"nasa for space/planets/rockets/earth-from-space, museum for art/ancient history/artefacts, else empty"}
-- {"type":"logo","brand":"exact brand name","domain":"brand website, e.g. nvidia.com","text":"2-6 words"}   (when a company, product or app is the subject)
+- {"type":"logo","brand":"exact official brand name","domain":"its official website domain, e.g. openai.com, gemini.google.com","wiki":"its exact English Wikipedia article title","text":"2-6 words"}   (when a company, product or app is the subject)
 - {"type":"chart","text":"short title","items":["Label: number", "2-5 items, numbers only after the colon"]}   (comparing amounts or growth)
 - {"type":"timeline","text":"short title","items":["Year — short event", "2-4 items in order"]}
 - {"type":"quote","text":"the quote, under 15 words","label":"who said it","wiki":"their English Wikipedia title"}   (only real, accurately quoted words)
@@ -113,7 +113,7 @@ For every scene choose ONE visual from this list (the app animates them), and fi
 - {"type":"outro","text":"the comment question, short","emoji":"one emoji"}  (use for the last scene)
 Vary the visuals; never use the same type more than twice in a row. On-screen text must be short.
 Real pictures are found automatically: use "photo" for 2 or 3 scenes where a real image helps (people, places, objects, events), with a concrete visual query${if (stockFootage) "; these can play as real stock video" else ""}.
-Whenever a line names a company, product, app or organisation, either use the "logo" visual for it, or add "brand" and "domain" to that scene's visual so its logo appears as a badge. Use each brand's real name and website.
+Whenever a line names a company, product, app or organisation, either use the "logo" visual for it, or add "brand" and "domain" to that scene's visual so its logo appears as a badge. Logos are checked against the official website, so: use the exact official name ("Google Gemini", not "Gemini"; "Microsoft Copilot", not "Copilot"), the exact official domain of that product (gemini.google.com, chatgpt.com, claude.ai, copilot.microsoft.com), and never put a brand on a scene that does not name it. If you are not sure of the official domain, leave "brand" empty.
 
 Reply with one JSON object and nothing else, exactly this shape:
 {
