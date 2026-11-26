@@ -43,6 +43,14 @@ object Palettes {
         bad = Color.rgb(255, 77, 109), good = Color.rgb(34, 197, 94),
     )
 
+    /** Paper sketch: cream paper, black ink, red marker, blue pen. */
+    val PAPER = Palette(
+        "paper", "Paper", Color.rgb(251, 247, 238), Color.rgb(243, 237, 224),
+        Color.rgb(230, 57, 70), Color.rgb(29, 78, 216), text = Color.rgb(30, 30, 30),
+        muted = Color.argb(170, 30, 30, 30), card = Color.argb(150, 255, 255, 255),
+        bad = Color.rgb(220, 38, 38), good = Color.rgb(22, 163, 74),
+    )
+
     /** Liquid-glass dark theme for problems, myths and questions: midnight violet with neon accents. */
     val GLASS_DARK = Palette(
         "glassdark", "Glass dark", Color.rgb(14, 11, 26), Color.rgb(22, 17, 46),

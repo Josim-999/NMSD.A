@@ -64,7 +64,7 @@ fun NewVideoScreen(app: App, onBack: () -> Unit, onCreated: (String) -> Unit, on
     var topic by rememberSaveable { mutableStateOf("") }
     var audience by rememberSaveable { mutableStateOf("") }
     var take by rememberSaveable { mutableStateOf("") }
-    var length by rememberSaveable { mutableIntStateOf(45) }
+    var length by rememberSaveable { mutableIntStateOf(60) }
     var language by rememberSaveable { mutableStateOf(s.language) }
     var voice by rememberSaveable { mutableStateOf(Voices.find(s.voice).let { if (it.language == s.language) it.id else Voices.forLanguage(s.language).first().id }) }
     var palette by rememberSaveable { mutableStateOf(s.palette) }

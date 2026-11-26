@@ -52,13 +52,18 @@ class ScenePainter(
     private val animoji: Map<String, Animoji> = animated.mapValues { Animoji(it.value) }
     private val basePalette = palette
     /** The colours in use right now: in the glass look they switch between light and dark per scene. */
-    private var palette: Palette = if (look.glass) Palettes.GLASS_LIGHT else palette
+    private var palette: Palette = when {
+        look.glass -> Palettes.GLASS_LIGHT
+        look.paper -> Palettes.PAPER
+        else -> palette
+    }
 
     /** Glass look: problems, myths, questions and data scenes go dark; the rest stay light. */
     private fun darkScene(index: Int) = look.glass &&
         scenes.getOrNull(index)?.type?.lowercase(Locale.ROOT) in setOf("compare", "question", "chart", "timeline", "logo", "quote")
 
     private fun paletteFor(index: Int): Palette = when {
+        look.paper -> Palettes.PAPER
         !look.glass -> basePalette
         darkScene(index) -> Palettes.GLASS_DARK
         else -> Palettes.GLASS_LIGHT
@@ -70,7 +75,7 @@ class ScenePainter(
         .getOrElse { Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
     /** Headline and caption lettering: a different free (OFL) display font for each caption style. */
     private val display: Typeface = runCatching {
-        Typeface.createFromAsset(context.assets, "fonts/" + DISPLAY_FONTS[look.captions % DISPLAY_FONTS.size])
+        Typeface.createFromAsset(context.assets, "fonts/" + if (look.paper) "PermanentMarker-Regular.ttf" else DISPLAY_FONTS[look.captions % DISPLAY_FONTS.size])
     }.getOrElse { black }
     private val bold: Typeface = runCatching { Typeface.createFromAsset(context.assets, "fonts/Inter-ExtraBold.otf") }
         .getOrElse { Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
@@ -224,6 +229,10 @@ class ScenePainter(
 
     private fun card(c: Canvas, l: Float, t: Float, r: Float, b: Float, color: Int, radius: Float = 44f) {
         // Neutral cards become frosted glass in the glass look.
+        if (look.paper && (color and 0xFFFFFF) == (palette.card and 0xFFFFFF)) {
+            sketchCard(c, l, t, r, b, Color.alpha(color) / Color.alpha(palette.card).coerceAtLeast(1).toFloat())
+            return
+        }
         if (look.glass && (color and 0xFFFFFF) == (palette.card and 0xFFFFFF)) {
             glassCard(c, l, t, r, b, radius, Color.alpha(color) / Color.alpha(palette.card).coerceAtLeast(1).toFloat())
             return
@@ -284,11 +293,18 @@ class ScenePainter(
         }
         palette = paletteFor(span.index)
         chrome(c, t, span.index)
-        if (!look.glass || darkScene(span.index)) c.drawRect(0f, 0f, W, H, vignette)
+        if (!look.paper && (!look.glass || darkScene(span.index))) c.drawRect(0f, 0f, W, H, vignette)
         grainShift.setTranslate(((t * 97) % 256).toFloat(), ((t * 61) % 256).toFloat())
         grainPaint.shader.setLocalMatrix(grainShift)
         c.drawRect(0f, 0f, W, H, grainPaint)
-        if (captions && loopK < 0.5f) { if (look.glass) glassCaptions(c, t) else captions(c, t) }
+        val kineticNow = look.kinetic && scenes[span.index].type.lowercase(Locale.ROOT) in KINETIC_TYPES
+        if (captions && loopK < 0.5f && !kineticNow) {
+            when {
+                look.glass -> glassCaptions(c, t)
+                look.paper -> markerCaptions(c, t)
+                else -> captions(c, t)
+            }
+        }
     }
 
     /** Zoom punch on emphasis words: a quick push-in that eases back. */
@@ -327,7 +343,10 @@ class ScenePainter(
         c.saveLayerAlpha(0f, 0f, W, H, (alpha * 255).toInt())
         c.translate(dx, dy)
         c.scale(scale * drift, scale * drift, W / 2, H * 0.42f)
-        when (scene.type.lowercase(Locale.ROOT)) {
+        val type = scene.type.lowercase(Locale.ROOT)
+        if (look.kinetic && type in KINETIC_TYPES) kineticScene(c, index, lt)
+        else when (type) {
+            "tier" -> tier(c, scene, lt, dur)
             "hook" -> hook(c, scene, lt)
             "stat" -> stat(c, scene, lt)
             "list" -> list(c, scene, lt, dur, numbered = false)
@@ -363,6 +382,8 @@ class ScenePainter(
 
     private fun background(c: Canvas, t: Double) {
         if (look.glass) { glassBackground(c, t); return }
+        if (look.paper) { paperBackground(c, t); return }
+        if (look.kinetic) { kineticBackground(c, t); return }
         c.drawRect(0f, 0f, W, H, bgPaint)
         when (look.background) {
             1 -> { gridBackground(c, t); return }
@@ -599,11 +620,15 @@ class ScenePainter(
         val r = 330f
         stroke.shader = null
         stroke.strokeWidth = 30f
-        stroke.color = withAlpha(palette.text, 34)
-        c.drawCircle(W / 2, cy, r, stroke)
-        stroke.color = palette.accent
-        rect.set(W / 2 - r, cy - r, W / 2 + r, cy + r)
-        c.drawArc(rect, -90f, (360 * outCubic(lt / 1.0)).toFloat(), false, stroke)
+        if (look.paper) {
+            scribbleCircle(c, W / 2, cy, r, outCubic(lt / 0.9).toFloat())
+        } else {
+            stroke.color = withAlpha(palette.text, 34)
+            c.drawCircle(W / 2, cy, r, stroke)
+            stroke.color = palette.accent
+            rect.set(W / 2 - r, cy - r, W / 2 + r, cy + r)
+            c.drawArc(rect, -90f, (360 * outCubic(lt / 1.0)).toFloat(), false, stroke)
+        }
         // Size the counting number by the final value so it does not jump while counting.
         val size = block("statfinal", final, display, 220f, r * 1.6f, r * 1.1f, palette.accent).paint.textSize
         drawBlock(c, block("stat", shown, display, size, r * 1.8f, r * 1.3f, palette.accent), W / 2, cy, 1f, outBack(lt / 0.4).toFloat())
@@ -733,7 +758,8 @@ class ScenePainter(
         fill.shader = null
         fill.color = palette.accent2
         val top = zoneMid - text.height / 2f
-        c.drawRect(60f, top, 74f, top + text.height * a, fill)
+        if (look.paper) wavyLine(c, SIDE + 40f, W - SIDE - 40f, top + text.height + 40f, outCubic((lt - 0.2) / 0.5).toFloat())
+        else c.drawRect(60f, top, 74f, top + text.height * a, fill)
         drawBlock(c, text, W / 2, zoneMid + (1 - a) * 60f, a)
     }
 
@@ -1154,6 +1180,256 @@ class ScenePainter(
         }
     }
 
+    // ---------------- Paper sketch look ----------------
+
+    /** Repeatable "hand" wobble: the same shape wobbles the same way every frame (no flicker). */
+    private fun wob(seed: Int, i: Int, amp: Float): Float {
+        val x = sin(seed * 12.9898 + i * 78.233) * 43758.5453
+        return ((x - kotlin.math.floor(x)) * 2 - 1).toFloat() * amp
+    }
+
+    private fun paperBackground(c: Canvas, t: Double) {
+        fill.color = Color.WHITE
+        fill.shader = LinearGradient(0f, 0f, 0f, H, palette.bgTop, palette.bgBottom, Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, W, H, fill)
+        fill.shader = null
+        stroke.shader = null
+        stroke.strokeWidth = 2f
+        stroke.color = Color.argb(38, 29, 78, 216)
+        var y = 168f
+        while (y < H) { c.drawLine(0f, y, W, y, stroke); y += 72f }
+        stroke.color = Color.argb(70, 230, 57, 70)
+        c.drawLine(92f, 0f, 92f, H, stroke)
+    }
+
+    /** A card drawn by hand: soft paper fill and a double, slightly wobbly ink outline. */
+    private fun sketchCard(c: Canvas, l: Float, t: Float, r: Float, b: Float, k: Float = 1f) {
+        if (k <= 0.01f) return
+        val seed = (l * 7 + t * 13).toInt()
+        fill.shader = null
+        fill.color = Color.argb((170 * k).toInt(), 255, 255, 255)
+        rect.set(l, t, r, b)
+        c.drawRoundRect(rect, 18f, 18f, fill)
+        stroke.shader = null
+        stroke.strokeWidth = 4f
+        stroke.strokeJoin = Paint.Join.ROUND
+        for (pass in 0..1) {
+            stroke.color = withAlpha(palette.text, ((if (pass == 0) 220 else 120) * k).toInt())
+            path.reset()
+            path.moveTo(l + wob(seed, pass * 8, 5f), t + wob(seed, pass * 8 + 1, 5f))
+            path.lineTo(r + wob(seed, pass * 8 + 2, 5f), t + wob(seed, pass * 8 + 3, 5f))
+            path.lineTo(r + wob(seed, pass * 8 + 4, 5f), b + wob(seed, pass * 8 + 5, 5f))
+            path.lineTo(l + wob(seed, pass * 8 + 6, 5f), b + wob(seed, pass * 8 + 7, 5f))
+            path.close()
+            c.drawPath(path, stroke)
+        }
+    }
+
+    /** A marker circle drawn on around a number, overlapping where it closes, like a real pen stroke. */
+    private fun scribbleCircle(c: Canvas, cx: Float, cy: Float, r: Float, k: Float) {
+        if (k <= 0f) return
+        stroke.shader = null
+        stroke.strokeWidth = 14f
+        stroke.color = palette.accent
+        path.reset()
+        val steps = (72 * 1.12f * k).toInt().coerceAtLeast(2)
+        for (i in 0..steps) {
+            val a = -Math.PI / 2 + i * (2 * Math.PI / 72)
+            val rr = r * (1 + 0.04f * sin(i * 0.35).toFloat() + i * 0.0009f)
+            val x = cx + (rr * kotlin.math.cos(a)).toFloat()
+            val y = cy + (rr * 0.92f * sin(a)).toFloat()
+            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        c.drawPath(path, stroke)
+    }
+
+    /** A wavy marker underline drawn from left to right. */
+    private fun wavyLine(c: Canvas, x0: Float, x1: Float, y: Float, k: Float) {
+        if (k <= 0f) return
+        stroke.shader = null
+        stroke.strokeWidth = 10f
+        stroke.color = palette.accent
+        path.reset()
+        var x = x0
+        path.moveTo(x, y)
+        while (x < x0 + (x1 - x0) * k) {
+            x += 12f
+            path.lineTo(x, y + 9f * sin((x - x0) / 34.0).toFloat())
+        }
+        c.drawPath(path, stroke)
+    }
+
+    /** Marker captions: ink words; the spoken word gets a yellow highlighter swipe, punch words go red. */
+    private fun markerCaptions(c: Canvas, t: Double) {
+        val g = timeline.captionAt(t) ?: return
+        val texts = g.words.map { it.text.trim() }
+        tp.typeface = display
+        tp.textSize = 80f
+        tp.style = Paint.Style.FILL
+        tp.shader = null
+        tp.clearShadowLayer()
+        val space = tp.measureText(" ")
+        var widths = texts.map { tp.measureText(it) }
+        var total = widths.sum() + (texts.size - 1) * space
+        if (total > zoneW) {
+            tp.textSize *= zoneW / total
+            widths = texts.map { tp.measureText(it) }
+            total = widths.sum() + (texts.size - 1) * space
+        }
+        val size = tp.textSize
+        var x = W / 2 - total / 2
+        texts.forEachIndexed { i, word ->
+            val start = g.words[i].start
+            val nextStart = g.words.getOrNull(i + 1)?.start ?: g.end
+            val active = t >= start && t < nextStart
+            val emph = emphasisTimes.any { kotlin.math.abs(it - start) < 1e-6 }
+            if (active) {
+                val k = outCubic((t - start) / 0.14).toFloat()
+                fill.shader = null
+                fill.color = Color.argb(185, 255, 224, 102)
+                path.reset()
+                val top = CAPTION_Y - size * 0.72f
+                val bot = CAPTION_Y + size * 0.16f
+                val right = x - 10f + (widths[i] + 20f) * k
+                path.moveTo(x - 12f, top + 6f); path.lineTo(right, top); path.lineTo(right + 4f, bot - 4f); path.lineTo(x - 8f, bot)
+                path.close()
+                c.drawPath(path, fill)
+            }
+            tp.color = if (emph) palette.accent else palette.text
+            c.drawText(word, x, CAPTION_Y, tp)
+            x += widths[i] + space
+        }
+    }
+
+    // ---------------- Kinetic typography look ----------------
+
+    private fun kineticBackground(c: Canvas, t: Double) {
+        fill.shader = null
+        fill.color = Color.rgb(9, 9, 14)
+        c.drawRect(0f, 0f, W, H, fill)
+        val x = W / 2 + (180 * sin(0.3 * t)).toFloat()
+        fill.shader = RadialGradient(x, H * 0.42f, 900f, intArrayOf(withAlpha(palette.accent, 46), 0), null, Shader.TileMode.CLAMP)
+        c.drawCircle(x, H * 0.42f, 900f, fill)
+        fill.shader = null
+    }
+
+    /** The spoken words of this scene stack up huge, one slamming in as it is said; older lines scroll up. */
+    private fun kineticScene(c: Canvas, index: Int, lt: Double) {
+        val span = timeline.spans[index]
+        val t = span.start + lt
+        val words = timeline.words.filter { it.scene == index }
+        if (words.isEmpty()) { statement(c, scenes[index], lt); return }
+        val spoken = words.filter { it.start <= t + 0.02 }.ifEmpty { words.take(1) }
+        // Lines of 1-2 words; long words and punch words get a line of their own.
+        val lines = ArrayList<MutableList<TimedWord>>()
+        for (w in spoken) {
+            val emph = emphasisTimes.any { kotlin.math.abs(it - w.start) < 1e-6 }
+            val last = lines.lastOrNull()
+            if (last == null || emph || last.size >= 2 || w.text.length > 8 ||
+                emphasisTimes.any { e -> last.any { kotlin.math.abs(e - it.start) < 1e-6 } }) lines.add(mutableListOf(w)) else last.add(w)
+        }
+        tp.typeface = display
+        tp.style = Paint.Style.FILL
+        tp.shader = null
+        tp.textAlign = Paint.Align.CENTER
+        val layout = lines.mapIndexed { i, line ->
+            val emph = line.any { w -> emphasisTimes.any { kotlin.math.abs(it - w.start) < 1e-6 } }
+            val text = upper(line.joinToString(" ") { it.text.trim(',', '.', '!', '?', ';', ':') })
+            var size = if (emph) 230f else if (i % 2 == 0) 170f else 130f
+            tp.textSize = size
+            val w = tp.measureText(text)
+            if (w > zoneW) size *= zoneW / w
+            Triple(text, size, emph)
+        }
+        val gap = 18f
+        val heights = layout.map { it.second * 1.02f + gap }
+        var total = heights.sum()
+        // Keep the newest line inside the zone: older ones scroll up and fade out.
+        var y = (zoneMid - total / 2).coerceAtMost(ZONE_BOTTOM - total)
+        val newest = spoken.last()
+        layout.forEachIndexed { i, (text, size, emph) ->
+            val h = heights[i]
+            val baseline = y + size * 0.82f
+            y += h
+            val fade = clamp(((baseline - ZONE_TOP + 120) / 220).toDouble()).toFloat()
+            if (fade <= 0f) return@forEachIndexed
+            val isNew = lines[i].contains(newest)
+            val k = if (isNew) outBack((t - newest.start) / 0.16).toFloat() else 1f
+            tp.textSize = size
+            tp.color = withAlpha(if (emph) palette.accent else if (i % 2 == 0) Color.WHITE else palette.accent2, (255 * fade).toInt())
+            c.save()
+            c.translate(W / 2, baseline - size * 0.35f)
+            val sc = if (isNew) 1.45f - 0.45f * k else 1f
+            c.scale(sc, sc)
+            if (isNew) c.rotate((1 - k) * -4f)
+            c.drawText(text, 0f, size * 0.35f, tp)
+            c.restore()
+        }
+        tp.textAlign = Paint.Align.LEFT
+    }
+
+    // ---------------- Tier list ----------------
+
+    private val tierColors = mapOf(
+        "S" to Color.rgb(255, 77, 77), "A" to Color.rgb(255, 159, 67), "B" to Color.rgb(255, 212, 59),
+        "C" to Color.rgb(81, 207, 102), "D" to Color.rgb(77, 171, 247),
+    )
+
+    /** S/A/B/C/D rows; each item pops into its row in the order the script lists them. */
+    private fun tier(c: Canvas, s: Scene, lt: Double, dur: Double) {
+        val parsed = s.items.take(6).mapNotNull { item ->
+            val i = item.indexOf(':')
+            if (i <= 0) null else item.substring(0, i).trim().uppercase(Locale.ROOT).take(1) to item.substring(i + 1).trim()
+        }.filter { it.first in tierColors && it.second.isNotBlank() }
+        if (parsed.size < 2) { list(c, s, lt, dur, numbered = true); return }
+        var top = ZONE_TOP + 10f
+        if (s.text.isNotBlank()) {
+            val title = block("tiertitle", upper(s.text), display, 80f, zoneW, 190f, palette.accent)
+            drawBlock(c, title, W / 2, top + title.height / 2f, outCubic(lt / 0.3).toFloat())
+            top += title.height + 40f
+        }
+        val tiers = listOf("S", "A", "B", "C", "D").filter { t -> t != "D" || parsed.any { it.first == "D" } }
+        val rowH = min((ZONE_BOTTOM - top) / tiers.size - 14f, 170f)
+        val delays = itemDelays(parsed.size, dur)
+        val used = HashMap<String, Float>()
+        tiers.forEachIndexed { r, t ->
+            val y = top + r * (rowH + 14f)
+            val a = outCubic((lt - r * 0.06) / 0.3).toFloat()
+            card(c, SIDE - 40f, y, W - SIDE + 40f, y + rowH, withAlpha(palette.card, (Color.alpha(palette.card) * a).toInt()), 24f)
+            fill.shader = null
+            fill.color = withAlpha(tierColors.getValue(t), (255 * a).toInt())
+            rect.set(SIDE - 40f, y, SIDE - 40f + rowH, y + rowH)
+            c.drawRoundRect(rect, 24f, 24f, fill)
+            tp.typeface = black; tp.textSize = rowH * 0.55f; tp.color = withAlpha(Color.rgb(20, 20, 20), (255 * a).toInt())
+            tp.textAlign = Paint.Align.CENTER
+            c.drawText(t, SIDE - 40f + rowH / 2, y + rowH / 2 + rowH * 0.2f, tp)
+            tp.textAlign = Paint.Align.LEFT
+            used[t] = SIDE - 40f + rowH + 20f
+        }
+        parsed.forEachIndexed { i, (t, name) ->
+            val k = outBack((lt - delays[i]) / 0.35).toFloat()
+            if (k <= 0f) return@forEachIndexed
+            val r = tiers.indexOf(t)
+            val y = top + r * (rowH + 14f)
+            tp.typeface = bold
+            tp.textSize = min(48f, rowH * 0.34f)
+            val label = TextUtils.ellipsize(name, tp, 420f, TextUtils.TruncateAt.END).toString()
+            val w = tp.measureText(label) + 44f
+            val x = used.getValue(t)
+            if (x + w > W - SIDE + 30f) return@forEachIndexed
+            used[t] = x + w + 14f
+            c.save()
+            c.scale(k, k, x + w / 2, y + rowH / 2)
+            fill.shader = null
+            fill.color = withAlpha(tierColors.getValue(t), 60)
+            rect.set(x, y + 18f, x + w, y + rowH - 18f)
+            c.drawRoundRect(rect, 20f, 20f, fill)
+            tp.color = palette.text
+            c.drawText(label, x + 22f, y + rowH / 2 + tp.textSize * 0.35f, tp)
+            c.restore()
+        }
+    }
+
     // ---------------- Liquid glass look ----------------
 
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { maskFilter = android.graphics.BlurMaskFilter(34f, android.graphics.BlurMaskFilter.Blur.NORMAL) }
@@ -1404,6 +1680,9 @@ class ScenePainter(
         /** Per caption style: chip, colour-pop, boxed, glow. All SIL Open Font License (licences in assets/fonts). */
         /** Glass micro-event times (seconds into the scene); the sound mix puts a click on each. */
         const val HOOK_CLICK = 0.75
+
+        /** Scenes the kinetic look turns into slamming word stacks. */
+        val KINETIC_TYPES = setOf("statement", "question", "emoji")
         const val OUTRO_BANNER = 0.35
         const val OUTRO_CLICK = 1.25
 

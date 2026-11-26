@@ -89,6 +89,7 @@ For every scene choose ONE visual from this list (the app animates them), and fi
 - {"type":"chart","text":"short title","items":["Label: number", "2-5 items, numbers only after the colon"]}   (comparing amounts or growth)
 - {"type":"timeline","text":"short title","items":["Year — short event", "2-4 items in order"]}
 - {"type":"quote","text":"the quote, under 15 words","label":"who said it","wiki":"their English Wikipedia title"}   (only real, accurately quoted words)
+- {"type":"tier","text":"short title","items":["S: best thing", "A: next", "B: ...", "C: worst", "3-6 items, each 'Tier: name' with tiers S, A, B, C or D"]}   (ranking things: viewers love to argue in the comments)
 - {"type":"outro","text":"the comment question, short","emoji":"one emoji"}  (use for the last scene)
 Vary the visuals; never use the same type more than twice in a row. On-screen text must be short.
 Real pictures are found automatically: use "photo" for 2 or 3 scenes where a real image helps (people, places, objects, events), with a concrete visual query${if (stockFootage) "; these can play as real stock video" else ""}.

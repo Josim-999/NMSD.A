@@ -99,6 +99,23 @@ class Pipeline(
         }
         p.writer = reply.model
         applyScript(p, extractJson(reply.text))
+        // Too short for the chosen length (AI scripts often are)? Ask once for a longer version.
+        val target = (p.lengthSec * Prompts.WORDS_PER_SECOND).toInt()
+        val have = p.scenes.sumOf { it.say.split(Regex("\\s+")).size }
+        if (reply.model != BUILT_IN && have < target * 0.85) {
+            log("The script has $have words; ${p.lengthSec} s needs about $target. Making it longer…")
+            runCatching {
+                val current2 = JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).toString(1)
+                val longer = scriptReply(Prompts.script(
+                    p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags,
+                    "Too short: it has $have words. Rewrite it to $target words in total (${p.lengthSec} seconds spoken) by adding 2 to 4 scenes with more specific facts. Keep the hook and the ending.",
+                    current2, stockFootage = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank(), take = p.take,
+                ))
+                val o = extractJson(longer.text)
+                val n = objects(o.optJSONArray("scenes")).sumOf { it.optString("say").split(Regex("\\s+")).size }
+                if (n > have) { applyScript(p, o); log("Longer script: $n words.") }
+            }.onFailure { log("Could not lengthen the script (${it.message?.take(60)}); keeping it as is.") }
+        }
         p.status = Status.SCRIPTED
         p.error = ""
         store.save(p)
@@ -168,7 +185,13 @@ class Pipeline(
         step("Recording the voice", null)
         val voice: VoiceResult = try {
             log("Voice: ${Voices.find(p.voice).label} (Microsoft online voice)…")
-            EdgeTts.speak(script, p.voice, settings.voiceRate, File(dir, "voice.mp3"))
+            val first = EdgeTts.speak(script, p.voice, settings.voiceRate, File(dir, "voice.mp3"))
+            // Fit the chosen length (60 s by default): re-record slightly slower or faster, at most 12%.
+            val fit = fitRate(settings.voiceRate, first.seconds, p.lengthSec.toDouble())
+            if (fit != null) {
+                log(String.format("Voice is %.0f s; re-recording at %s to fit %d s.", first.seconds, fit, p.lengthSec))
+                runCatching { EdgeTts.speak(script, p.voice, fit, File(dir, "voice.mp3")) }.getOrDefault(first)
+            } else first
         } catch (e: Exception) {
             log("The Microsoft voice failed (${e.message}). Using the phone's own voice instead.")
             DeviceTts.speak(context, script, Voices.find(p.voice).locale, Voices.rateFactor(settings.voiceRate), File(dir, "voice.wav"))
@@ -275,8 +298,8 @@ class Pipeline(
         p.scenes.forEachIndexed { i, sc ->
             val span = timeline.spans[i]
             when (sc.type) {
-                "list", "steps", "chart", "timeline" -> {
-                    val n = if (sc.type == "chart") sc.items.take(5).size else sc.items.take(4).size
+                "list", "steps", "chart", "timeline", "tier" -> {
+                    val n = when (sc.type) { "chart" -> sc.items.take(5).size; "tier" -> sc.items.take(6).size; else -> sc.items.take(4).size }
                     ScenePainter.itemDelays(n, span.end - span.start).forEach { pops.add(span.start + it + 0.05) }
                 }
                 "logo", "quote" -> pops.add(span.start + 0.12)
@@ -394,6 +417,19 @@ class Pipeline(
 
     companion object {
         const val BUILT_IN = "built-in writer"
+
+        /**
+         * A speaking rate ("+4%") that brings [seconds] close to [target], changing the current rate by
+         * at most 12 points (beyond that voices sound rushed or dragged). Null when it is already close.
+         */
+        fun fitRate(current: String, seconds: Double, target: Double): String? {
+            if (seconds <= 0 || target <= 0 || seconds in (target - 5)..(target + 6)) return null
+            val r0 = current.trim().removeSuffix("%").toIntOrNull() ?: 0
+            val wanted = ((1 + r0 / 100.0) * seconds / target - 1) * 100
+            val r = wanted.toInt().coerceIn(r0 - 12, r0 + 12).coerceIn(-15, 30)
+            if (kotlin.math.abs(r - r0) < 3) return null
+            return (if (r >= 0) "+" else "") + r + "%"
+        }
 
         /** "Thu Nov 27, 7:00 PM ET" in the audience's zone. */
         fun scheduleText(at: Long, zone: String): String {

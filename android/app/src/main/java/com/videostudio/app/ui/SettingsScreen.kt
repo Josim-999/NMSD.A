@@ -209,12 +209,12 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 Spacer(Modifier.height(10.dp))
                 Text("Video look")
                 var lookMode by remember { mutableStateOf(s.lookMode) }
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for ((id, label) in listOf("mix" to "Mix of all", "glass" to "Liquid glass", "classic" to "Classic dark")) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for ((id, label) in listOf("mix" to "Mix of all", "glass" to "Liquid glass", "paper" to "Paper sketch", "kinetic" to "Kinetic type", "classic" to "Classic dark")) {
                         FilterChip(selected = lookMode == id, onClick = { lookMode = id; s.lookMode = id }, label = { Text(label, fontSize = 12.sp) })
                     }
                 }
-                Hint("Liquid glass: light frosted-UI cards, dark/light theme switches, blur-in captions, cursor clicks and pop-up notifications. Every video still differs from the last.")
+                Hint("Liquid glass: frosted UI cards, theme switches, cursor clicks. Paper sketch: whiteboard explainer with marker and highlighter. Kinetic type: the spoken words slam in huge. Every video still differs from the last.")
             }
 
             YouTubeSettings(app)

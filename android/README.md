@@ -173,3 +173,11 @@ The application id `com.videostudio.app` must never change either.
 - It runs automatically whenever every free AI fails (quota, bad key, no internet), so writing a script never ends in an error. The Script tab says when the built-in writer was used; tap Rewrite later for an AI version.
 - Free research: when Gemini's search research is used up, Wikipedia facts become the research notes for the AI writers.
 
+## 2.3: more pro looks, tier lists, 60-second default
+
+- **Paper sketch look** (whiteboard and stick-figure explainer style): cream ruled paper with a red margin, Permanent Marker lettering (Apache 2.0), yellow highlighter captions with red punch words, hand-drawn stat circles, wavy underlines and wobbly sketched cards.
+- **Kinetic type look**: on a dark screen, the spoken words of statement, question and emoji scenes stack up huge, each one slamming in as it is said. Punch words get their own line in colour, and older lines scroll up.
+- **Tier list scene** (`"type":"tier"`, items like `S: name`) in every look: S/A/B/C/D rows, with each item popping in along with a sound.
+- Settings → Video look: Mix / Liquid glass / Paper sketch / Kinetic type / Classic dark.
+- **60 seconds is the default length.** Scripts under 85% of the word target are lengthened once. If the recorded voice is more than about 5 s off the target, it is re-recorded slightly slower or faster (at most ±12 points).
+
