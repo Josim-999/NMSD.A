@@ -191,3 +191,14 @@ Every look now opens the way top Shorts do:
 - Three bright diagonal stripes wipe across the cut to the second scene, with a whoosh.
 - The colour fades out gradually by 5 s. Colours rotate per video.
 
+## 2.5: captions and hashtags for every app, typed in automatically
+
+- **A caption made for each app** (`upload/Captions.kt`), from the script with no extra AI call:
+  - TikTok and Instagram: 5 hashtags at most (their new limit), with #fyp / #reels
+  - Facebook: a short version with 3 tags
+  - YouTube app: the title plus #shorts within 100 characters
+  - X: fits 280 characters; Threads: 1 tag
+  - Disclaimers, picture credits and the AI label are included where there is room.
+- **Auto-fill captions** (`upload/AutoCaptionService.kt`, an accessibility service switched on once). TikTok, Instagram and Facebook ignore captions sent with a shared video. When "Post to all" opens an app, the helper types that app's caption into its EMPTY caption box. It only acts in the app Video Studio just opened, only once, never in search or comment boxes, and never presses Post. The caption is also on the clipboard as a fallback.
+- The Post-to-all card shows every app's caption with a Copy button, plus the auto-fill on/off status.
+

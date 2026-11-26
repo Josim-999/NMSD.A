@@ -20,11 +20,11 @@ object Share {
     val targets = listOf(
         ShareTarget(
             "tiktok", "TikTok", listOf("com.zhiliaoapp.musically", "com.ss.android.ugc.trill", "com.zhiliaoapp.musically.go"),
-            "Tap Next, paste the caption (long-press the text box → Paste), then Post."
+            "Tap Next: the caption is typed in for you (or long-press the text box → Paste), then Post."
         ),
         ShareTarget(
             "instagram", "Instagram", listOf("com.instagram.android"),
-            "Choose Reels, tap Next, paste the caption, then Share."
+            "Choose Reels, tap Next: the caption is typed in for you (or long-press → Paste), then Share."
         ),
         ShareTarget(
             "youtube", "YouTube", listOf("com.google.android.youtube"),
@@ -32,11 +32,11 @@ object Share {
         ),
         ShareTarget(
             "facebook", "Facebook", listOf("com.facebook.katana", "com.facebook.lite"),
-            "Choose Reel, paste the caption, then Share."
+            "Choose Reel: the caption is typed in for you (or paste it), then Share."
         ),
-        ShareTarget("x", "X", listOf("com.twitter.android"), "Paste the caption if it is empty, then Post."),
-        ShareTarget("threads", "Threads", listOf("com.instagram.barcelona"), "Paste the caption if it is empty, then Post."),
-        ShareTarget("linkedin", "LinkedIn", listOf("com.linkedin.android"), "Paste the caption if it is empty, then Post."),
+        ShareTarget("x", "X", listOf("com.twitter.android"), "The caption is typed in for you (or paste it), then Post."),
+        ShareTarget("threads", "Threads", listOf("com.instagram.barcelona"), "The caption is typed in for you (or paste it), then Post."),
+        ShareTarget("linkedin", "LinkedIn", listOf("com.linkedin.android"), "The caption is typed in for you (or paste it), then Post."),
         ShareTarget("whatsapp", "WhatsApp", listOf("com.whatsapp"), "Choose My status or a chat, then Send."),
     )
 
@@ -70,8 +70,8 @@ object Share {
      */
     fun open(context: Context, target: ShareTarget, video: Uri, caption: String, title: String): Boolean {
         val pkg = installedPackage(context, target) ?: return false
-        val isYouTube = target.key == "youtube"
-        copy(context, if (isYouTube) "title" else "caption", if (isYouTube) title else caption)
+        // The caption passed in is already made for this app (for YouTube it is the title line).
+        copy(context, "caption", caption)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "video/mp4"
             putExtra(Intent.EXTRA_STREAM, video)

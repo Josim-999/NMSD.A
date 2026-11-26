@@ -467,7 +467,32 @@ private fun PostToAll(app: App, p: Project, freshProject: () -> Project) {
     val posted = p.uploads.map { it.platform }.toSet()
 
     Section("Post to all your apps") {
-        Hint("Uses the apps on this phone, where you are already signed in. Nothing to set up. Each app opens with the video ready and the caption copied; tap Post there, come back, and the next app opens.")
+        Hint("Uses the apps on this phone, where you are already signed in. Each app opens with the video and its own caption and hashtags (made for that app); tap Post there, come back, and the next app opens.")
+        val autoOn = remember { com.videostudio.app.upload.AutoCaption.isEnabled(ctx) }
+        if (!autoOn) {
+            Spacer(Modifier.height(8.dp))
+            Text("Turn on auto-fill captions", fontWeight = FontWeight.SemiBold, color = Accent)
+            Hint("TikTok, Instagram and Facebook ignore captions sent with a video. Switch on \"Video Studio auto-fill captions\" once, and the caption and hashtags are typed in for you. If Android says it is restricted: App info → ⋮ → Allow restricted settings, then try again.")
+            TextButton(onClick = { runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) {
+                Text("Open accessibility settings")
+            }
+        } else Hint("Auto-fill captions is on: the caption and hashtags are typed in for you.", Good)
+        var showCaps by remember { mutableStateOf(false) }
+        TextButton(onClick = { showCaps = !showCaps }) { Text(if (showCaps) "Hide captions for each app" else "See the caption for each app") }
+        if (showCaps) {
+            val fresh0 = freshProject()
+            val caps = com.videostudio.app.upload.Captions.all(
+                Share.targets.map { it.key }.filter { it in installed }, fresh0, s, Pipeline.credits(fresh0.dir(app.store.root)),
+            )
+            for ((k, text) in caps) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(Share.name(k), fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { Share.copy(ctx, "caption", text); toast(ctx, "${Share.name(k)} caption copied") }) { Text("Copy") }
+                }
+                Hint(text)
+                Spacer(Modifier.height(6.dp))
+            }
+        }
         Spacer(Modifier.height(8.dp))
         for (t in Share.targets) {
             val has = t.key in installed
@@ -499,10 +524,12 @@ private fun PostToAll(app: App, p: Project, freshProject: () -> Project) {
                     }
                     preparing = false
                     uri.onSuccess {
+                        val credits = Pipeline.credits(fresh.dir(app.store.root))
                         app.postAll.start(
                             fresh.id, ordered, it,
-                            caption = Pipeline.publishText(fresh, s, forYouTube = false, credits = Pipeline.credits(fresh.dir(app.store.root))),
+                            caption = Pipeline.publishText(fresh, s, forYouTube = false, credits = credits),
                             title = fresh.ytTitle.ifBlank { fresh.displayTitle() },
+                            captions = com.videostudio.app.upload.Captions.all(ordered, fresh, s, credits),
                         )
                         app.postAll.openCurrent(ctx)
                     }.onFailure { toast(ctx, "Could not prepare the video: ${it.message}") }

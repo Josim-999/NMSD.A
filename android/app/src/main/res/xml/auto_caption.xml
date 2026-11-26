@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewFocused"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:notificationTimeout="200"
+    android:packageNames="com.zhiliaoapp.musically,com.ss.android.ugc.trill,com.instagram.android,com.facebook.katana,com.facebook.lite,com.google.android.youtube,com.twitter.android,com.instagram.barcelona,com.linkedin.android"
+    android:description="@string/auto_caption_description" />

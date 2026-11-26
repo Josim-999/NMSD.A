@@ -35,11 +35,14 @@ class PostAll(private val store: ProjectStore) {
     private var video: Uri? = null
     private var caption = ""
     private var title = ""
+    /** A caption made for each app (hashtag limits, length, style). */
+    private var captions: Map<String, String> = emptyMap()
 
-    fun start(projectId: String, targets: List<String>, video: Uri, caption: String, title: String) {
+    fun start(projectId: String, targets: List<String>, video: Uri, caption: String, title: String, captions: Map<String, String> = emptyMap()) {
         this.video = video
         this.caption = caption
         this.title = title
+        this.captions = captions
         _state.value = PostAllState(projectId, targets)
     }
 
@@ -50,7 +53,10 @@ class PostAll(private val store: ProjectStore) {
             val key = s.current ?: return
             val target = Share.target(key)
             val v = video
-            if (target != null && v != null && Share.open(context, target, v, caption, title)) {
+            val text = captions[key] ?: if (key == "youtube") title else caption
+            // Auto-fill: the accessibility helper types this app's caption into its caption box.
+            if (target != null) AutoCaption.arm(key, target.packages, text)
+            if (target != null && v != null && Share.open(context, target, v, text, title)) {
                 _state.value = s.copy(waiting = true)
                 return
             }
