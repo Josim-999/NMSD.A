@@ -206,3 +206,16 @@ Every look now opens the way top Shorts do:
 - Removed the accessibility "auto-fill captions" helper added in 2.5. Google Play Protect blocks sideloaded APKs that ask for accessibility access, so 2.5 could not be installed. The per-app captions and hashtags stay: each app's caption is copied as it opens.
 - Rule for future versions: no accessibility, SMS or notification-listener permissions; Play Protect blocks those in sideloaded apps.
 
+## 2.7: top-class scripts (playbook + quality gate)
+
+- **Script playbook in every AI request:**
+  - 10 proven hook formulas; the AI writes 5 hook options with different formulas, scores them and uses the best
+  - hook rules: 5-10 words, keyword, a number or named tool, no "Hey guys" or "Did you know"
+  - a timed 60 s structure: hook, promise/stakes, setup, a re-hook every ~12 s, escalating concrete beats, payoff with one action for today, comment trigger, loop line
+  - language rules: sentences of 4-12 words, "you", at least 3 numbers or names
+  - a banned-cliché list (unlock, delve, game-changer...)
+- **Quality gate** (`ai/ScriptCheck.kt`): scores every script 0-100 on the phone. Below 80, one targeted rewrite fixes the listed issues, and it is kept only if it scores higher.
+- **Hook picker:** the other hook options appear on the Script tab; tap Use to swap.
+- **Best free writers first:** Kimi K2 and DeepSeek on NVIDIA and Groq, GLM on Z.ai, DeepSeek/Kimi first on OpenRouter.
+- **Built-in writer:** bold-claim hooks from numeric facts, plus a re-hook line.
+

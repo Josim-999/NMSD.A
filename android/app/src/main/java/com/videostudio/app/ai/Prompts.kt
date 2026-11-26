@@ -59,13 +59,33 @@ $series
 $rewrite
 $research
 
-Rules that make a short spread; follow every one:
-1. Hook in the first second. Say the main keyword in the first line (platforms read speech for search). Scene 1 opens a curiosity gap: a question (strongest), a claim that sounds wrong, or a stake. Under 12 words. No greeting, no intro, no "in this video".
-2. One idea, paid off fast. By scene 2 the viewer knows what they get by the end. No list of five tips.
-3. Tight pacing: each scene is one spoken line of 4 to 12 words, so the picture changes every 1.5 to 4 seconds.
-4. Follow these beats in order:
+THE SCRIPT PLAYBOOK (what top educational Shorts do). Follow every rule.
+
+A. HOOK (scene 1, the first 1-2 seconds) decides everything.
+- First write 5 hook options in "hook_options", each with a DIFFERENT formula from this list:
+  contrarian flip ("Everyone says X. They're wrong."), mistake warning ("Stop doing X if you want Y."),
+  list tease ("3 AI tools that... the last one is free."), concrete promise ("Do X in 10 seconds with one prompt."),
+  bold claim + proof ("This free tool beat ChatGPT. Here's the test."), curiosity loop ("I asked AI to X. It did something weird."),
+  forbidden knowledge ("What AI companies won't tell you about X."), stakes ("You're losing X every day because of Y."),
+  question hook (a specific question the viewer cannot answer yet), pattern interrupt (a surprising image or line).
+- Score each option 1-10 for curiosity, specificity and relevance; use the BEST one as scene 1.
+- The hook: 5 to 10 words, says the main keyword, has a number or a named tool/person when possible, and opens a loop the video closes later.
+- Never open with: "Hey guys", "In this video", "Did you know", "Have you ever wondered", "Today we", "Let's talk about", "Welcome".
+B. STRUCTURE (for ${p.lengthSec} seconds; scale the timings):
+- 0-2 s HOOK. 2-5 s PROMISE/STAKES: what the viewer gets by the end, or what they lose if they skip.
+- 5-15 s SETUP: the first concrete fact or example, fast.
+- About every 12 seconds a RE-HOOK line that re-opens curiosity ("But here's the part nobody mentions.", "Wait, it gets better.", "This is where most people mess up.").
+- Middle: 2 or 3 escalating beats, each one concrete: a number, a named tool, an exact step or prompt, a real example. Each beat is better than the last.
+- PAYOFF (last 15 s): closes the hook's loop with the answer or the result. Give ONE thing the viewer can do today.
+- END: one line that sparks a comment (a choice, a hot take, "which one would you try?"), optionally a 3-word save line ("Save this for later."), and the very last words flow naturally back into the hook so the replay feels seamless. No "like and subscribe".
+C. LANGUAGE:
+- Write for a 12-year-old: sentences of 4 to 12 words, one idea each, active voice, present tense, "you" and "your".
+- Show, don't tell: every claim gets an example, a number or a name. At least 3 specific numbers, tools or names in the script.
+- Banned words and phrases (they sound like AI and kill retention): "basically", "essentially", "in today's world", "game-changer", "game changer", "revolutionary", "unlock", "unleash", "delve", "dive into", "let's dive", "it's important to note", "in conclusion", "whether you're", "the world of", "landscape", "leverage", "seamless", "cutting-edge", "harness", "elevate", "supercharge".
+- No lists of more than 3 items. No repeating the same sentence opening twice in a row.
+D. Each scene is one spoken line, so the picture changes every 1.5 to 4 seconds. Follow these beats in order:
 $beats
-5. Honest: every number or factual claim must be listed in "sources" with its URL. Make the viewer feel one thing and end on a question viewers will want to answer in the comments. The last line loops back to the hook.
+E. Honest: every number or factual claim must be listed in "sources" with its URL. Never invent a statistic; if unsure, say it without a number.
 Originality matters (platforms refuse to pay for template-like videos): include one line that gives a clear, reasoned take or insight in the creator's voice, not just facts.${if (take.isNotBlank()) " The creator's own take, to work in faithfully: \"$take\"." else ""}
 YouTube rules (the channel must stay monetizable), follow every one:
 - Advertiser-friendly: no profanity, no graphic, shocking or hateful content, no dangerous instructions.
@@ -100,6 +120,7 @@ Reply with one JSON object and nothing else, exactly this shape:
   "title": "working title",
   "one_idea": "the single idea of the video, in one sentence",
   "comment_question": "the question that invites comments",
+  "hook_options": [ {"text": "hook option", "formula": "which formula", "score": 8} ],
   "mood": "one of: energetic, calm, dramatic, playful (sets the music)",
   "compliance": {"sensitive": "none, health, finance, news or elections", "made_for_kids": false},
   "scenes": [ {"say": "the spoken words of this scene", "emphasis": "the one most important word of say, copied exactly", "visual": { ...one of the visuals above... }} ],

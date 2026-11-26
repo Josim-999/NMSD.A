@@ -119,6 +119,10 @@ data class Project(
     var scheduleState: String = "",
     /** Who wrote the script: the AI model, or "built-in writer" when every free AI was busy. */
     var writer: String = "",
+    /** The other hooks the writer offered (the best one is scene 1); tap one to use it. */
+    var hookOptions: List<String> = emptyList(),
+    /** Playbook score of the script, 0-100. */
+    var scriptScore: Int = -1,
     val created: Long = System.currentTimeMillis(),
     var updated: Long = System.currentTimeMillis(),
 ) {
@@ -143,7 +147,7 @@ data class Project(
         .put("error", error).put("voiceUsed", voiceUsed).put("durationSec", durationSec)
         .put("take", take).put("mood", mood).put("style", style)
         .put("madeForKids", madeForKids).put("paidPromotion", paidPromotion).put("sensitive", sensitive)
-        .put("scheduledAt", scheduledAt).put("scheduleZone", scheduleZone).put("scheduleState", scheduleState).put("writer", writer)
+        .put("scheduledAt", scheduledAt).put("scheduleZone", scheduleZone).put("scheduleState", scheduleState).put("writer", writer).put("hookOptions", JSONArray(hookOptions)).put("scriptScore", scriptScore)
         .put("created", created).put("updated", updated)
 
     companion object {
@@ -182,6 +186,8 @@ data class Project(
             scheduleZone = o.optString("scheduleZone"),
             scheduleState = o.optString("scheduleState"),
             writer = o.optString("writer"),
+            hookOptions = strings(o.optJSONArray("hookOptions")),
+            scriptScore = o.optInt("scriptScore", -1),
             created = o.optLong("created", System.currentTimeMillis()),
             updated = o.optLong("updated", System.currentTimeMillis()),
         )

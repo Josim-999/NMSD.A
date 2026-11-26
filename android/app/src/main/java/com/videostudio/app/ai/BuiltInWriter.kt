@@ -74,7 +74,10 @@ class BuiltInWriter(
         }
         val seed = topic.hashCode()
         // HOOK
+        // Concrete-promise / bold-claim hook when a fact has a number (specific hooks beat vague ones).
+        val numeric = facts.map { speakable(it.text) }.firstOrNull { Regex("\\d").containsMatchIn(it) && it.split(" ").size <= 18 }
         val hookSay = when {
+            numeric != null -> shortText(numeric, 10).trimEnd('.') + ". Here's why."
             Regex("^(how|why|what|when|where|who|is|are|can|do|does)\\b", RegexOption.IGNORE_CASE).containsMatchIn(topic) -> "$topic?"
             else -> listOf(
                 "What nobody tells you about $subject.",
@@ -107,6 +110,8 @@ class BuiltInWriter(
                 else -> JSONObject().put("type", "statement").put("text", shortText(f.text, 9)).put("highlight", longestWord(shortText(f.text, 9)))
             }
             add(f.text, visual)
+            // A re-hook after the second fact keeps the middle from sagging.
+            if (i == 1 && usable.size > 3) add("But here's the part most people miss.", JSONObject().put("type", "statement").put("text", "The part most people miss").put("highlight", "miss"))
         }
         if (usable.isEmpty()) {
             // Offline or nothing found: a clear, honest structure built from the topic itself.

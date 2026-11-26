@@ -167,12 +167,13 @@ class BackupAi(
             ),
             BackupProvider(
                 "nvidia", "NVIDIA", "https://integrate.api.nvidia.com/v1", k.nvidia,
-                listOf("openai/gpt-oss-120b", "deepseek-ai/deepseek-v3.1", "qwen/qwen3-235b-a22b", "moonshotai/kimi-k2-instruct", "meta/llama-3.3-70b-instruct"),
+                // Best free writers first (creative-writing rankings: Kimi, DeepSeek, GLM, Qwen).
+                listOf("moonshotai/kimi-k2-instruct", "deepseek-ai/deepseek-v3.1", "qwen/qwen3-235b-a22b", "openai/gpt-oss-120b", "meta/llama-3.3-70b-instruct"),
                 keyPage = "https://build.nvidia.com", maxModels = 4,
             ),
             BackupProvider(
                 "groq", "Groq", "https://api.groq.com/openai/v1", k.groq,
-                listOf("openai/gpt-oss-120b", "moonshotai/kimi-k2-instruct", "qwen/qwen3-32b", "meta-llama/llama-4-maverick-17b-128e-instruct", "openai/gpt-oss-20b"),
+                listOf("moonshotai/kimi-k2-instruct", "openai/gpt-oss-120b", "qwen/qwen3-32b", "meta-llama/llama-4-maverick-17b-128e-instruct", "openai/gpt-oss-20b"),
                 keyPage = "https://console.groq.com/keys", maxModels = 4,
             ),
             BackupProvider(
@@ -187,7 +188,7 @@ class BackupAi(
             ),
             BackupProvider(
                 "openrouter", "OpenRouter", "https://openrouter.ai/api/v1", k.openRouter,
-                listOf("openai/gpt-oss-120b:free", "deepseek/deepseek-chat-v3.1:free", "meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-235b-a22b:free"),
+                listOf("deepseek/deepseek-chat-v3.1:free", "moonshotai/kimi-k2:free", "openai/gpt-oss-120b:free", "meta-llama/llama-3.3-70b-instruct:free", "qwen/qwen3-235b-a22b:free"),
                 listFilter = { it.optString("id").endsWith(":free") },
                 keyPage = "https://openrouter.ai/keys",
             ),

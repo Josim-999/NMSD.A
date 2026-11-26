@@ -208,7 +208,24 @@ private fun ScriptTab(app: App, p: Project, job: JobState?, toVideo: () -> Unit)
         Section("Written by the built-in writer") {
             Hint("Every free AI was busy, so this script was written without AI from Wikipedia facts. You can make the video now, or tap \"Rewrite\" below when an AI is free again (add a free Z.ai or NVIDIA key in Settings for almost unlimited AI scripts).")
         }
-    } else if (p.writer.isNotBlank()) Hint("Written by ${p.writer}", Muted)
+    } else if (p.writer.isNotBlank()) Hint("Written by ${p.writer}" + if (p.scriptScore >= 0) " · playbook score ${p.scriptScore}/100" else "", Muted)
+    if (p.hookOptions.isNotEmpty() && !busy) {
+        Section("Other hooks") {
+            Hint("The writer tried several proven hook formulas and put the strongest first. Tap one to use it instead.")
+            for (h in p.hookOptions) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
+                    Text(h, Modifier.weight(1f), fontSize = 14.sp)
+                    TextButton(onClick = {
+                        val f = app.store.get(p.id) ?: p
+                        val old = f.scenes.first().say
+                        f.scenes[0] = f.scenes[0].copy(say = h, text = h.trimEnd('.', '!').split(" ").take(7).joinToString(" "))
+                        f.hookOptions = (f.hookOptions - h) + old
+                        app.store.save(f)
+                    }) { Text("Use") }
+                }
+            }
+        }
+    }
 
     Button(
         onClick = {

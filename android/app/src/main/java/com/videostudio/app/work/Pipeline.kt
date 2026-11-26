@@ -3,6 +3,7 @@ package com.videostudio.app.work
 import com.videostudio.app.compliance.YouTubeCheck
 import com.videostudio.app.ai.BackupAi
 import com.videostudio.app.ai.BuiltInWriter
+import com.videostudio.app.ai.ScriptCheck
 import com.videostudio.app.ai.GeminiReply
 import com.videostudio.app.render.AnimatedEmoji
 import com.videostudio.app.render.Cutout
@@ -99,23 +100,30 @@ class Pipeline(
         }
         p.writer = reply.model
         applyScript(p, extractJson(reply.text))
-        // Too short for the chosen length (AI scripts often are)? Ask once for a longer version.
-        val target = (p.lengthSec * Prompts.WORDS_PER_SECOND).toInt()
-        val have = p.scenes.sumOf { it.say.split(Regex("\\s+")).size }
-        if (reply.model != BUILT_IN && have < target * 0.85) {
-            log("The script has $have words; ${p.lengthSec} s needs about $target. Making it longer…")
+        // Quality gate: score against the playbook; below the bar, one targeted rewrite fixes exactly what is wrong.
+        var check = ScriptCheck.check(p.scenes, p.lengthSec)
+        log("Script score: ${check.score}/100${if (check.issues.isNotEmpty()) " (" + check.issues.size + " things to fix)" else ""}.")
+        if (reply.model != BUILT_IN && !check.good) {
+            log("Improving it: ${check.issues.joinToString(" ").take(220)}")
             runCatching {
                 val current2 = JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).toString(1)
-                val longer = scriptReply(Prompts.script(
+                val better = scriptReply(Prompts.script(
                     p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags,
-                    "Too short: it has $have words. Rewrite it to $target words in total (${p.lengthSec} seconds spoken) by adding 2 to 4 scenes with more specific facts. Keep the hook and the ending.",
+                    "Rewrite to pass the playbook. Fix ALL of these: " + check.issues.joinToString(" ") +
+                        " Keep what already works, keep it about ${(p.lengthSec * Prompts.WORDS_PER_SECOND).toInt()} words.",
                     current2, stockFootage = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank(), take = p.take,
                 ))
-                val o = extractJson(longer.text)
-                val n = objects(o.optJSONArray("scenes")).sumOf { it.optString("say").split(Regex("\\s+")).size }
-                if (n > have) { applyScript(p, o); log("Longer script: $n words.") }
-            }.onFailure { log("Could not lengthen the script (${it.message?.take(60)}); keeping it as is.") }
+                val o = extractJson(better.text)
+                val candidate = objects(o.optJSONArray("scenes")).map { Scene.fromJson(it) }.filter { it.say.isNotBlank() }
+                val c2 = ScriptCheck.check(candidate, p.lengthSec)
+                if (candidate.size >= 3 && c2.score > check.score) {
+                    applyScript(p, o)
+                    check = c2
+                    log("Improved script: ${c2.score}/100.")
+                } else log("The rewrite was not better (${c2.score}/100); keeping the first version.")
+            }.onFailure { log("Could not improve the script (${it.message?.take(60)}); keeping it.") }
         }
+        p.scriptScore = check.score
         p.status = Status.SCRIPTED
         p.error = ""
         store.save(p)
@@ -159,6 +167,11 @@ class Pipeline(
         p.scenes = scenes.toMutableList()
         if (p.scenes.first().type != "hook" && p.scenes.first().text.isBlank()) p.scenes.first().type = "hook"
         p.title = o.optString("title").ifBlank { p.topic }
+        p.hookOptions = objects(o.optJSONArray("hook_options"))
+            .sortedByDescending { it.optDouble("score", 0.0) }
+            .map { it.optString("text").trim() }
+            .filter { it.isNotBlank() && !it.equals(p.scenes.first().say.trim(), ignoreCase = true) }
+            .take(4)
         p.commentQuestion = o.optString("comment_question")
         p.mood = o.optString("mood").lowercase().trim()
         o.optJSONObject("compliance")?.let { c ->
