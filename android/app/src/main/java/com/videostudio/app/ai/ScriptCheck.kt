@@ -53,10 +53,11 @@ object ScriptCheck {
             scenes.count { it.brand.isNotBlank() || it.wiki.isNotBlank() }
         if (specifics < 3) fail(12, "Only $specifics specific numbers or names; use at least 3 (numbers, named tools, real examples).")
 
-        val target = (lengthSec * wordsPerSecond).toInt()
+        val range = Prompts.wordRange(lengthSec)
         val total = words(all).size
-        if (total < target * 0.85) fail(12, "Only $total words; ${lengthSec} s needs about $target. Add 2-4 concrete scenes.")
-        if (total > target * 1.2) fail(6, "$total words is too long for ${lengthSec} s (about $target).")
+        // Videos must run 50-60 seconds.
+        if (total < range.first) fail(if (total < range.first * 0.85) 25 else 15, "Only $total words: the video would be under ${Prompts.MIN_SEC} s. Write ${range.first}-${range.last} words by adding 2-4 concrete scenes.")
+        if (total > range.last + 8) fail(10, "$total words is over ${Prompts.MAX_SEC} s; cut to ${range.first}-${range.last} words.")
 
         val middle = scenes.drop(2).dropLast(2)
         if (middle.size >= 4 && middle.none { REHOOK.containsMatchIn(it.say) }) fail(8, "No re-hook in the middle: add a line like \"But here's the part nobody mentions.\"")

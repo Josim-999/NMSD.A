@@ -230,3 +230,11 @@ Every look now opens the way top Shorts do:
 - **The script must give** the exact official brand name and product domain, plus a Wikipedia title for logo scenes, and leave brands out when unsure.
 - **Photos must match the scene:** Openverse, Commons and Pixabay results are kept only if their title or tags contain the search words (at least half of them for longer searches), and the closest match wins.
 
+## 2.9: every video is 50-60 seconds
+
+- Length choices are 50 / 55 / 60 s (default 60); older 30/45 s projects are lifted to 50.
+- The AI gets a hard word range inside 50-60 s (150-174 words, about 2.9 words per second), with a scene count, and is told that fewer words means a failed script.
+- The quality check fails scripts under the range (or over 60 s) and asks for a rewrite.
+- **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
+- The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
+

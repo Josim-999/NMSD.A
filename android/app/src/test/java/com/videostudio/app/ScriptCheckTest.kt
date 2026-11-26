@@ -22,9 +22,21 @@ class ScriptCheckTest {
             "Watch time went up by 30 percent.",
             "Try it on your next video today.",
             "Your edits take minutes, not hours.",
+            "Here is the exact prompt I paste every time.",
+            "Cut the silences, keep every laugh, add bold captions.",
+            "It reads your script and matches each cut to a line.",
+            "Then it picks music that fits the mood.",
+            "Most people skip the second setting, called Smart Zoom.",
+            "That one adds 2 zooms every 10 seconds.",
+            "Viewers stay because the frame never sits still.",
+            "My best Short got 41,000 views this way.",
+            "The whole edit took me 4 minutes.",
+            "So the tool is not the secret.",
+            "The prompt and the zooms are.",
+            "Save this so you have the prompt later.",
             "Would you let AI edit your videos?",
         )
-        val r = ScriptCheck.check(good, 30)
+        val r = ScriptCheck.check(good, 55)
         assertTrue("score ${r.score}: ${r.issues}", r.good)
     }
 
@@ -38,6 +50,7 @@ class ScriptCheckTest {
             "Thanks for watching.",
         )
         val r = ScriptCheck.check(weak, 60)
+        assertTrue(r.issues.any { it.contains("under 50 s") })
         assertTrue(r.score < ScriptCheck.PASS)
         val text = r.issues.joinToString(" ")
         assertTrue(text, text.contains("hook has"))

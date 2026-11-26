@@ -27,10 +27,15 @@ import java.io.File
 class V23Test {
     @Test fun sixtySecondsByDefaultAndVoiceFitting() {
         assertEquals(60, Project(id = "a", topic = "t").lengthSec)
-        assertNull(Pipeline.fitRate("+8%", 58.0, 60.0))            // close enough
-        assertEquals("-2%", Pipeline.fitRate("+8%", 54.0, 60.0))   // too short: slower
-        assertEquals("-4%", Pipeline.fitRate("+8%", 40.0, 60.0))   // capped at -12 from +8
-        assertEquals("+20%", Pipeline.fitRate("+8%", 75.0, 60.0))  // too long: faster, capped
+        // Word ranges always land inside 50-60 s.
+        for (sec in listOf(30, 50, 55, 60, 90)) {
+            val r = com.videostudio.app.ai.Prompts.wordRange(sec)
+            assertTrue("$sec -> $r", r.first >= 150 && r.last <= 174 && r.first < r.last)
+        }
+        assertNull(Pipeline.fitRate("+8%", 55.0))                  // inside 50-60 s
+        assertEquals("+0%", Pipeline.fitRate("+8%", 48.0))         // under 50 s: slower, towards 52 s
+        assertEquals("-4%", Pipeline.fitRate("+8%", 40.0))         // capped at 12 points
+        assertEquals("+19%", Pipeline.fitRate("+8%", 64.0))        // over 60 s: faster, towards 58 s
     }
 
     @Test fun lookModesPickTheirFamily() {

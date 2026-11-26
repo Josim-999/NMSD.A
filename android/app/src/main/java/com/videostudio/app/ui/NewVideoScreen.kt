@@ -122,7 +122,7 @@ fun NewVideoScreen(app: App, onBack: () -> Unit, onCreated: (String) -> Unit, on
             }
             Section("Length") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (sec in listOf(30, 45, 60)) {
+                    for (sec in listOf(50, 55, 60)) {
                         FilterChip(selected = length == sec, onClick = { length = sec }, label = { Text("$sec s") })
                     }
                 }

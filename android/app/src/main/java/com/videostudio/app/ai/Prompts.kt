@@ -5,6 +5,20 @@ import com.videostudio.app.data.Project
 object Prompts {
     const val WORDS_PER_SECOND = 2.9
 
+    /** Every video is 50 to 60 seconds long. */
+    const val MIN_SEC = 50
+    const val MAX_SEC = 60
+    val MIN_WORDS = (MIN_SEC * WORDS_PER_SECOND).toInt() + 5   // 150: a little above 50 s
+    val MAX_WORDS = (MAX_SEC * WORDS_PER_SECOND).toInt()       // 174
+
+    /** The word range for a chosen length (always inside 50-60 s). */
+    fun wordRange(lengthSec: Int): IntRange {
+        val sec = lengthSec.coerceIn(MIN_SEC, MAX_SEC)
+        val lo = maxOf(MIN_WORDS, ((sec - 3) * WORDS_PER_SECOND).toInt())
+        val hi = minOf(MAX_WORDS, maxOf(lo + 10, ((sec + 3) * WORDS_PER_SECOND).toInt()))
+        return lo..hi
+    }
+
     val BEATS = listOf(
         "HOOK (first line, about 2 s): a curiosity gap the viewer must close: a question, a claim that sounds wrong, or a stake. Under 12 words. No greeting, no intro, no 'in this video'.",
         "PROMISE (by about 3 s, line 2 at the latest): say what the viewer will know by the end.",
@@ -38,7 +52,7 @@ Do not invent anything; leave out any fact you could not find a source for.
         stockFootage: Boolean = false,
         take: String = "",
     ): String {
-        val maxWords = (p.lengthSec * WORDS_PER_SECOND).toInt()
+        val range = wordRange(p.lengthSec)
         val research = if (p.researchNotes.isNotBlank())
             "The research is below. Use only facts listed in it for numbers and claims.\n<research>\n${p.researchNotes}\n</research>"
         else
@@ -54,7 +68,7 @@ You are a scriptwriter with years of short-form video behind you. Write the scri
 Topic: ${p.topic}
 Audience: ${p.audience.ifBlank { "work it out from the topic" }}
 Language of the spoken lines and on-screen text: ${p.language}
-Target length: ${p.lengthSec} seconds spoken: write ${maxWords - 8} to $maxWords words in total (the voice reads about 2.9 words a second).
+Target length: the finished video MUST be between $MIN_SEC and $MAX_SEC seconds (aim for ${p.lengthSec.coerceIn(MIN_SEC, MAX_SEC)} s). Write between ${range.first} and ${range.last} words in total across all "say" lines, in about ${range.first / 11} to ${range.last / 9} scenes (the voice reads about 2.9 words a second). Count the words before you answer: fewer than ${range.first} is a failed script.
 $series
 $rewrite
 $research

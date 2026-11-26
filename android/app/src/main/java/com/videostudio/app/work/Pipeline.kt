@@ -57,6 +57,8 @@ class Pipeline(
     private fun gemini() = Gemini(settings.geminiKey, notice = log, autoSwitch = settings.autoSwitchModels)
 
     fun writeScript(p: Project, feedback: String = "") {
+        // Every video is 50-60 s (older projects may still say 30 or 45).
+        p.lengthSec = p.lengthSec.coerceIn(Prompts.MIN_SEC, Prompts.MAX_SEC)
         if (p.research && p.researchNotes.isBlank()) {
             step("Researching the topic (Google Search)", null)
             log("Researching with ${settings.researchModel}…")
@@ -123,12 +125,58 @@ class Pipeline(
                 } else log("The rewrite was not better (${c2.score}/100); keeping the first version.")
             }.onFailure { log("Could not improve the script (${it.message?.take(60)}); keeping it.") }
         }
+        ensureLength(p, reply.model != BUILT_IN)
+        check = ScriptCheck.check(p.scenes, p.lengthSec)
         p.scriptScore = check.score
         p.status = Status.SCRIPTED
         p.error = ""
         store.save(p)
         val words = p.scenes.sumOf { it.say.split(Regex("\\s+")).size }
         log("Script ready with ${reply.model}: ${p.scenes.size} scenes, $words words.")
+    }
+
+    private fun words(p: Project) = p.scenes.sumOf { it.say.split(Regex("\\s+")).filter { w -> w.isNotBlank() }.size }
+
+    /**
+     * Guarantees a 50+ second script: asks the AI once more for a longer version, then, if still
+     * short, adds fact scenes from Wikipedia (keyless) before the ending, then a recap line.
+     */
+    private fun ensureLength(p: Project, ai: Boolean) {
+        val range = Prompts.wordRange(p.lengthSec)
+        if (words(p) >= range.first) return
+        if (ai) runCatching {
+            val have = words(p)
+            log("The script has $have words; a 50-60 s video needs ${range.first}-${range.last}. Asking for a longer version…")
+            val current = JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).toString(1)
+            val longer = scriptReply(Prompts.script(
+                p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags,
+                "Too short: $have words. Rewrite to ${range.first}-${range.last} words in total by adding ${maxOf(2, (range.first - have) / 10)} scenes with specific facts, numbers or examples. Keep the hook and the ending.",
+                current, stockFootage = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank(), take = p.take,
+            ))
+            val o = extractJson(longer.text)
+            val n = objects(o.optJSONArray("scenes")).sumOf { it.optString("say").split(Regex("\\s+")).filter { w -> w.isNotBlank() }.size }
+            if (n > have) applyScript(p, o)
+        }.onFailure { log("Could not lengthen with AI (${it.message?.take(60)}).") }
+        if (words(p) >= range.first) { log("Script length: ${words(p)} words."); return }
+        // Still short: real facts (Wikipedia, no key) as scenes just before the payoff and ending.
+        val facts = runCatching { BuiltInWriter().facts(p.topic) }.getOrDefault(emptyList())
+            .map { BuiltInWriter.speakable(it.text) }
+            .filter { f -> f.split(" ").size in 6..28 && p.scenes.none { it.say.contains(f.take(30)) } }
+        val at = (p.scenes.size - 2).coerceAtLeast(1)
+        var added = 0
+        for (f in facts) {
+            if (words(p) >= range.first) break
+            val short = BuiltInWriter.shortText(f, 8)
+            p.scenes.add(at + added, Scene(f, type = "statement", text = short, highlight = BuiltInWriter.longestWord(short)))
+            added++
+        }
+        if (words(p) < range.first) {
+            // Offline and still short: a recap of the key points keeps the video above 50 s.
+            val points = p.scenes.drop(1).dropLast(1).map { BuiltInWriter.shortText(it.say, 6) }.filter { it.isNotBlank() }.distinct().take(3)
+            if (points.isNotEmpty()) p.scenes.add((p.scenes.size - 1).coerceAtLeast(1),
+                Scene("Quick recap. " + points.joinToString(". ") + ".", type = "list", text = "Quick recap", items = points))
+        }
+        log("Script length: ${words(p)} words${if (added > 0) " ($added fact scene(s) added)" else ""}.")
     }
 
     /**
@@ -200,9 +248,9 @@ class Pipeline(
             log("Voice: ${Voices.find(p.voice).label} (Microsoft online voice)…")
             val first = EdgeTts.speak(script, p.voice, settings.voiceRate, File(dir, "voice.mp3"))
             // Fit the chosen length (60 s by default): re-record slightly slower or faster, at most 12%.
-            val fit = fitRate(settings.voiceRate, first.seconds, p.lengthSec.toDouble())
+            val fit = fitRate(settings.voiceRate, first.seconds)
             if (fit != null) {
-                log(String.format("Voice is %.0f s; re-recording at %s to fit %d s.", first.seconds, fit, p.lengthSec))
+                log(String.format("Voice is %.0f s; re-recording at %s to land in 50-60 s.", first.seconds, fit))
                 runCatching { EdgeTts.speak(script, p.voice, fit, File(dir, "voice.mp3")) }.getOrDefault(first)
             } else first
         } catch (e: Exception) {
@@ -216,7 +264,10 @@ class Pipeline(
         log(String.format("Voice: %.1f s, %d words.", voice.seconds, voice.words.size))
         if (cancelled()) return
 
-        val timeline = Timeline(p.scenes, voice.words, voice.seconds)
+        // Just under 50 s? Hold the ending (comment question on screen, music playing) for up to 4.5 s.
+        val duration = if (voice.seconds < Prompts.MIN_SEC) minOf(Prompts.MIN_SEC + 0.5, voice.seconds + 4.5) else voice.seconds
+        if (duration > voice.seconds + 0.1) log(String.format("Holding the ending %.1f s so the video reaches %.0f s.", duration - voice.seconds, duration))
+        val timeline = Timeline(p.scenes, voice.words, duration)
 
         // Pictures and logos, matched to the script. Free sources first need no key at all.
         val finder = MediaFinder(File(context.cacheDir, "media"), settings.pexelsKey, log, pixabayKey = settings.pixabayKey)
@@ -438,8 +489,9 @@ class Pipeline(
          * A speaking rate ("+4%") that brings [seconds] close to [target], changing the current rate by
          * at most 12 points (beyond that voices sound rushed or dragged). Null when it is already close.
          */
-        fun fitRate(current: String, seconds: Double, target: Double): String? {
-            if (seconds <= 0 || target <= 0 || seconds in (target - 5)..(target + 6)) return null
+        fun fitRate(current: String, seconds: Double, min: Double = Prompts.MIN_SEC.toDouble(), max: Double = Prompts.MAX_SEC.toDouble()): String? {
+            if (seconds <= 0 || seconds in min..max) return null
+            val target = if (seconds < min) min + 2 else max - 2
             val r0 = current.trim().removeSuffix("%").toIntOrNull() ?: 0
             val wanted = ((1 + r0 / 100.0) * seconds / target - 1) * 100
             val r = wanted.toInt().coerceIn(r0 - 12, r0 + 12).coerceIn(-15, 30)
