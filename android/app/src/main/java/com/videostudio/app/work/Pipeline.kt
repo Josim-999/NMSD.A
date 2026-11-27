@@ -361,8 +361,11 @@ class Pipeline(
             val clip = File(dir, "photo_$i.mp4")
             val credit = runCatching { Stock.pexelsVideo(settings.pexelsKey, query, clip, seconds) }.getOrNull()
                 ?: runCatching { finder.pixabayVideo(query, clip, seconds) }.getOrNull() ?: return false
+            // Decode the clip now, in parallel with the other downloads, never during rendering.
+            val frameDir = File(dir, "clip_frames_$i")
+            if (SceneMedia.Clip.prepare(clip, seconds, frameDir) == 0) return false
             credits.add(credit)
-            found[i] = SceneMedia.Lazy { SceneMedia.Clip.load(clip, seconds) }
+            found[i] = SceneMedia.Lazy { SceneMedia.Clip.loadFrames(frameDir) }
             return true
         }
         for ((i, scene) in photoScenes) jobs += pool.submit {

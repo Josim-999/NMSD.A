@@ -23,6 +23,9 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
 
+/** Longest one frame may take to draw before the render is stopped (seconds). */
+private const val FRAME_TIMEOUT_S = 240L
+
 /** Paints every frame with [ScenePainter] and encodes H.264 + AAC into an MP4, all on the phone. */
 class VideoRenderer(private val width: Int, private val height: Int, private val fps: Int = 30) {
     // Upload bitrates creators use for 9:16 1080p: 8-12 Mbps at 30 fps, 12-16 Mbps at 60 fps.
@@ -100,7 +103,9 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         try {
             for (i in 0 until frames) {
                 if (cancelled()) throw RenderError("cancelled")
-                val item = ready.poll(60, java.util.concurrent.TimeUnit.SECONDS) ?: throw RenderError("drawing a frame took too long")
+                // Generous: a scene's pictures load on its first frame. Only a real hang stops the render.
+                val item = ready.poll(FRAME_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS)
+                    ?: throw RenderError("frame ${i + 1} of $frames did not finish drawing in $FRAME_TIMEOUT_S s. Please try again")
                 if (item is Throwable) throw item
                 val bmp = item as Bitmap
                 drawer.draw(bmp)

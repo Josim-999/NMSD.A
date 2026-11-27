@@ -238,6 +238,12 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.4: fix "drawing a frame took too long"
+
+- Cause: in 3.3, the new background clips were decoded inside the render, frame by frame (up to 48 slow seeks per clip). On a phone one frame could take over a minute, so the 60 s safety stop fired.
+- Fix: every clip is decoded once in the download step, in parallel, into small JPEG frames. While rendering, a scene only reads those back, which takes a fraction of a second. This also makes rendering faster for every video with clips.
+- The safety stop now allows 240 s and names the frame if it ever fires.
+
 ## 3.3: logos always, pictures behind every talking scene, ~2x faster
 
 - **Logos are back on every brand.** The live check found correct logos for 26 of 26 popular brands, so the lookup itself was fine. The gap was scripts that named a brand without marking it. `BrandSpotter` now finds 200+ well-known brands in what is said and marks them with their official domain. Names that are also ordinary words (Apple, Amazon, Tesla...) count only mid-sentence. The badge is bigger (124 px), and no overlay covers it.

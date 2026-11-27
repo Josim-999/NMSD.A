@@ -72,3 +72,4 @@ change, ask the owner first (with options), then update this file and the test i
 | Frame drawing ~2.5x faster (half-size smooth backgrounds, baked vignette and grain, no offscreen layer for opaque scenes) | 3.3 | `ScenePainter` |
 | Drawing and encoding run on two threads at once | 3.3 | `render/VideoRenderer.kt` |
 | Pictures, clips and logos download in parallel (6 at once) | 3.3 | `work/Pipeline.kt` |
+| Clips are decoded once, before rendering and in parallel, into JPEG frames (never during drawing); frame timeout 240 s with the frame number | 3.4 | `SceneMedia.Clip.prepare`, `VideoRenderer` |

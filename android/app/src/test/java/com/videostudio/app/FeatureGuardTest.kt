@@ -76,4 +76,22 @@ class FeatureGuardTest {
         for (bad in listOf("BIND_ACCESSIBILITY_SERVICE", "READ_SMS", "SEND_SMS", "RECEIVE_SMS", "BIND_NOTIFICATION_LISTENER_SERVICE"))
             assertTrue("Play Protect blocks $bad", bad !in manifest)
     }
+
+    @Test fun clipsAreNeverDecodedWhileRendering() {
+        // 3.4: decoding a clip frame by frame inside the render made one frame take over a minute.
+        val pipeline = File("src/main/java/com/videostudio/app/work/Pipeline.kt").readText()
+        assertTrue(pipeline.contains("SceneMedia.Clip.prepare("))
+        assertTrue("no lazy clip decoding during the render", !pipeline.contains("Lazy { SceneMedia.Clip.load("))
+    }
+
+    @Test fun preparedClipFramesLoadBack() {
+        val dir = File("build/clip-frames-test").apply { deleteRecursively(); mkdirs() }
+        repeat(5) { i ->
+            val b = android.graphics.Bitmap.createBitmap(54, 96, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.rgb(40 * i, 80, 120)) }
+            File(dir, "f%03d.jpg".format(i)).outputStream().use { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 88, it) }
+        }
+        val clip = com.videostudio.app.render.SceneMedia.Clip.loadFrames(dir)!!
+        assertEquals(54, clip.width)
+        clip.release()
+    }
 }

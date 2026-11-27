@@ -48,7 +48,7 @@ sealed class SceneMedia {
      * A clip decoded to frames on the phone ([FPS] a second, about 540 px wide, RGB 565 to keep
      * memory low). Plays forward then backward so a short clip never jumps.
      */
-    class Clip(private val frames: List<Bitmap>) : SceneMedia() {
+    class Clip(internal val frames: List<Bitmap>) : SceneMedia() {
         override val width get() = frames[0].width
         override val height get() = frames[0].height
         override fun frameAt(t: Double): Bitmap {
@@ -64,6 +64,34 @@ sealed class SceneMedia {
         companion object {
             const val FPS = 12
             private const val MAX_FRAMES = 48
+
+            /**
+             * Decodes up to [seconds] of [file] once, before rendering, into small JPEG frames in [dir]
+             * (decoding a video frame by frame is slow on phones; reading JPEGs back is fast).
+             * Returns how many frames were written (0 when the phone cannot read the clip).
+             */
+            fun prepare(file: File, seconds: Double, dir: File, maxWidth: Int = 540): Int {
+                dir.mkdirs()
+                dir.listFiles()?.forEach { it.delete() }
+                val clip = load(file, seconds, maxWidth) ?: return 0
+                var n = 0
+                clip.frames.forEachIndexed { i, b ->
+                    runCatching {
+                        File(dir, "f%03d.jpg".format(i)).outputStream().use { b.compress(Bitmap.CompressFormat.JPEG, 88, it) }
+                        n++
+                    }
+                }
+                clip.release()
+                return n
+            }
+
+            /** Reads frames written by [prepare]. */
+            fun loadFrames(dir: File): Clip? {
+                val opts = android.graphics.BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }
+                val frames = dir.listFiles { f -> f.name.endsWith(".jpg") }?.sortedBy { it.name }
+                    ?.mapNotNull { runCatching { android.graphics.BitmapFactory.decodeFile(it.absolutePath, opts) }.getOrNull() }.orEmpty()
+                return if (frames.isEmpty()) null else Clip(frames)
+            }
 
             /** Decodes up to [seconds] of [file]. Null when the phone cannot read it. */
             fun load(file: File, seconds: Double, maxWidth: Int = 540): Clip? = runCatching {
