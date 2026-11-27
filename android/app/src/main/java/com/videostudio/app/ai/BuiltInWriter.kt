@@ -123,9 +123,10 @@ class BuiltInWriter(
         // The creator's take (originality).
         if (p.take.isNotBlank()) add("Here's my take: ${p.take.trim().trimEnd('.')}.", JSONObject().put("type", "statement").put("text", shortText(p.take, 8)))
         // PAYOFF + comment question, looping back to the hook.
-        add("So now you know the real story behind $subject.", JSONObject().put("type", "emoji").put("emoji", "💡").put("text", "Now you know"))
+        add("Now you know the real story behind $subject.", JSONObject().put("type", "emoji").put("emoji", "💡").put("text", "Now you know"))
         val question = if (howTo) "What's stopping you from trying it today?" else "What surprised you most about $subject?"
-        add(question, JSONObject().put("type", "outro").put("text", shortText(question, 8)).put("emoji", "💬"))
+        // No verbal sign-off: the last line runs straight back into the hook; the question is on screen only.
+        add("And that is exactly why", JSONObject().put("type", "outro").put("text", shortText(question, 8)).put("emoji", "💬"))
 
         val tags = (searchTerms(topic).lowercase(Locale.ROOT).split(" ").filter { it.length > 3 }.take(3) +
             extraHashtags.split(Regex("[\\s,#]+")).filter { it.isNotBlank() }.take(2)).distinct()

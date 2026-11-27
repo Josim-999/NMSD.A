@@ -39,6 +39,10 @@ data class Scene(
     var emphasis: String = "",
     /** Picture library hint for photo scenes: "nasa" (space, science), "museum" (art, history), or empty. */
     var library: String = "",
+    /** Map scene: the country (English name) and an optional spot (latitude/longitude, 0 = none). */
+    var place: String = "",
+    var lat: Double = 0.0,
+    var lon: Double = 0.0,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("say", say).put("type", type).put("text", text).put("emoji", emoji)
@@ -46,6 +50,7 @@ data class Scene(
         .put("left", left).put("leftText", leftText).put("right", right).put("rightText", rightText)
         .put("highlight", highlight).put("query", query)
         .put("brand", brand).put("domain", domain).put("wiki", wiki).put("emphasis", emphasis).put("library", library)
+        .put("place", place).put("lat", lat).put("lon", lon)
 
     companion object {
         /** Reads both the stored shape and the model's {"say", "visual": {...}} shape. */
@@ -71,6 +76,9 @@ data class Scene(
                 emphasis = o.optString("emphasis").ifBlank { v.optString("emphasis") },
                 library = v.optString("library").ifBlank { o.optString("library") }.lowercase().trim()
                     .takeIf { it == "nasa" || it == "museum" } ?: "",
+                place = v.optString("place").ifBlank { o.optString("place") },
+                lat = v.optDouble("lat", o.optDouble("lat", 0.0)).takeIf { !it.isNaN() && it in -90.0..90.0 } ?: 0.0,
+                lon = v.optDouble("lon", o.optDouble("lon", 0.0)).takeIf { !it.isNaN() && it in -180.0..180.0 } ?: 0.0,
             )
         }
     }

@@ -3,13 +3,14 @@ package com.videostudio.app.ai
 import com.videostudio.app.data.Project
 
 object Prompts {
-    const val WORDS_PER_SECOND = 2.9
+    /** A clear, slightly slower narrator (about 160 words a minute). */
+    const val WORDS_PER_SECOND = 2.7
 
     /** Every video is 50 to 60 seconds long. */
     const val MIN_SEC = 50
     const val MAX_SEC = 60
-    val MIN_WORDS = (MIN_SEC * WORDS_PER_SECOND).toInt() + 5   // 150: a little above 50 s
-    val MAX_WORDS = (MAX_SEC * WORDS_PER_SECOND).toInt()       // 174
+    const val MIN_WORDS = 140   // about 52 s at the narrator's pace
+    const val MAX_WORDS = 160   // about 59 s
 
     /** The word range for a chosen length (always inside 50-60 s). */
     fun wordRange(lengthSec: Int): IntRange {
@@ -24,7 +25,7 @@ object Prompts {
         "PROMISE (by about 3 s, line 2 at the latest): say what the viewer will know by the end.",
         "PROOF (most of the video): one idea only, shown in beats of 3 to 5 seconds: escalate, break a myth, give a specific fact with its source.",
         "PAYOFF (the last 10-15 s): the answer that closes the loop the hook opened.",
-        "TRIGGER (last lines): one line that makes the viewer feel something (surprise, a little fear, the urge to argue) and one that loops back to the hook, so the replay feels seamless.",
+        "LOOP (last line): no sign-off. The last spoken line breaks off mid-thought and flows straight into the hook's first words, so the replay sounds like one continuous sentence.",
     )
 
     fun research(p: Project): String {
@@ -68,7 +69,7 @@ You are a scriptwriter with years of short-form video behind you. Write the scri
 Topic: ${p.topic}
 Audience: ${p.audience.ifBlank { "work it out from the topic" }}
 Language of the spoken lines and on-screen text: ${p.language}
-Target length: the finished video MUST be between $MIN_SEC and $MAX_SEC seconds (aim for ${p.lengthSec.coerceIn(MIN_SEC, MAX_SEC)} s). Write between ${range.first} and ${range.last} words in total across all "say" lines, in about ${range.first / 11} to ${range.last / 9} scenes (the voice reads about 2.9 words a second). Count the words before you answer: fewer than ${range.first} is a failed script.
+Target length: the finished video MUST be between $MIN_SEC and $MAX_SEC seconds (aim for ${p.lengthSec.coerceIn(MIN_SEC, MAX_SEC)} s). Write between ${range.first} and ${range.last} words in total across all "say" lines, in about ${range.first / 11} to ${range.last / 9} scenes (the voice reads about 2.7 words a second). Count the words before you answer: fewer than ${range.first} is a failed script.
 $series
 $rewrite
 $research
@@ -88,10 +89,18 @@ A. HOOK (scene 1, the first 1-2 seconds) decides everything.
 B. STRUCTURE (for ${p.lengthSec} seconds; scale the timings):
 - 0-2 s HOOK. 2-5 s PROMISE/STAKES: what the viewer gets by the end, or what they lose if they skip.
 - 5-15 s SETUP: the first concrete fact or example, fast.
+- NESTED LOOPS: every 5 to 8 seconds give a MICRO-PAYOFF (answer one small question) and in the same breath open a deeper one ("...which is why X. But that raises a bigger problem."). The viewer always has an open question.
 - About every 12 seconds a RE-HOOK line that re-opens curiosity ("But here's the part nobody mentions.", "Wait, it gets better.", "This is where most people mess up.").
 - Middle: 2 or 3 escalating beats, each one concrete: a number, a named tool, an exact step or prompt, a real example. Each beat is better than the last.
-- PAYOFF (last 15 s): closes the hook's loop with the answer or the result. Give ONE thing the viewer can do today.
-- END: one line that sparks a comment (a choice, a hot take, "which one would you try?"), optionally a 3-word save line ("Save this for later."), and the very last words flow naturally back into the hook so the replay feels seamless. No "like and subscribe".
+- PAYOFF (last 10-15 s): closes the hook's loop with the answer or the result. Give ONE thing the viewer can do today.
+- END: NO verbal sign-off at all: never "in conclusion", "so remember", "subscribe", "follow for more", "save this", "let me know in the comments", "thanks for watching". The last spoken line ends mid-thought and grammatically runs into the hook's first words (e.g. last line "...and that is exactly why" + hook "your brain deletes 90% of what you learn"). The comment question goes ONLY in the on-screen outro text and "comment_question", not in the spoken lines.
+B2. FORMAT: pick the ONE proven format that fits the topic best and put its name in "format":
+- what_if ("What happens if..."): premise, step-by-step consequences that escalate, the surprising end state.
+- myth_vs_fact: the common belief, why people believe it, the evidence that breaks it, what is actually true.
+- tutorial: the result first, then 3 exact steps (tool, setting or prompt, outcome), then the one mistake to avoid.
+- ranking: 3-5 items from weakest to strongest with one concrete reason each (use the tier visual), the top pick last.
+- explainer: the surprising question, the simple mechanism in 3 links, a real example, what it means for you.
+- story: one real event or person, the turning point, the lesson; facts only, no invented details.
 C. LANGUAGE:
 - Write for a 12-year-old: sentences of 4 to 12 words, one idea each, active voice, present tense, "you" and "your".
 - Show, don't tell: every claim gets an example, a number or a name. At least 3 specific numbers, tools or names in the script.
@@ -99,7 +108,10 @@ C. LANGUAGE:
 - No lists of more than 3 items. No repeating the same sentence opening twice in a row.
 D. Each scene is one spoken line, so the picture changes every 1.5 to 4 seconds. Follow these beats in order:
 $beats
-E. Honest: every number or factual claim must be listed in "sources" with its URL. Never invent a statistic; if unsure, say it without a number.
+E. FACTS ONLY (the most important rule): every fact, number, date, name and quote must be true and checkable.
+- Numbers and specific claims must come from the research above; list each one in "sources" with its URL.
+- Never invent statistics, studies, quotes, dates, prices or results. If you are not sure, say it without a number or leave it out.
+- Prefer one verified fact over three impressive guesses. No exaggeration of what a tool or study really did.
 Originality matters (platforms refuse to pay for template-like videos): include one line that gives a clear, reasoned take or insight in the creator's voice, not just facts.${if (take.isNotBlank()) " The creator's own take, to work in faithfully: \"$take\"." else ""}
 YouTube rules (the channel must stay monetizable), follow every one:
 - Advertiser-friendly: no profanity, no graphic, shocking or hateful content, no dangerous instructions.
@@ -124,7 +136,9 @@ For every scene choose ONE visual from this list (the app animates them), and fi
 - {"type":"timeline","text":"short title","items":["Year — short event", "2-4 items in order"]}
 - {"type":"quote","text":"the quote, under 15 words","label":"who said it","wiki":"their English Wikipedia title"}   (only real, accurately quoted words)
 - {"type":"tier","text":"short title","items":["S: best thing", "A: next", "B: ...", "C: worst", "3-6 items, each 'Tier: name' with tiers S, A, B, C or D"]}   (ranking things: viewers love to argue in the comments)
-- {"type":"outro","text":"the comment question, short","emoji":"one emoji"}  (use for the last scene)
+- {"type":"document","text":"one real sentence or stat from a source, under 22 words","label":"the source, e.g. NASA, 2024 or Reuters","highlight":"2-5 key words from text"}   (citing a fact: shown as a highlighted article card)
+- {"type":"map","place":"exact English country name","lat":0.0,"lon":0.0,"text":"2-5 words"}   (a place matters: the map zooms to it; lat/lon of the city or spot if relevant, else 0)
+- {"type":"outro","text":"the comment question, short (on screen only)","emoji":"one emoji"}  (last scene; its spoken line is the mid-thought loop line)
 Vary the visuals; never use the same type more than twice in a row. On-screen text must be short.
 Real pictures are found automatically: use "photo" for 2 or 3 scenes where a real image helps (people, places, objects, events), with a concrete visual query${if (stockFootage) "; these can play as real stock video" else ""}.
 Whenever a line names a company, product, app or organisation, either use the "logo" visual for it, or add "brand" and "domain" to that scene's visual so its logo appears as a badge. Logos are checked against the official website, so: use the exact official name ("Google Gemini", not "Gemini"; "Microsoft Copilot", not "Copilot"), the exact official domain of that product (gemini.google.com, chatgpt.com, claude.ai, copilot.microsoft.com), and never put a brand on a scene that does not name it. If you are not sure of the official domain, leave "brand" empty.
@@ -135,6 +149,7 @@ Reply with one JSON object and nothing else, exactly this shape:
   "one_idea": "the single idea of the video, in one sentence",
   "comment_question": "the question that invites comments",
   "hook_options": [ {"text": "hook option", "formula": "which formula", "score": 8} ],
+  "format": "what_if, myth_vs_fact, tutorial, ranking, explainer or story",
   "mood": "one of: energetic, calm, dramatic, playful (sets the music)",
   "compliance": {"sensitive": "none, health, finance, news or elections", "made_for_kids": false},
   "scenes": [ {"say": "the spoken words of this scene", "emphasis": "the one most important word of say, copied exactly", "visual": { ...one of the visuals above... }} ],

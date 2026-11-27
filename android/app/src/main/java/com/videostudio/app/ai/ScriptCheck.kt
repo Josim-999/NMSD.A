@@ -24,7 +24,21 @@ object ScriptCheck {
 
     private fun words(s: String) = s.split(Regex("\\s+")).filter { it.isNotBlank() }
 
-    fun check(scenes: List<Scene>, lengthSec: Int, wordsPerSecond: Double = Prompts.WORDS_PER_SECOND): Result {
+    val SIGN_OFFS = listOf(
+        "in conclusion", "so remember", "subscribe", "follow for more", "save this", "let me know", "thanks for watching",
+        "comment below", "see you", "that's it", "that's all", "hit the like",
+    )
+
+    /** Numbers written in digits ("73%", "2019", "1,200") in what is said and shown. */
+    fun numbers(scenes: List<Scene>): List<String> = scenes.flatMap { sc ->
+        listOf(sc.say, sc.value, sc.label, sc.text) + sc.items
+    }.flatMap { Regex("\\d[\\d,.]*%?").findAll(it).map { m -> m.value.trimEnd('.', ',') }.toList() }
+        .filter { n -> n.count { it.isDigit() } >= 2 || n.endsWith("%") }.distinct()
+
+    fun check(
+        scenes: List<Scene>, lengthSec: Int, wordsPerSecond: Double = Prompts.WORDS_PER_SECOND,
+        research: String = "", sources: List<String> = emptyList(),
+    ): Result {
         if (scenes.isEmpty()) return Result(0, listOf("The script is empty."))
         val issues = ArrayList<String>()
         var score = 100
@@ -62,8 +76,20 @@ object ScriptCheck {
         val middle = scenes.drop(2).dropLast(2)
         if (middle.size >= 4 && middle.none { REHOOK.containsMatchIn(it.say) }) fail(8, "No re-hook in the middle: add a line like \"But here's the part nobody mentions.\"")
 
-        val last = scenes.last().say.trim()
-        if (!last.contains('?') && scenes.takeLast(2).none { it.say.contains('?') }) fail(8, "End with a question that invites comments.")
+        // No verbal sign-off: the last line should flow back into the hook.
+        val ending = scenes.takeLast(2).joinToString(" ") { it.say }.lowercase(Locale.ROOT)
+        SIGN_OFFS.firstOrNull { ending.contains(it) }?.let { fail(10, "Remove the sign-off \"$it\": end mid-thought so the last line runs into the hook.") }
+
+        // Facts only: every number must come from the research or the listed sources.
+        val nums = numbers(scenes)
+        val evidence = (research + " " + sources.joinToString(" ")).replace(",", "")
+        if (nums.isNotEmpty()) {
+            if (research.isBlank() && sources.isEmpty()) fail(10, "Numbers without any source (${nums.take(4).joinToString()}): give a source for each or say it without the number.")
+            else {
+                val unsourced = nums.filter { n -> !evidence.contains(n.replace(",", "").removeSuffix("%")) }
+                if (unsourced.isNotEmpty()) fail(minOf(18, 6 * unsourced.size), "These numbers are not in the research or sources: ${unsourced.take(4).joinToString()}. Use only sourced numbers.")
+            }
+        }
 
         val you = Regex("\\byou(r|'re)?\\b", RegexOption.IGNORE_CASE).findAll(all).count()
         if (you < 2) fail(6, "Talk to the viewer: use \"you\" and \"your\".")

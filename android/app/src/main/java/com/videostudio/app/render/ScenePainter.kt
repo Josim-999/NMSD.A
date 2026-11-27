@@ -48,7 +48,12 @@ class ScenePainter(
     animated: Map<String, com.airbnb.lottie.LottieComposition> = emptyMap(),
     /** Subject cut-outs of photo scenes, by scene index: the text goes behind the subject. */
     private val cutouts: Map<Int, Cutout> = emptyMap(),
+    /** Animate graphics at 12 fps inside the video (handmade, documentary feel). */
+    stutter12: Boolean = false,
 ) {
+    private val stutter = stutter12 || look.paper
+    private val world: WorldMap? by lazy { WorldMap.load(context.applicationContext) }
+    private val appContext = context.applicationContext
     private val animoji: Map<String, Animoji> = animated.mapValues { Animoji(it.value) }
     private val basePalette = palette
     /** The colours in use right now: in the glass look they switch between light and dark per scene. */
@@ -281,9 +286,15 @@ class ScenePainter(
                     drawScene(c, span.index, lt, cd, t, alpha = 1f, scale = 1.06f - 0.06f * k)
                     c.restore()
                 }
-                else -> { // zoom-push: the old scene grows and fades away, the new one settles in
-                    drawScene(c, prev.index, pt, pd, t, alpha = 1f - k, scale = 1f + 0.10f * k, dy = -70f * k)
-                    drawScene(c, span.index, lt, cd, t, alpha = k, scale = 0.90f + 0.10f * k, dy = 90f * (1 - k))
+                else -> { // 3D push-blur: the camera flies through the old scene into the new one, with motion-blur trails
+                    for (g in 2 downTo 0) {
+                        val ga = if (g == 0) 1f else 0.28f / g
+                        drawScene(c, prev.index, pt, pd, t, alpha = (1f - k) * ga, scale = 1f + 0.65f * k * (1 + 0.12f * g))
+                    }
+                    for (g in 2 downTo 0) {
+                        val ga = if (g == 0) 1f else 0.25f / g
+                        drawScene(c, span.index, lt, cd, t, alpha = k * ga, scale = (0.55f + 0.45f * k) * (1 - 0.06f * g * (1 - k)))
+                    }
                 }
             }
         } else {
@@ -339,10 +350,12 @@ class ScenePainter(
 
     /** One scene, with a slow push-in "camera" over its whole length. */
     private fun drawScene(
-        c: Canvas, index: Int, lt: Double, durRaw: Double, t: Double,
+        c: Canvas, index: Int, ltIn: Double, durRaw: Double, t: Double,
         alpha: Float, scale: Float, dy: Float = 0f, dx: Float = 0f,
     ) {
         if (alpha <= 0.01f) return
+        // 12 fps "stutter": graphics move in deliberate steps while the camera and captions stay smooth.
+        val lt = if (stutter) kotlin.math.floor(ltIn * 12) / 12 else ltIn
         val scene = scenes[index]
         val dur = durRaw.coerceAtLeast(0.3)
         val savedPalette = palette
@@ -356,6 +369,8 @@ class ScenePainter(
         if (look.kinetic && type in KINETIC_TYPES) kineticScene(c, index, lt)
         else when (type) {
             "tier" -> tier(c, scene, lt, dur)
+            "document" -> document(c, scene, lt)
+            "map" -> mapScene(c, scene, lt)
             "hook" -> hook(c, scene, lt)
             "stat" -> stat(c, scene, lt)
             "list" -> list(c, scene, lt, dur, numbered = false)
@@ -503,14 +518,14 @@ class ScenePainter(
         val space = tp.measureText(" ")
         var widths = texts.map { tp.measureText(it) }
         var total = widths.sum() + (texts.size - 1) * space
-        if (total > zoneW) {
-            tp.textSize = tp.textSize * (zoneW / total)
+        if (total > CAP_W) {
+            tp.textSize = tp.textSize * (CAP_W / total)
             widths = texts.map { tp.measureText(it) }
             total = widths.sum() + (texts.size - 1) * space
         }
         val size = tp.textSize
         c.save()
-        c.translate(W / 2, CAPTION_Y)
+        c.translate(CAP_CX, CAPTION_Y)
         val sc = 0.85f + 0.15f * pop
         c.scale(sc, sc)
         if (style == 2) {
@@ -1460,13 +1475,13 @@ class ScenePainter(
         val space = tp.measureText(" ")
         var widths = texts.map { tp.measureText(it) }
         var total = widths.sum() + (texts.size - 1) * space
-        if (total > zoneW) {
-            tp.textSize *= zoneW / total
+        if (total > CAP_W) {
+            tp.textSize *= CAP_W / total
             widths = texts.map { tp.measureText(it) }
             total = widths.sum() + (texts.size - 1) * space
         }
         val size = tp.textSize
-        var x = W / 2 - total / 2
+        var x = CAP_CX - total / 2
         texts.forEachIndexed { i, word ->
             val start = g.words[i].start
             val nextStart = g.words.getOrNull(i + 1)?.start ?: g.end
@@ -1555,6 +1570,154 @@ class ScenePainter(
             c.restore()
         }
         tp.textAlign = Paint.Align.LEFT
+    }
+
+    // ---------------- Document highlight pull ----------------
+
+    private val serifPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL) }
+    private val cam = android.graphics.Camera()
+    private val camMatrix = android.graphics.Matrix()
+
+    /** A real-looking article card, tilted in 3D with a shadow; a marker stroke sweeps across the key words. */
+    private fun document(c: Canvas, s: Scene, lt: Double) {
+        val text = s.text.ifBlank { s.say }
+        val k = spring(lt / 0.6).toFloat()
+        val cw = 860f
+        serifPaint.textSize = 58f
+        serifPaint.color = Color.rgb(28, 28, 32)
+        val layout = StaticLayout.Builder.obtain(text, 0, text.length, serifPaint, (cw - 120).toInt())
+            .setLineSpacing(10f, 1f).setIncludePad(false).build()
+        val ch = layout.height + 420f
+        val cx = W / 2
+        val cy = zoneMid + (1 - k) * 500f
+        c.save()
+        // 3D tilt that settles a little: rotateX/Y through a camera, like a page laid on a desk.
+        cam.save()
+        cam.rotateX(14f * (1 - k) + 6f)
+        cam.rotateY(-10f + 4f * sin(lt * 0.8).toFloat())
+        cam.getMatrix(camMatrix)
+        cam.restore()
+        camMatrix.preTranslate(-cx, -cy)
+        camMatrix.postTranslate(cx, cy)
+        c.concat(camMatrix)
+        c.rotate(-3f, cx, cy)
+        val l = cx - cw / 2; val t = cy - ch / 2
+        shadowPaint.color = Color.argb(110, 0, 0, 0)
+        rect.set(l + 18f, t + 34f, l + cw + 18f, t + ch + 34f)
+        c.drawRoundRect(rect, 22f, 22f, shadowPaint)
+        fill.shader = null
+        fill.color = Color.rgb(252, 251, 247)
+        rect.set(l, t, l + cw, t + ch)
+        c.drawRoundRect(rect, 22f, 22f, fill)
+        // Source header.
+        fill.color = palette.accent
+        c.drawRect(l + 60f, t + 56f, l + 72f, t + 120f, fill)
+        tp.typeface = bold; tp.textSize = 40f; tp.color = Color.rgb(60, 60, 70); tp.textAlign = Paint.Align.LEFT
+        c.drawText(TextUtils.ellipsize(s.label.ifBlank { "Source" }.uppercase(Locale.ROOT), tp, cw - 160f, TextUtils.TruncateAt.END).toString(), l + 96f, t + 102f, tp)
+        // Grey "other text" lines around the quote.
+        fill.color = Color.rgb(222, 222, 226)
+        for (i in 0 until 2) c.drawRoundRect(l + 60f, t + 160f + i * 34f, l + cw - 60f - i * 140f, t + 176f + i * 34f, 8f, 8f, fill)
+        val textTop = t + 260f
+        // Marker stroke under the highlighted words, sweeping in.
+        val hl = s.highlight.trim()
+        val start = if (hl.isNotEmpty()) text.indexOf(hl, ignoreCase = true) else -1
+        val sweep = outCubic((lt - 0.55) / 0.6).toFloat()
+        if (start >= 0 && sweep > 0f) {
+            val end = start + hl.length
+            fill.color = Color.argb(200, 255, 222, 60)
+            for (line in layout.getLineForOffset(start)..layout.getLineForOffset(end)) {
+                val ls = maxOf(start, layout.getLineStart(line)); val le = minOf(end, layout.getLineEnd(line))
+                val x0 = layout.getPrimaryHorizontal(ls); val x1 = if (le >= layout.getLineEnd(line)) layout.getLineRight(line) else layout.getPrimaryHorizontal(le)
+                val top = textTop + layout.getLineTop(line) + 6f; val bot = textTop + layout.getLineBottom(line) - 2f
+                c.drawRect(l + 60f + x0 - 6f, top, l + 60f + x0 + (x1 - x0 + 12f) * sweep, bot, fill)
+            }
+        }
+        c.save(); c.translate(l + 60f, textTop); layout.draw(c); c.restore()
+        fill.color = Color.rgb(222, 222, 226)
+        val below = textTop + layout.height + 50f
+        for (i in 0 until 2) c.drawRoundRect(l + 60f, below + i * 34f, l + cw - 160f + i * 80f, below + 16f + i * 34f, 8f, 8f, fill)
+        c.restore()
+    }
+
+    // ---------------- Animated map ----------------
+
+    private val mapMatrix = android.graphics.Matrix()
+    private val mapPath = Path()
+
+    /** The world, then a zoom to the country; it lights up and a pin drops on the spot. */
+    private fun mapScene(c: Canvas, s: Scene, lt: Double) {
+        val w = world
+        val country = w?.find(s.place.ifBlank { s.text })
+        if (w == null || country == null) { statement(c, s.copy(text = s.text.ifBlank { s.place }), lt); return }
+        val panel = RectF(SIDE - 50f, ZONE_TOP - 20f, W - SIDE + 50f, ZONE_BOTTOM - 60f)
+        // Camera: from the whole world to the country box (padded), eased.
+        val b = RectF(country.bounds)
+        val pad = maxOf(b.width(), b.height()) * 0.35f + 4f
+        b.inset(-pad, -pad)
+        val worldBox = RectF(0f, 10f, 360f, 160f)
+        val k = outCubic((lt - 0.25) / 1.1).toFloat()
+        val view = RectF(
+            worldBox.left + (b.left - worldBox.left) * k, worldBox.top + (b.top - worldBox.top) * k,
+            worldBox.right + (b.right - worldBox.right) * k, worldBox.bottom + (b.bottom - worldBox.bottom) * k,
+        )
+        val sc = minOf(panel.width() / view.width(), panel.height() / view.height())
+        mapMatrix.reset()
+        mapMatrix.postTranslate(-view.centerX(), -view.centerY())
+        mapMatrix.postScale(sc, sc)
+        mapMatrix.postTranslate(panel.centerX(), panel.centerY())
+        c.save()
+        path.reset(); path.addRoundRect(panel, 40f, 40f, Path.Direction.CW)
+        c.clipPath(path)
+        val dark = luminance(palette.text) > 0.5
+        fill.shader = null
+        fill.color = if (dark) Color.rgb(16, 24, 44) else Color.rgb(214, 232, 247)
+        c.drawRect(panel, fill)
+        stroke.shader = null; stroke.strokeWidth = 1.5f
+        stroke.color = if (dark) Color.argb(40, 255, 255, 255) else Color.argb(50, 40, 80, 140)
+        for (lon in -180..180 step 30) { val p = floatArrayOf(lon + 180f, 0f, lon + 180f, 180f); mapMatrix.mapPoints(p); c.drawLine(p[0], p[1], p[2], p[3], stroke) }
+        for (lat in -60..60 step 30) { val p = floatArrayOf(0f, 90f - lat, 360f, 90f - lat); mapMatrix.mapPoints(p); c.drawLine(p[0], p[1], p[2], p[3], stroke) }
+        val lit = clamp((lt - 0.9) / 0.4).toFloat()
+        for (ct in w.countries) {
+            mapPath.reset(); ct.path.transform(mapMatrix, mapPath)
+            val target = ct === country
+            fill.color = when {
+                target -> blend(if (dark) Color.rgb(52, 60, 84) else Color.rgb(236, 236, 230), palette.accent, lit)
+                dark -> Color.rgb(52, 60, 84)
+                else -> Color.rgb(236, 236, 230)
+            }
+            c.drawPath(mapPath, fill)
+            stroke.strokeWidth = if (target) 4f else 1.4f
+            stroke.color = if (target) withAlpha(palette.accent2, (255 * maxOf(lit, 0.3f)).toInt()) else if (dark) Color.argb(90, 255, 255, 255) else Color.argb(120, 90, 90, 90)
+            c.drawPath(mapPath, stroke)
+        }
+        // Pin on the spot (or the middle of the country), dropping in with a bounce and a pulse.
+        val px = if (s.lat != 0.0 || s.lon != 0.0) s.lon.toFloat() + 180f else country.bounds.centerX()
+        val py = if (s.lat != 0.0 || s.lon != 0.0) 90f - s.lat.toFloat() else country.bounds.centerY()
+        val pin = floatArrayOf(px, py); mapMatrix.mapPoints(pin)
+        val drop = (lt - MAP_PIN).toFloat()
+        if (drop >= 0f) {
+            val bounce = outBack(drop / 0.35.toDouble()).toFloat()
+            val pyS = pin[1] - 160f * (1 - bounce)
+            for (r in 0 until 2) {
+                val ph = ((lt * 0.9 + r * 0.5) % 1.0).toFloat()
+                stroke.strokeWidth = 5f; stroke.color = withAlpha(palette.accent2, (200 * (1 - ph)).toInt())
+                c.drawCircle(pin[0], pin[1], 20f + 70f * ph, stroke)
+            }
+            fill.color = palette.accent2
+            path.reset()
+            path.addCircle(pin[0], pyS - 46f, 30f, Path.Direction.CW)
+            c.drawPath(path, fill)
+            path.reset(); path.moveTo(pin[0] - 24f, pyS - 36f); path.lineTo(pin[0], pyS); path.lineTo(pin[0] + 24f, pyS - 36f); path.close()
+            c.drawPath(path, fill)
+            fill.color = Color.WHITE
+            c.drawCircle(pin[0], pyS - 46f, 11f, fill)
+        }
+        c.restore()
+        val label = s.text.ifBlank { country.name }
+        val a = clamp((lt - 1.0) / 0.3).toFloat()
+        val block = block("maplabel", upper(label), display, 84f, zoneW, 160f)
+        card(c, W / 2 - zoneW / 2, panel.bottom - block.height - 70f, W / 2 + zoneW / 2, panel.bottom - 20f, withAlpha(palette.card, (Color.alpha(palette.card) * a).toInt()), 30f)
+        drawBlock(c, block, W / 2, panel.bottom - 45f - block.height / 2f, a)
     }
 
     // ---------------- Tier list ----------------
@@ -1826,15 +1989,15 @@ class ScenePainter(
         val space = tp.measureText(" ")
         var widths = texts.map { tp.measureText(it) }
         var total = widths.sum() + (texts.size - 1) * space
-        if (total > zoneW - 40f) {
-            tp.textSize *= (zoneW - 40f) / total
+        if (total > CAP_W - 40f) {
+            tp.textSize *= (CAP_W - 40f) / total
             widths = texts.map { tp.measureText(it) }
             total = widths.sum() + (texts.size - 1) * space
         }
         val size = tp.textSize
         val pillK = outCubic((t - g.start) / 0.2).toFloat()
-        glassCard(c, W / 2 - total / 2 - 44f, CAPTION_Y - size * 1.05f, W / 2 + total / 2 + 44f, CAPTION_Y + size * 0.5f, 40f, pillK)
-        var x = W / 2 - total / 2
+        glassCard(c, CAP_CX - total / 2 - 44f, CAPTION_Y - size * 1.05f, CAP_CX + total / 2 + 44f, CAPTION_Y + size * 0.5f, 40f, pillK)
+        var x = CAP_CX - total / 2
         texts.forEachIndexed { i, word ->
             val start = g.words[i].start
             val e = outCubic((t - start + 0.04) / 0.2).toFloat()
@@ -1867,8 +2030,17 @@ class ScenePainter(
     companion object {
         /** When each list, chart or timeline item appears (s into the scene); the sound design uses the same times. */
         /** Per caption style: chip, colour-pop, boxed, glow. All SIL Open Font License (licences in assets/fonts). */
+        /**
+         * Caption safe zone: clear of the right-side like/comment/share buttons (about the right 15%)
+         * and above the bottom title/description area.
+         */
+        const val CAP_CX = 492f
+        const val CAP_W = 780f
+
         /** Glass micro-event times (seconds into the scene); the sound mix puts a click on each. */
         const val HOOK_CLICK = 0.75
+        /** When the map pin drops (the sound mix adds a click). */
+        const val MAP_PIN = 1.35
 
         /** The hook intro effects run over the first seconds; frames 1+ get the impact glitch. */
         const val HOOK_FX_END = 5.0

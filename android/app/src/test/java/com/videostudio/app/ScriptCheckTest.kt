@@ -33,10 +33,10 @@ class ScriptCheckTest {
             "The whole edit took me 4 minutes.",
             "So the tool is not the secret.",
             "The prompt and the zooms are.",
-            "Save this so you have the prompt later.",
             "Would you let AI edit your videos?",
         )
-        val r = ScriptCheck.check(good, 55)
+        val research = "CapCut Auto Cut makes 10 videos in 60 seconds; creators spend 3 hours; 40 cuts; 12 videos tested; 30 percent; 2 zooms every 10 seconds; 41,000 views; 4 minutes"
+        val r = ScriptCheck.check(good, 55, research = research)
         assertTrue("score ${r.score}: ${r.issues}", r.good)
     }
 
@@ -58,5 +58,15 @@ class ScriptCheckTest {
         assertTrue(text, text.contains("game-changer") && text.contains("basically"))
         assertTrue(text, text.contains("question"))
         assertTrue(text, text.contains("words;"))
+    }
+
+    @Test fun flagsSignOffsAndUnsourcedNumbers() {
+        val lines = s("This tool saves 73% of your time.", "You will see why.", "Thanks for watching, subscribe for more.")
+        val r = ScriptCheck.check(lines, 55, research = "The tool saves 40% of editing time.")
+        val t = r.issues.joinToString(" ")
+        assertTrue(t, t.contains("sign-off"))
+        assertTrue(t, t.contains("73%"))
+        val noSource = ScriptCheck.check(s("It grew 250% in 2024.", "You saw that."), 55)
+        assertTrue(noSource.issues.joinToString(" ").contains("without any source"))
     }
 }

@@ -38,6 +38,7 @@ import com.videostudio.app.render.VideoRenderer
 import com.videostudio.app.upload.YouTube
 import com.videostudio.app.voice.DeviceTts
 import com.videostudio.app.voice.EdgeTts
+import com.videostudio.app.voice.GeminiTts
 import com.videostudio.app.voice.VoiceResult
 import com.videostudio.app.voice.Voices
 import com.videostudio.app.voice.Word
@@ -103,7 +104,7 @@ class Pipeline(
         p.writer = reply.model
         applyScript(p, extractJson(reply.text))
         // Quality gate: score against the playbook; below the bar, one targeted rewrite fixes exactly what is wrong.
-        var check = ScriptCheck.check(p.scenes, p.lengthSec)
+        var check = ScriptCheck.check(p.scenes, p.lengthSec, research = p.researchNotes, sources = p.sources.map { it.claim + " " + it.url })
         log("Script score: ${check.score}/100${if (check.issues.isNotEmpty()) " (" + check.issues.size + " things to fix)" else ""}.")
         if (reply.model != BUILT_IN && !check.good) {
             log("Improving it: ${check.issues.joinToString(" ").take(220)}")
@@ -117,7 +118,7 @@ class Pipeline(
                 ))
                 val o = extractJson(better.text)
                 val candidate = objects(o.optJSONArray("scenes")).map { Scene.fromJson(it) }.filter { it.say.isNotBlank() }
-                val c2 = ScriptCheck.check(candidate, p.lengthSec)
+                val c2 = ScriptCheck.check(candidate, p.lengthSec, research = p.researchNotes, sources = p.sources.map { it.claim + " " + it.url })
                 if (candidate.size >= 3 && c2.score > check.score) {
                     applyScript(p, o)
                     check = c2
@@ -126,7 +127,7 @@ class Pipeline(
             }.onFailure { log("Could not improve the script (${it.message?.take(60)}); keeping it.") }
         }
         ensureLength(p, reply.model != BUILT_IN)
-        check = ScriptCheck.check(p.scenes, p.lengthSec)
+        check = ScriptCheck.check(p.scenes, p.lengthSec, research = p.researchNotes, sources = p.sources.map { it.claim + " " + it.url })
         p.scriptScore = check.score
         p.status = Status.SCRIPTED
         p.error = ""
@@ -160,14 +161,17 @@ class Pipeline(
         if (words(p) >= range.first) { log("Script length: ${words(p)} words."); return }
         // Still short: real facts (Wikipedia, no key) as scenes just before the payoff and ending.
         val facts = runCatching { BuiltInWriter().facts(p.topic) }.getOrDefault(emptyList())
-            .map { BuiltInWriter.speakable(it.text) }
-            .filter { f -> f.split(" ").size in 6..28 && p.scenes.none { it.say.contains(f.take(30)) } }
+            .map { it.copy(text = BuiltInWriter.speakable(it.text)) }
+            .filter { f -> f.text.split(" ").size in 6..28 && p.scenes.none { it.say.contains(f.text.take(30)) } }
         val at = (p.scenes.size - 2).coerceAtLeast(1)
         var added = 0
-        for (f in facts) {
+        for (fact in facts) {
             if (words(p) >= range.first) break
+            val f = fact.text
             val short = BuiltInWriter.shortText(f, 8)
-            p.scenes.add(at + added, Scene(f, type = "statement", text = short, highlight = BuiltInWriter.longestWord(short)))
+            p.scenes.add(at + added, Scene(f, type = "document", text = BuiltInWriter.shortText(f, 20), label = "Wikipedia: ${fact.page}", highlight = short.split(" ").take(3).joinToString(" ")))
+            // Facts only: every added fact carries its source.
+            if (fact.url.isNotBlank()) p.sources = p.sources + Source(f.take(80), fact.url)
             added++
         }
         if (words(p) < range.first) {
@@ -244,7 +248,11 @@ class Pipeline(
 
         val script = p.scenes.joinToString(" ") { it.say.trim() }
         step("Recording the voice", null)
-        val voice: VoiceResult = try {
+        val expressive: VoiceResult? = if (settings.expressiveVoice && settings.geminiKey.isNotBlank()) runCatching {
+            log("Voice: expressive Gemini voice (${settings.expressiveVoiceName})…")
+            GeminiTts.speak(settings.geminiKey, script, settings.expressiveVoiceName, File(dir, "voice.wav"))
+        }.onFailure { log("The expressive voice is not available right now (${it.message?.take(80)}); using the Microsoft voice.") }.getOrNull() else null
+        val voice: VoiceResult = expressive ?: try {
             log("Voice: ${Voices.find(p.voice).label} (Microsoft online voice)…")
             val first = EdgeTts.speak(script, p.voice, settings.voiceRate, File(dir, "voice.mp3"))
             // Fit the chosen length (60 s by default): re-record slightly slower or faster, at most 12%.
@@ -384,6 +392,19 @@ class Pipeline(
         hits.add(0, 0.03)
         if (timeline.spans.size > 1) pops.add(timeline.spans[1].start - 0.05)
                 val risers = if (timeline.spans.size >= 3) listOf(timeline.spans.last().start) else emptyList()
+        // Richer sound design: clicks, paper, a bass drop on the payoff, a heartbeat under the hook.
+        val clicks = ArrayList<Double>()
+        val papers = ArrayList<Double>()
+        p.scenes.forEachIndexed { i, sc ->
+            val span = timeline.spans[i]
+            when (sc.type) {
+                "document" -> { papers.add(span.start + 0.05); clicks.add(span.start + 0.6) }
+                "map" -> clicks.add(span.start + ScenePainter.MAP_PIN)
+            }
+            if (look.paper && i > 0) papers.add(span.start)
+        }
+        val drops = risers.toList()
+        val pulses = if (p.mood in setOf("dramatic", "energetic", "")) listOf(0.6, 1.4).filter { it < (timeline.spans.firstOrNull()?.end ?: 0.0) } else emptyList()
 
         // Animated emoji (Noto, free): the fire flickers, the bulb glows.
         val emojis = (p.scenes.map { it.emoji.trim() } + "💬" + "💡").filter { it.isNotBlank() }.distinct()
@@ -403,7 +424,7 @@ class Pipeline(
 
         val painter = ScenePainter(
             context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media, logos, look, emphasisTimes,
-            animated, cutouts,
+            animated, cutouts, stutter12 = settings.stutter12,
         )
         val (w, h) = if (settings.quality == "720") 720 to 1280 else 1080 to 1920
         val fps = if (settings.smooth60) 60 else 30
@@ -418,6 +439,10 @@ class Pipeline(
             pops = pops,
             hits = hits,
             risers = risers,
+            clicks = clicks,
+            papers = papers,
+            drops = drops,
+            pulses = pulses,
         )
         step("Rendering the video", 0f)
         log(String.format("Rendering ${w}x$h at $fps fps, %.1f s…", timeline.duration))

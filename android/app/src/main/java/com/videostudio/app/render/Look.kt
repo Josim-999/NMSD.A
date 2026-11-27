@@ -25,7 +25,7 @@ data class Look(val captions: Int, val transition: Int, val background: Int) {
         const val COUNT = CAPTIONS * TRANSITIONS * BACKGROUNDS
 
         val CAPTION_NAMES = listOf("chip", "colour-pop", "boxed", "glow")
-        val TRANSITION_NAMES = listOf("zoom-push", "slide-up", "whip-pan", "iris")
+        val TRANSITION_NAMES = listOf("3D push-blur", "slide-up", "whip-pan", "iris")
         val BACKGROUND_NAMES = listOf("soft-light", "grid", "aurora", "liquid-glass", "paper-sketch", "kinetic-type")
 
         /** The "liquid glass" family: light frosted UI, theme switches, blur-in captions. */

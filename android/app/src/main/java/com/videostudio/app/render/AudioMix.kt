@@ -39,6 +39,14 @@ object AudioMix {
         val hits: List<Double> = emptyList(),
         /** Risers that build into a moment (the payoff scene). */
         val risers: List<Double> = emptyList(),
+        /** Crisp UI clicks (cursor taps, map pins, marker strokes). */
+        val clicks: List<Double> = emptyList(),
+        /** Paper rustles (document cards, paper-look scene changes). */
+        val papers: List<Double> = emptyList(),
+        /** Sub-bass drops (the payoff landing). */
+        val drops: List<Double> = emptyList(),
+        /** Low tension heartbeats (under the hook). */
+        val pulses: List<Double> = emptyList(),
     )
 
     /** Mono 48 kHz 16-bit PCM of the finished soundtrack. */
@@ -68,6 +76,10 @@ object AudioMix {
             for (t in plan.pops) addPop(out, t)
             for (t in plan.hits) addHit(out, t, rnd)
             for (t in plan.risers) addRiser(out, t, rnd)
+            for (t in plan.clicks) addClick(out, t, rnd)
+            for (t in plan.papers) addPaper(out, t, rnd)
+            for (t in plan.drops) addDrop(out, t)
+            for (t in plan.pulses) addPulse(out, t)
         }
         normalizeLoudness(out, targetLufs = -14.0)
         limit(out, ceiling = db(-1.0).toFloat())
@@ -395,7 +407,7 @@ object AudioMix {
             ph += 2 * PI * f / RATE
             val boom = sin(ph) * exp(-i.toDouble() / (0.16 * RATE))
             val click = if (i < 0.004 * RATE) (rnd.nextFloat() * 2 - 1) * (1 - i / (0.004 * RATE)) else 0.0
-            out[idx] += ((boom * db(-16.0)) + click * db(-24.0)).toFloat()
+            out[idx] += ((boom * db(-18.0)) + click * db(-24.0)).toFloat()
         }
     }
 
@@ -439,6 +451,72 @@ object AudioMix {
             bp += g * hp
             val env = if (i < peakAt) (i.toDouble() / peakAt).pow(2.0) else exp(-(i - peakAt).toDouble() / (0.04 * RATE))
             out[idx] += (bp * env * db(-20.0)).toFloat()
+        }
+    }
+
+    // ---- Click: a tight UI tap (all new effects sit between -18 and -24 dB) ----
+
+    private fun addClick(out: FloatArray, at: Double, rnd: Random) {
+        val s0 = (at * RATE).toInt()
+        val len = (0.03 * RATE).toInt()
+        var ph = 0.0
+        for (i in 0 until len) {
+            val idx = s0 + i
+            if (idx < 0 || idx >= out.size) continue
+            ph += 2 * PI * 3200 / RATE
+            val env = exp(-i.toDouble() / (0.004 * RATE))
+            val noise = if (i < 0.0015 * RATE) (rnd.nextFloat() * 2 - 1).toDouble() else 0.0
+            out[idx] += ((sin(ph) * 0.6 + noise) * env * db(-21.0)).toFloat()
+        }
+    }
+
+    // ---- Paper: a short rustle of crackling filtered noise ----
+
+    private fun addPaper(out: FloatArray, at: Double, rnd: Random) {
+        val s0 = (at * RATE).toInt()
+        val len = (0.32 * RATE).toInt()
+        var hp = 0f; var prev = 0f
+        for (i in 0 until len) {
+            val idx = s0 + i
+            if (idx < 0 || idx >= out.size) continue
+            val t = i.toDouble() / len
+            val n = rnd.nextFloat() * 2 - 1
+            hp = 0.85f * (hp + n - prev); prev = n // high-pass: papery hiss
+            val crackle = if (rnd.nextFloat() < 0.02f) 3f else 1f
+            val env = sin(PI * t).pow(0.7) * (0.6 + 0.4 * sin(t * 40))
+            out[idx] += (hp * crackle * env * db(-23.0)).toFloat()
+        }
+    }
+
+    // ---- Drop: a sub-bass sweep that lands the payoff ----
+
+    private fun addDrop(out: FloatArray, at: Double) {
+        val s0 = (at * RATE).toInt()
+        val len = (0.9 * RATE).toInt()
+        var ph = 0.0
+        for (i in 0 until len) {
+            val idx = s0 + i
+            if (idx < 0 || idx >= out.size) continue
+            val t = i.toDouble() / len
+            ph += 2 * PI * (90 - 55 * t) / RATE
+            val env = min(1.0, i / (0.01 * RATE)) * exp(-t * 3.2)
+            out[idx] += (sin(ph) * env * db(-18.0)).toFloat()
+        }
+    }
+
+    // ---- Pulse: a soft double heartbeat for tension ----
+
+    private fun addPulse(out: FloatArray, at: Double) {
+        for ((offset, gain) in listOf(0.0 to -22.0, 0.18 to -25.0)) {
+            val s0 = ((at + offset) * RATE).toInt()
+            val len = (0.16 * RATE).toInt()
+            var ph = 0.0
+            for (i in 0 until len) {
+                val idx = s0 + i
+                if (idx < 0 || idx >= out.size) continue
+                ph += 2 * PI * 55 / RATE
+                out[idx] += (sin(ph) * exp(-i.toDouble() / (0.04 * RATE)) * db(gain)).toFloat()
+            }
         }
     }
 }

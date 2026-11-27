@@ -238,3 +238,22 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.0: playbook upgrade (script, motion, voice, sound)
+
+- **Script:**
+  - nested loops (a micro-payoff every 5-8 s that opens a deeper question)
+  - no verbal sign-off: the last line breaks off mid-thought and runs into the hook; the comment question is on screen only
+  - 140-160 words at a clearer pace (2.7 words/s, default voice rate +0%)
+  - format templates (what_if, myth_vs_fact, tutorial, ranking, explainer, story)
+  - FACTS ONLY rules, plus an on-phone check that flags any number not found in the research or sources (sent back for a rewrite)
+  - facts added from Wikipedia carry their source
+- **Motion:**
+  - "document" scene: a tilted article card with a drop shadow and a marker stroke sweeping across the key words
+  - "map" scene: Natural Earth countries (public domain asset); zooms from the world to the country, lights it up, drops a pin
+  - transition 0 is now a 3D push with motion-blur trails
+  - 12 fps handmade graphics option (always on in Paper sketch)
+- **Voice and sound:**
+  - optional expressive Gemini voice (8 voices; word timings estimated from the speech and pauses; falls back to the Microsoft voice)
+  - new SFX at -18 to -24 dB: UI clicks, paper rustles, a sub-bass drop on the payoff, a heartbeat under the hook
+- **Captions** stay clear of the right-side like/comment buttons (centred at x=492, max width 780).
+

@@ -68,7 +68,7 @@ class Settings(context: Context) {
         set(v) = put("voice", v)
 
     var voiceRate: String
-        get() = str("voice_rate", "+8%")
+        get() = str("voice_rate", "+0%")
         set(v) = put("voice_rate", v)
 
     var language: String
@@ -194,4 +194,18 @@ class Settings(context: Context) {
     var lookMode: String
         get() = str("look_mode", "mix")
         set(v) = put("look_mode", v)
+
+    /** Graphics animate at 12 fps (handmade documentary feel); the Paper look always does. */
+    var stutter12: Boolean
+        get() = p.getBoolean("stutter12", false)
+        set(v) = p.edit().putBoolean("stutter12", v).apply()
+
+    /** Expressive Gemini voice (falls back to the Microsoft voice). */
+    var expressiveVoice: Boolean
+        get() = p.getBoolean("expressive_voice", false)
+        set(v) = p.edit().putBoolean("expressive_voice", v).apply()
+
+    var expressiveVoiceName: String
+        get() = str("expressive_voice_name", "Puck")
+        set(v) = put("expressive_voice_name", v)
 }

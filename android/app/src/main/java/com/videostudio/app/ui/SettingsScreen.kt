@@ -206,6 +206,16 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 }
                 var sfx by remember { mutableStateOf(s.soundEffects) }
                 ToggleRow("Sound effects", "A light whoosh on every scene change.", sfx) { sfx = it; s.soundEffects = it }
+                var ev by remember { mutableStateOf(s.expressiveVoice) }
+                ToggleRow("Expressive voice (Gemini)", "A livelier narrator with natural emphasis, using your free Gemini voice quota. Falls back to the Microsoft voice when the quota is used up.", ev) { ev = it; s.expressiveVoice = it }
+                if (ev) {
+                    var vn by remember { mutableStateOf(s.expressiveVoiceName) }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (v in com.videostudio.app.voice.GeminiTts.VOICES) FilterChip(selected = vn == v, onClick = { vn = v; s.expressiveVoiceName = v }, label = { Text(v, fontSize = 12.sp) })
+                    }
+                }
+                var st by remember { mutableStateOf(s.stutter12) }
+                ToggleRow("12 fps handmade graphics", "Graphics move in deliberate steps (documentary style) while captions and camera stay smooth. Paper sketch always uses it.", st) { st = it; s.stutter12 = it }
                 Spacer(Modifier.height(10.dp))
                 Text("Video look")
                 var lookMode by remember { mutableStateOf(s.lookMode) }
