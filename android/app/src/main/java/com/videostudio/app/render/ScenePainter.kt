@@ -123,6 +123,21 @@ class ScenePainter(
         shader = android.graphics.BitmapShader(grainBitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
     }
     private val grainShift = android.graphics.Matrix()
+    private var finishBitmap: Bitmap? = null
+    private var grainOnlyBitmap: Bitmap? = null
+    private fun finish(grainOnly: Boolean = false): Bitmap {
+        (if (grainOnly) grainOnlyBitmap else finishBitmap)?.let { return it }
+        val b = Bitmap.createBitmap((W + FINISH_PAD).toInt(), (H + FINISH_PAD).toInt(), Bitmap.Config.ARGB_8888)
+        val fc = Canvas(b)
+        if (!grainOnly) {
+            fc.translate(FINISH_PAD / 2, FINISH_PAD / 2)
+            fc.drawRect(-FINISH_PAD, -FINISH_PAD, W + FINISH_PAD, H + FINISH_PAD, vignette)
+            fc.setMatrix(null)
+        }
+        fc.drawRect(0f, 0f, W + FINISH_PAD, H + FINISH_PAD, grainPaint)
+        if (grainOnly) grainOnlyBitmap = b else finishBitmap = b
+        return b
+    }
     private val scrim = Paint()
     private val rect = RectF()
     private val path = Path()
@@ -261,14 +276,21 @@ class ScenePainter(
         c.drawRoundRect(rect, radius, radius, fill)
     }
 
+    var profiling = false
+    val prof = HashMap<String, Long>()
+    private var pt0 = 0L
     fun draw(c: Canvas, t: Double, captions: Boolean = true) {
         now = t
+        if (profiling) pt0 = System.nanoTime()
         background(c, t)
+        if (profiling) { val nt = System.nanoTime(); prof["background"] = (prof["background"] ?: 0L) + nt - pt0; pt0 = nt }
         val span = timeline.sceneAt(t)
         manageMedia(span.index, t - span.start)
         val lt = t - span.start
         motifLayer(c, t)
+        if (profiling) { val nt = System.nanoTime(); prof["motif"] = (prof["motif"] ?: 0L) + nt - pt0; pt0 = nt }
         hookBackdrop(c, t)
+        if (profiling) { val nt = System.nanoTime(); prof["hookBackdrop"] = (prof["hookBackdrop"] ?: 0L) + nt - pt0; pt0 = nt }
         // Impact shake in the opening (and on early punch words).
         val (sx, sy) = shake(t)
         c.save()
@@ -326,14 +348,21 @@ class ScenePainter(
             c.restore()
         }
         c.restore()
+        if (profiling) { val nt = System.nanoTime(); prof["scenes"] = (prof["scenes"] ?: 0L) + nt - pt0; pt0 = nt }
         emphasisOverlay(c, t)
         hookOverlay(c, t)
         palette = paletteFor(span.index)
         chrome(c, t, span.index)
-        if (!look.paper && (!look.glass || darkScene(span.index))) c.drawRect(0f, 0f, W, H, vignette)
-        grainShift.setTranslate(((t * 97) % 256).toFloat(), ((t * 61) % 256).toFloat())
-        grainPaint.shader.setLocalMatrix(grainShift)
-        c.drawRect(0f, 0f, W, H, grainPaint)
+        if (profiling) { val nt = System.nanoTime(); prof["overlays+chrome"] = (prof["overlays+chrome"] ?: 0L) + nt - pt0; pt0 = nt }
+        if (!look.paper && (!look.glass || darkScene(span.index))) {
+            // Vignette and grain baked into one picture; a small jitter keeps the grain alive.
+            val f = finish()
+            c.drawBitmap(f, -((t * 97) % FINISH_PAD).toFloat(), -((t * 61) % FINISH_PAD).toFloat(), null)
+        } else {
+            c.drawBitmap(finish(grainOnly = true), -((t * 97) % FINISH_PAD).toFloat(), -((t * 61) % FINISH_PAD).toFloat(), null)
+        }
+        if (profiling) { val nt = System.nanoTime(); prof["vignette"] = (prof["vignette"] ?: 0L) + nt - pt0; pt0 = nt }
+        if (profiling) { val nt = System.nanoTime(); prof["grain"] = (prof["grain"] ?: 0L) + nt - pt0; pt0 = nt }
         val kineticNow = look.kinetic && scenes[span.index].type.lowercase(Locale.ROOT) in KINETIC_TYPES
         if (captions && loopK < 0.5f && !kineticNow) {
             when {
@@ -379,13 +408,15 @@ class ScenePainter(
         palette = paletteFor(index)
         val drift = (1f + 0.035f * clamp(lt / dur).toFloat()) * emphasisPunch(t) *
             (if (scene.type == "logo") 1f else cutIn(lt, dur))
-        c.saveLayerAlpha(0f, 0f, W, H, (alpha * 255).toInt())
+        // An offscreen layer only when the scene is fading (it is the costliest thing on a frame).
+        if (alpha >= 0.995f) c.save() else c.saveLayerAlpha(0f, 0f, W, H, (alpha * 255).toInt())
         c.translate(dx, dy)
         c.scale(scale * drift, scale * drift, W / 2, H * 0.42f)
         cameraMove(c, motion.camera.getOrElse(index) { 0 }, lt, dur)
         val savedScene = curScene; val savedLt = curLt
         curScene = index; curLt = lt
         val type = scene.type.lowercase(Locale.ROOT)
+        if (index > 0 && wantsBackdrop(type)) backdrop(c, index, lt, dur)
         if (look.kinetic && type in KINETIC_TYPES) kineticScene(c, index, lt)
         else when (type) {
             "tier" -> tier(c, scene, lt, dur)
@@ -424,9 +455,33 @@ class ScenePainter(
         media.values.forEach { it.release() }
         logoBitmaps.values.forEach { it?.recycle() }
         grainBitmap.recycle()
+        bgLow?.recycle(); bgLow = null
+        finishBitmap?.recycle(); finishBitmap = null
+        grainOnlyBitmap?.recycle(); grainOnlyBitmap = null
     }
 
+    // Smooth backgrounds (gradients, light blobs) are drawn at half size and scaled up: 4x fewer pixels,
+    // no visible difference under the grain. The grid and paper looks have fine lines, so stay full size.
+    private val lowResBackground = !look.paper && look.background != 1
+    private var bgLow: Bitmap? = null
+    private var bgLowCanvas: Canvas? = null
+    private var bgLowT = Double.NaN
+    private var bgLowPalette: Any? = null
+    private val bgLowPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val bgLowDst = RectF(0f, 0f, W, H)
+
     private fun background(c: Canvas, t: Double) {
+        if (!lowResBackground) { backgroundFull(c, t); return }
+        val bmp = bgLow ?: Bitmap.createBitmap((W / 2).toInt(), (H / 2).toInt(), Bitmap.Config.ARGB_8888).also { bgLow = it; bgLowCanvas = Canvas(it) }
+        if (t != bgLowT || bgLowPalette !== palette) {
+            val lc = bgLowCanvas!!
+            lc.save(); lc.scale(0.5f, 0.5f); backgroundFull(lc, t); lc.restore()
+            bgLowT = t; bgLowPalette = palette
+        }
+        c.drawBitmap(bmp, null, bgLowDst, bgLowPaint)
+    }
+
+    private fun backgroundFull(c: Canvas, t: Double) {
         if (look.glass) { glassBackground(c, t); return }
         if (look.paper) { paperBackground(c, t); return }
         if (look.kinetic) { kineticBackground(c, t); return }
@@ -1043,7 +1098,31 @@ class ScenePainter(
         }
     }
 
-    /** A small glass pill with the logo and name, for scenes that mention a brand. */
+    /** A matching picture or clip behind a talking scene, toned into the look so the words stay readable. */
+    private fun backdrop(c: Canvas, index: Int, lt: Double, dur: Double) {
+        val m = media[index]?.get() ?: return
+        val frame = m.frameAt(lt)
+        val zoom = max(W / frame.width, H / frame.height) * (1.06f + 0.07f * clamp(lt / dur.coerceAtLeast(1.0)).toFloat())
+        val w = frame.width * zoom
+        val h = frame.height * zoom
+        val left = (W - w) / 2 + (8 * lt).toFloat() - 16f
+        val top = (H - h) / 2
+        fill.shader = null
+        fill.alpha = (255 * clamp(lt / 0.25)).toInt().coerceAtLeast(60)
+        fill.isFilterBitmap = true
+        c.drawBitmap(frame, Rect(0, 0, frame.width, frame.height), RectF(left, top, left + w, top + h), fill)
+        fill.alpha = 255
+        val base = if (look.paper) Color.rgb(244, 237, 222) else palette.bgTop
+        scrim.shader = LinearGradient(
+            0f, 0f, 0f, H,
+            intArrayOf(withAlpha(base, 225), withAlpha(base, 170), withAlpha(base, 165), withAlpha(base, 230)),
+            floatArrayOf(0f, 0.32f, 0.62f, 1f), Shader.TileMode.CLAMP,
+        )
+        c.drawRect(0f, 0f, W, H, scrim)
+        scrim.shader = null
+    }
+
+    /** A glass pill with the logo and name, for scenes that mention a brand. */
     private fun badge(c: Canvas, s: Scene, index: Int, lt: Double) {
         if (s.type == "logo" || s.brand.isBlank()) return
         if (index == 0 && seriesName.isNotBlank()) return // the series badge sits there
@@ -1052,10 +1131,10 @@ class ScenePainter(
         val pop = spring((lt - 0.15) / 0.6).toFloat()
         if (pop <= 0.01f) return
         tp.typeface = bold
-        tp.textSize = 40f
+        tp.textSize = 50f
         val name = s.brand.take(22)
         val tw = tp.measureText(name)
-        val h = 92f
+        val h = 124f
         val w = h + 20f + tw + 36f
         val cy = 244f
         c.save()
@@ -1071,7 +1150,7 @@ class ScenePainter(
         drawLogoTile(c, logo, W / 2 - w / 2 + h / 2 + 6f, cy, h - 20f, -1f)
         tp.color = Color.WHITE
         tp.textAlign = Paint.Align.LEFT
-        c.drawText(name, W / 2 - w / 2 + h + 20f, cy + 14f, tp)
+        c.drawText(name, W / 2 - w / 2 + h + 20f, cy + 18f, tp)
         c.restore()
     }
 
@@ -1493,6 +1572,8 @@ class ScenePainter(
     /** Decorative overlay for a scene (drawn with the scene, so it moves with transitions). */
     private fun sceneOverlay(c: Canvas, kind: Int, lt: Double, dur: Double) {
         if (kind == 0) return
+        // Never cover a logo badge (corner brackets and the timer ring sit in the same place).
+        if ((kind == 1 || kind == 5) && logos[curScene] != null) return
         val a = clamp(lt / 0.3).toFloat()
         val col = palette.accent
         stroke.shader = null; fill.shader = null
@@ -2430,6 +2511,13 @@ class ScenePainter(
 
         /** Glass micro-event times (seconds into the scene); the sound mix puts a click on each. */
         const val HOOK_CLICK = 0.75
+        /** Extra size of the baked vignette/grain picture, so it can jitter without showing an edge. */
+        const val FINISH_PAD = 16f
+
+        /** Talking scenes that get a matching picture or clip behind the words. */
+        private val BACKDROP_TYPES = setOf("statement", "question", "stat", "emoji", "list", "steps", "compare", "")
+        fun wantsBackdrop(type: String) = type.lowercase(Locale.ROOT) in BACKDROP_TYPES
+
         /** How long a text entrance takes, in seconds. */
         const val ENTRANCE_DUR = 0.42
 

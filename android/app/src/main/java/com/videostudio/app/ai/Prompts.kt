@@ -141,6 +141,7 @@ For every scene choose ONE visual from this list (the app animates them), and fi
 - {"type":"outro","text":"the comment question, short (on screen only)","emoji":"one emoji"}  (last scene; its spoken line is the mid-thought loop line)
 Vary the visuals; never use the same type more than twice in a row. On-screen text must be short.
 Real pictures are found automatically: use "photo" for 2 or 3 scenes where a real image helps (people, places, objects, events), with a concrete visual query${if (stockFootage) "; these can play as real stock video" else ""}.
+Every scene (not only photo scenes) gets a "query": 2-4 concrete English words for a background picture or clip that shows exactly what that line is about (e.g. "man sleeping bedroom night", "server room data center"). Use things a camera can film, never abstract words.
 Whenever a line names a company, product, app or organisation, either use the "logo" visual for it, or add "brand" and "domain" to that scene's visual so its logo appears as a badge. Logos are checked against the official website, so: use the exact official name ("Google Gemini", not "Gemini"; "Microsoft Copilot", not "Copilot"), the exact official domain of that product (gemini.google.com, chatgpt.com, claude.ai, copilot.microsoft.com), and never put a brand on a scene that does not name it. If you are not sure of the official domain, leave "brand" empty.
 
 Reply with one JSON object and nothing else, exactly this shape:

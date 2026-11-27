@@ -238,6 +238,16 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.3: logos always, pictures behind every talking scene, ~2x faster
+
+- **Logos are back on every brand.** The live check found correct logos for 26 of 26 popular brands, so the lookup itself was fine. The gap was scripts that named a brand without marking it. `BrandSpotter` now finds 200+ well-known brands in what is said and marks them with their official domain. Names that are also ordinary words (Apple, Amazon, Tesla...) count only mid-sentence. The badge is bigger (124 px), and no overlay covers it.
+- **Matching picture or clip behind every talking scene** (statement, question, stat, emoji, list, steps, compare). The script gives a filmable `query` per scene (a keyword fallback covers scripts without one). The picture is toned into the look so the text stays readable. You can turn it off in Settings.
+- **Faster:**
+  - Frame drawing went from 35 ms to about 13 ms (desktop measurement): half-size smooth backgrounds, vignette and grain baked into one picture, and no offscreen layer for opaque scenes.
+  - Drawing and encoding run on two threads at once.
+  - Pictures, clips and logos download 6 at a time.
+- **Never drop a feature:** `FEATURES.md` lists every requested feature by version, `FeatureGuardTest` checks them on every build, and `CLAUDE.md` makes this the rule for every future update.
+
 ## 3.2: premium script studio (Claude with live web research)
 
 Settings has a new **Premium script studio** section. With the user's own Anthropic API key (paid per use), every script goes through three passes (`ai/ClaudeStudio.kt`, official `anthropic-java` SDK):

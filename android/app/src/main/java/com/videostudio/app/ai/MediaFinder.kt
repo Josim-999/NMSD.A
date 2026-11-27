@@ -86,7 +86,7 @@ class MediaFinder(
     private var index: Map<String, Icon>? = null
 
     /** Simple Icons' brand list (titles, aliases, colours), cached for 30 days. */
-    private fun icons(): Map<String, Icon> {
+    @Synchronized private fun icons(): Map<String, Icon> {
         index?.let { return it }
         val cache = File(cacheDir, "simple-icons.json")
         val fresh = cache.exists() && System.currentTimeMillis() - cache.lastModified() < 30L * 24 * 3600 * 1000
@@ -255,10 +255,10 @@ class MediaFinder(
 
     // ---------------- Photos ----------------
 
-    private val used = HashSet<String>()
+    private val used: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet<String>())
 
     /** Search answers already fetched: extra pictures for a scene reuse them (Openverse allows ~200 searches a day). */
-    private val searches = HashMap<String, String>()
+    private val searches = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /**
      * Best free picture for a scene. [wiki] is a Wikipedia article title (a named person, place,
@@ -493,6 +493,19 @@ class MediaFinder(
             Normalizer.normalize(s.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(Regex("[^a-z0-9]"), "")
 
         private val STOP = setOf("the", "and", "for", "with", "from", "into", "your", "you", "this", "that", "how", "why", "what", "photo", "image", "picture")
+
+        private val TALK_STOP = setOf("about", "after", "again", "also", "because", "been", "before", "being", "could", "does", "doing", "every", "even",
+            "have", "here", "just", "like", "more", "most", "much", "only", "other", "over", "really", "same", "some", "than", "their", "them", "then", "there",
+            "these", "they", "thing", "things", "those", "through", "very", "want", "were", "when", "where", "which", "while", "will", "would", "years", "year",
+            "actually", "almost", "always", "never", "nothing", "something", "everything", "people", "percent", "million", "billion", "single", "today", "right")
+
+        /** A short picture search for a spoken line: its 3 most concrete words, else the topic. */
+        fun keywords(text: String, topic: String): String {
+            val words = text.split(Regex("[^\\p{L}]+")).filter { it.length >= 4 && it.lowercase(Locale.ROOT) !in TALK_STOP && it.lowercase(Locale.ROOT) !in STOP }
+            val pick = words.sortedByDescending { it.length }.take(3)
+            return if (pick.size >= 2) pick.joinToString(" ").lowercase(Locale.ROOT)
+            else (pick + topic.split(Regex("[^\\p{L}]+")).filter { it.length >= 4 }.take(3)).distinct().take(3).joinToString(" ").lowercase(Locale.ROOT)
+        }
 
         /** Meaningful words of a search, singular-ish ("robots" -> "robot"). */
         fun keywords(q: String): List<String> = q.lowercase(Locale.ROOT).split(Regex("[^\\p{L}\\p{N}]+"))

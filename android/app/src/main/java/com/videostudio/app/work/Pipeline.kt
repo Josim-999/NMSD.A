@@ -1,6 +1,7 @@
 package com.videostudio.app.work
 
 import com.videostudio.app.compliance.YouTubeCheck
+import com.videostudio.app.ai.BrandSpotter
 import com.videostudio.app.ai.ClaudeStudio
 import com.videostudio.app.ai.BackupAi
 import com.videostudio.app.ai.BuiltInWriter
@@ -338,75 +339,104 @@ class Pipeline(
 
         // Pictures and logos, matched to the script. Free sources first need no key at all.
         val finder = MediaFinder(File(context.cacheDir, "media"), settings.pexelsKey, log, pixabayKey = settings.pixabayKey)
-        val media = LinkedHashMap<Int, SceneMedia.Lazy>()
+        val found = java.util.concurrent.ConcurrentHashMap<Int, SceneMedia.Lazy>()
         val logos = LinkedHashMap<Int, Logo>()
-        val credits = ArrayList<String>()
+        val credits = java.util.Collections.synchronizedList(ArrayList<String>())
+        // Brand names the script forgot to mark still get their logo (checked against the official site).
+        val autoBrands = BrandSpotter.mark(p.scenes)
+        if (autoBrands > 0) { log("Found $autoBrands brand name(s) in the script without a logo; adding them."); store.save(p) }
         val photoScenes = p.scenes.withIndex().filter { it.value.type == "photo" }
         val brandScenes = p.scenes.withIndex().filter { it.value.type == "logo" || it.value.brand.isNotBlank() }
-        if (photoScenes.isNotEmpty() || brandScenes.isNotEmpty()) step("Finding pictures and logos", null)
-        var clips = 0
-        var pictures = 0
-        for ((i, scene) in photoScenes) {
-            if (cancelled()) return
+        // Text scenes get a relevant picture or clip behind the words (darkened so the text stays readable).
+        val backdropScenes = if (settings.backdrops) p.scenes.withIndex().filter { it.index > 0 && ScenePainter.wantsBackdrop(it.value.type) } else emptyList()
+        if (photoScenes.isNotEmpty() || brandScenes.isNotEmpty() || backdropScenes.isNotEmpty()) step("Finding pictures, clips and logos", null)
+        val clips = java.util.concurrent.atomic.AtomicInteger()
+        val pictures = java.util.concurrent.atomic.AtomicInteger()
+        val backdrops = java.util.concurrent.atomic.AtomicInteger()
+        val stock = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank()
+        // Everything downloads at the same time (6 at once) instead of one after another.
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(6)
+        val jobs = ArrayList<java.util.concurrent.Future<*>>()
+        fun clipFor(i: Int, query: String, seconds: Double): Boolean {
+            val clip = File(dir, "photo_$i.mp4")
+            val credit = runCatching { Stock.pexelsVideo(settings.pexelsKey, query, clip, seconds) }.getOrNull()
+                ?: runCatching { finder.pixabayVideo(query, clip, seconds) }.getOrNull() ?: return false
+            credits.add(credit)
+            found[i] = SceneMedia.Lazy { SceneMedia.Clip.load(clip, seconds) }
+            return true
+        }
+        for ((i, scene) in photoScenes) jobs += pool.submit {
+            if (cancelled()) return@submit
             val query = scene.query.ifBlank { scene.text }
             val span = timeline.spans[i]
             val seconds = (span.end - span.start) + ScenePainter.TRANSITION
-            if ((settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank()) && scene.library.isBlank()) {
-                val clip = File(dir, "photo_$i.mp4")
-                val videoCredit = runCatching { Stock.pexelsVideo(settings.pexelsKey, query, clip, seconds) }.getOrNull()
-                    ?: runCatching { finder.pixabayVideo(query, clip, seconds) }.getOrNull()
-                if (videoCredit != null) {
-                    credits.add(videoCredit)
-                    clips++
-                    media[i] = SceneMedia.Lazy { SceneMedia.Clip.load(clip, seconds) }
-                    continue
-                }
-            }
+            if (stock && scene.library.isBlank() && clipFor(i, query, seconds)) { clips.incrementAndGet(); return@submit }
             val f = File(dir, "photo_$i.jpg")
-            val found = runCatching { finder.photo(query, scene.wiki, f, scene.library) }.getOrNull()
-            if (found != null) {
-                credits.add(found.credit)
-                pictures++
-                // Long scenes get one or two more pictures, so the image changes every ~2 seconds.
-                val extra = when {
-                    seconds >= 5.5 -> 2
-                    seconds >= 3.6 -> 1
-                    else -> 0
-                }
-                val files = arrayListOf(f)
-                for (k in 1..extra) {
-                    val g = File(dir, "photo_${i}_$k.jpg")
-                    val more = runCatching { finder.photo(query.ifBlank { scene.wiki }, "", g, scene.library) }.getOrNull() ?: break
-                    credits.add(more.credit)
-                    files.add(g)
-                }
-                media[i] = SceneMedia.Lazy {
-                    val bmps = files.mapNotNull { loadBitmap(it) }
-                    when {
-                        bmps.size > 1 -> SceneMedia.Slideshow(bmps)
-                        bmps.size == 1 -> SceneMedia.Photo(bmps[0])
-                        else -> null
-                    }
+            val hit = runCatching { finder.photo(query, scene.wiki, f, scene.library) }.getOrNull() ?: return@submit
+            credits.add(hit.credit)
+            pictures.incrementAndGet()
+            // Long scenes get one or two more pictures, so the image changes every ~2 seconds.
+            val extra = when {
+                seconds >= 5.5 -> 2
+                seconds >= 3.6 -> 1
+                else -> 0
+            }
+            val files = arrayListOf(f)
+            for (k in 1..extra) {
+                val g = File(dir, "photo_${i}_$k.jpg")
+                val more = runCatching { finder.photo(query.ifBlank { scene.wiki }, "", g, scene.library) }.getOrNull() ?: break
+                credits.add(more.credit)
+                files.add(g)
+            }
+            found[i] = SceneMedia.Lazy {
+                val bmps = files.mapNotNull { loadBitmap(it) }
+                when {
+                    bmps.size > 1 -> SceneMedia.Slideshow(bmps)
+                    bmps.size == 1 -> SceneMedia.Photo(bmps[0])
+                    else -> null
                 }
             }
         }
         // Quote scenes: the speaker's photo from Wikipedia.
-        for ((i, scene) in p.scenes.withIndex().filter { it.value.type == "quote" && it.value.wiki.isNotBlank() }) {
+        for ((i, scene) in p.scenes.withIndex().filter { it.value.type == "quote" && it.value.wiki.isNotBlank() }) jobs += pool.submit {
             val f = File(dir, "photo_$i.jpg")
-            runCatching { finder.photo("", scene.wiki, f) }.getOrNull()?.let { found ->
-                credits.add(found.credit)
-                media[i] = SceneMedia.Lazy { loadBitmap(f)?.let { SceneMedia.Photo(it) } }
+            runCatching { finder.photo("", scene.wiki, f) }.getOrNull()?.let { hit ->
+                credits.add(hit.credit)
+                found[i] = SceneMedia.Lazy { loadBitmap(f)?.let { SceneMedia.Photo(it) } }
             }
         }
-        val logoCache = HashMap<String, Logo?>()
-        for ((i, scene) in brandScenes) {
-            if (cancelled()) return
-            val name = scene.brand.ifBlank { scene.text }
-            val logo = logoCache.getOrPut(MediaFinder.key(name + scene.domain)) { runCatching { finder.logo(name, scene.domain, if (scene.type == "logo") scene.wiki else "") }.getOrNull() }
-            if (logo != null) logos[i] = logo
+        for ((i, scene) in backdropScenes) jobs += pool.submit {
+            if (cancelled()) return@submit
+            val query = scene.query.ifBlank { MediaFinder.keywords(scene.text.ifBlank { scene.say }, p.topic) }
+            if (query.isBlank()) return@submit
+            val span = timeline.spans[i]
+            val seconds = (span.end - span.start) + ScenePainter.TRANSITION
+            if (stock && clipFor(i, query, seconds)) { backdrops.incrementAndGet(); return@submit }
+            val f = File(dir, "photo_$i.jpg")
+            runCatching { finder.photo(query, "", f) }.getOrNull()?.let { hit ->
+                credits.add(hit.credit)
+                backdrops.incrementAndGet()
+                found[i] = SceneMedia.Lazy { loadBitmap(f)?.let { SceneMedia.Photo(it) } }
+            }
         }
+        // Logos in one task (the logo check keeps state between steps), alongside the pictures.
+        jobs += pool.submit {
+            val logoCache = HashMap<String, Logo?>()
+            for ((i, scene) in brandScenes) {
+                if (cancelled()) return@submit
+                val name = scene.brand.ifBlank { scene.text }
+                val logo = logoCache.getOrPut(MediaFinder.key(name + scene.domain)) { runCatching { finder.logo(name, scene.domain, if (scene.type == "logo") scene.wiki else "") }.getOrNull() }
+                if (logo != null) synchronized(logos) { logos[i] = logo }
+            }
+        }
+        pool.shutdown()
+        for (j in jobs) runCatching { j.get(90, java.util.concurrent.TimeUnit.SECONDS) }
+        pool.shutdownNow()
+        if (cancelled()) return
+        val media = LinkedHashMap<Int, SceneMedia.Lazy>().apply { found.keys.sorted().forEach { put(it, found.getValue(it)) } }
         if (credits.isNotEmpty()) File(dir, "credits.txt").writeText(credits.joinToString("\n"))
-        if (photoScenes.isNotEmpty()) log("Pictures: $clips video clip(s), $pictures photo(s) for ${photoScenes.size} photo scene(s).")
+        if (photoScenes.isNotEmpty()) log("Pictures: ${clips.get()} video clip(s), ${pictures.get()} photo(s) for ${photoScenes.size} photo scene(s).")
+        if (backdropScenes.isNotEmpty()) log("Backgrounds: ${backdrops.get()} of ${backdropScenes.size} talking scenes got a matching picture or clip.")
         if (brandScenes.isNotEmpty()) log("Logos: ${logos.size} of ${brandScenes.size} brand scene(s).")
 
         // A look of its own for every video (captions, transitions, background), different from the last one.

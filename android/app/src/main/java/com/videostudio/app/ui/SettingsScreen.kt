@@ -217,6 +217,10 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 ToggleRow("Smooth motion (60 fps)", "Silkier animations and transitions. Rendering takes about twice as long.", smooth) {
                     smooth = it; s.smooth60 = it
                 }
+                var backdrops by remember { mutableStateOf(s.backdrops) }
+                ToggleRow("Pictures behind talking scenes", "Each talking scene shows a matching photo or clip behind the words, toned so the text stays easy to read.", backdrops) {
+                    backdrops = it; s.backdrops = it
+                }
                 var music by remember { mutableStateOf(s.music) }
                 ToggleRow("Background music", "A soft music bed made on the phone (no copyright), lowered automatically while the voice speaks.", music) {
                     music = it; s.music = it

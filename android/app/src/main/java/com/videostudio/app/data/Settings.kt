@@ -237,4 +237,9 @@ class Settings(context: Context) {
     var premiumModel: String
         get() = str("premium_model", com.videostudio.app.ai.ClaudeStudio.DEFAULT_MODEL)
         set(v) = put("premium_model", v)
+
+    /** Talking scenes get a matching picture or clip behind the words. */
+    var backdrops: Boolean
+        get() = str("backdrops", "true") == "true"
+        set(v) = put("backdrops", v.toString())
 }
