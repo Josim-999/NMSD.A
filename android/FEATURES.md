@@ -17,7 +17,8 @@ change, ask the owner first (with options), then update this file and the test i
 - Never decode video or large media while rendering; prepare it before. Pictures are capped to the 1080x1920 frame.
 - One render at a time; a failed render retries itself once in safe mode before showing an error.
 - One tap makes the whole video. All internet work happens first, in parallel, with time limits; after that the video finishes even offline.
-- Speed target: script within ~2.5 min, downloads within 75 s, render on the graphics chip; never lower the quality to go faster.
+- Speed target: script within ~2.5 min, downloads within 75 s, render on the graphics chip or every CPU core; never lower the quality to go faster.
+- Every frame must look exactly the same whichever way it is rendered (GPU, parallel CPU, safe mode).
 
 ## Script
 | Feature | Since | Where |
@@ -93,3 +94,8 @@ change, ask the owner first (with options), then update this file and the test i
 | GPU rendering (Android 10+): hardware canvas into a texture, exact 1/fps timestamps, content check, automatic CPU fallback | 3.7 | `VideoRenderer.GpuFrames`, `RenderMode` |
 | Network call limits: free AIs 55 s, Gemini 100 s, pictures 30 s, stock clips 45 s; pop-out cutouts 15 s | 3.7 | ai/*, `Cutout` |
 | Crash guard: a GPU render that never finished switches that phone to CPU rendering automatically | 3.7 | Settings `gpuAttempt`, Pipeline |
+| Parallel CPU rendering: up to 4 painters (one per two cores, by memory), frame i on painter i % n, pixel-identical frames, ~3x faster | 3.8 | `VideoRenderer` PARALLEL, `Pipeline.parallelWorkers`, `ParallelRenderTest` |
+| Shared pictures counted per painter: freed only when no painter needs them | 3.8 | `SceneMedia.Lazy` |
+| Audio mix + AAC encoding run alongside the frames (video waits in memory until the audio track is ready) | 3.8 | `VideoRenderer.render/startMuxer` |
+| Encoder unpaced (KEY_PRIORITY non-realtime + KEY_OPERATING_RATE), with its own fallback level so quality settings stay | 3.8 | `VideoRenderer.videoFormat` |
+| Live render speed: "about 40 s left" on the progress line | 3.8 | `Pipeline.render` |

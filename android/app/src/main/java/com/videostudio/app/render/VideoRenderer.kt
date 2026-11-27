@@ -24,8 +24,8 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
 
-/** How frames are drawn: on the graphics chip (fastest), or on the CPU with two threads or one (safe). */
-enum class RenderMode { GPU, TWO_THREADS, ONE_THREAD }
+/** How frames are drawn: on the graphics chip (fastest), on several CPU cores at once, or on one thread (safe). */
+enum class RenderMode { GPU, PARALLEL, ONE_THREAD }
 
 /** Longest one frame may take to draw before the render is stopped (seconds). */
 private const val FRAME_TIMEOUT_S = 240L
@@ -49,21 +49,25 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         out: File,
         cancelled: () -> Boolean,
         mode: RenderMode = RenderMode.GPU,
+        /** More painters for [RenderMode.PARALLEL]: each draws every n-th frame on its own CPU core. */
+        helpers: List<ScenePainter> = emptyList(),
         progress: (Float) -> Unit,
     ) {
-        val twoThreads = mode == RenderMode.TWO_THREADS
-        val audio = encodeAudio(audioFile, audioPlan)
+        // The voice/music mix and its AAC encoding run alongside the video frames, not before them.
+        val audioJob = java.util.concurrent.Executors.newSingleThreadExecutor()
+        val audioFuture = audioJob.submit<EncodedAudio> { encodeAudio(audioFile, audioPlan) }
+        audioJob.shutdown()
         out.parentFile?.mkdirs()
         val part = File(out.parentFile, out.name + ".part")
         part.delete()
 
         val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
         // Best settings first; phones whose encoder refuses some of them fall back step by step.
-        val attempts = listOf(true to true, false to true, false to false)
+        val attempts = listOf(Triple(true, true, true), Triple(true, true, false), Triple(false, true, false), Triple(false, false, false))
         var surface: Surface? = null
-        for ((high, extras) in attempts) {
+        for ((high, extras, speed) in attempts) {
             try {
-                encoder.configure(videoFormat(high, extras), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+                encoder.configure(videoFormat(high, extras, speed), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
                 surface = encoder.createInputSurface()
                 encoder.start()
                 break
@@ -73,45 +77,53 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         }
         if (surface == null) {
             encoder.release()
+            audioFuture.cancel(true)
             throw RenderError("This phone's video encoder does not support ${width}x$height. Try 720p in Settings.")
         }
 
         val muxer = MediaMuxer(part.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
         val egl = Egl(surface)
         val drawer = TextureDrawer()
-        // Two threads: the painter draws the next frame while this (GL) thread uploads and encodes
-        // the current one. Two bitmaps rotate between them (each 8 MB at 1080p). With [twoThreads]
-        // off (the safe retry), one bitmap and one thread, exactly like before 3.3.
-        val buffers = when (mode) { RenderMode.GPU -> 0; RenderMode.TWO_THREADS -> 2; RenderMode.ONE_THREAD -> 1 }
-        val pool = java.util.concurrent.ArrayBlockingQueue<Bitmap>(buffers)
-        val canvases = HashMap<Bitmap, Canvas>()
-        repeat(buffers) { Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { pool.add(it); canvases[it] = Canvas(it) } }
-        val ready = java.util.concurrent.ArrayBlockingQueue<Any>(buffers + 1)
         val scale = width / ScenePainter.W
         val info = MediaCodec.BufferInfo()
-        val mux = MuxState()
+        val mux = MuxState(audioFuture)
         val frames = (durationSec * fps).toInt().coerceAtLeast(1)
         val stop = java.util.concurrent.atomic.AtomicBoolean(false)
-        fun paint(bmp: Bitmap, i: Int) {
+
+        // CPU modes: [workers] painters, each drawing frames i where i % workers == its number, in
+        // order, into its own two bitmaps. This (GL) thread takes frame i from worker i % workers.
+        val painters = when (mode) { RenderMode.GPU -> emptyList(); RenderMode.PARALLEL -> listOf(painter) + helpers; RenderMode.ONE_THREAD -> listOf(painter) }
+        val workers = painters.size
+        val threaded = mode == RenderMode.PARALLEL
+        val pools = List(workers) { java.util.concurrent.ArrayBlockingQueue<Bitmap>(if (threaded) 2 else 1) }
+        val readies = List(workers) { java.util.concurrent.ArrayBlockingQueue<Any>(3) }
+        val canvases = HashMap<Bitmap, Canvas>()
+        for (q in pools) repeat(q.remainingCapacity()) { Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { q.add(it); canvases[it] = Canvas(it) } }
+        fun paint(p: ScenePainter, bmp: Bitmap, i: Int) {
             val canvas = canvases.getValue(bmp)
             canvas.save()
             canvas.scale(scale, scale)
-            painter.draw(canvas, i.toDouble() / fps, captions = true)
+            p.draw(canvas, i.toDouble() / fps, captions = true)
             canvas.restore()
         }
-        val painterThread = if (!twoThreads) null else Thread({
-            try {
-                for (i in 0 until frames) {
-                    if (stop.get()) return@Thread
-                    val bmp = pool.poll(30, java.util.concurrent.TimeUnit.SECONDS) ?: throw RenderError("the encoder stalled")
-                    paint(bmp, i)
-                    ready.put(bmp)
+        val threads = if (!threaded) emptyList() else painters.mapIndexed { k, p ->
+            Thread({
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY)
+                try {
+                    var i = k
+                    while (i < frames) {
+                        if (stop.get()) return@Thread
+                        val bmp = pools[k].poll(30, java.util.concurrent.TimeUnit.SECONDS) ?: throw RenderError("the encoder stalled")
+                        paint(p, bmp, i)
+                        readies[k].put(bmp)
+                        i += workers
+                    }
+                } catch (e: Throwable) {
+                    runCatching { readies[k].put(e) }
                 }
-            } catch (e: Throwable) {
-                runCatching { ready.put(e) }
-            }
-        }, "frame-painter")
-        painterThread?.start()
+            }, "frame-painter-$k")
+        }
+        threads.forEach { it.start() }
         // GPU mode: the phone's graphics chip draws each frame (10x+ faster than the CPU), into a
         // texture that is then encoded with an exact 1/fps timestamp, so quality is unchanged.
         val gpu = if (mode == RenderMode.GPU) GpuFrames(painter, width, height, scale, fps) else null
@@ -120,33 +132,32 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
                 if (cancelled()) throw RenderError("cancelled")
                 if (gpu != null) {
                     gpu.frame(i)
+                } else if (!threaded) {
+                    val bmp = pools[0].peek()!!
+                    paint(painter, bmp, i)
+                    drawer.draw(bmp)
                 } else {
-                val bmp: Bitmap
-                if (painterThread == null) {
-                    bmp = pool.peek()!!
-                    paint(bmp, i)
-                } else {
+                    val k = i % workers
                     // Generous: a scene's pictures load on its first frame. Only a real hang stops the render.
-                    val item = ready.poll(FRAME_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS)
+                    val item = readies[k].poll(FRAME_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS)
                         ?: throw RenderError("frame ${i + 1} of $frames did not finish drawing in $FRAME_TIMEOUT_S s")
                     if (item is Throwable) throw item
-                    bmp = item as Bitmap
-                }
-                drawer.draw(bmp)
-                if (painterThread != null) pool.put(bmp)
+                    val bmp = item as Bitmap
+                    drawer.draw(bmp)
+                    pools[k].put(bmp)
                 }
                 egl.present(i * 1_000_000_000L / fps)
-                drain(encoder, info, muxer, audio, mux, end = false)
+                drain(encoder, info, muxer, mux, end = false)
                 if (i % 15 == 0) progress(i.toFloat() / frames)
             }
-            drain(encoder, info, muxer, audio, mux, end = true)
+            drain(encoder, info, muxer, mux, end = true)
             progress(1f)
         } finally {
             stop.set(true)
-            pool.clear(); ready.clear()
+            pools.forEach { it.clear() }; readies.forEach { it.clear() }
             gpu?.release()
-            painterThread?.interrupt()
-            runCatching { painterThread?.join(5000) }
+            threads.forEach { it.interrupt() }
+            threads.forEach { runCatching { it.join(5000) } }
             canvases.keys.forEach { runCatching { it.recycle() } }
             runCatching { encoder.stop() }
             encoder.release()
@@ -155,6 +166,7 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
             surface.release()
             runCatching { if (mux.started) muxer.stop() }
             muxer.release()
+            if (!audioFuture.isDone) audioFuture.cancel(true)
         }
         if (!mux.started || part.length() < 10_000) throw RenderError("the encoder produced no video")
         out.delete()
@@ -166,7 +178,7 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
      * (Android 12+ keeps a minimum quality in VBR) and BT.709 colour tags, the HD standard, so
      * colours look the same after the platforms re-encode.
      */
-    private fun videoFormat(high: Boolean, extras: Boolean) =
+    private fun videoFormat(high: Boolean, extras: Boolean, speed: Boolean = false) =
         MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
             setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
@@ -182,41 +194,65 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
                 setInteger(MediaFormat.KEY_COLOR_RANGE, MediaFormat.COLOR_RANGE_LIMITED)
                 setInteger(MediaFormat.KEY_COLOR_TRANSFER, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
             }
+            if (speed) {
+                // Not a live stream: let the encoder run as fast as it can instead of pacing at real time.
+                setInteger(MediaFormat.KEY_PRIORITY, 1)
+                setInteger(MediaFormat.KEY_OPERATING_RATE, if (fps >= 50) 240 else 120)
+            }
         }
 
-    private class MuxState {
+    private class MuxState(val audio: java.util.concurrent.Future<EncodedAudio>) {
         var videoTrack = -1
         var started = false
+        var videoFormat: MediaFormat? = null
+        /** Encoded video waiting for the audio track (the muxer can only start once both formats are known). */
+        val waiting = ArrayList<Sample>()
     }
 
-    private fun drain(encoder: MediaCodec, info: MediaCodec.BufferInfo, muxer: MediaMuxer, audio: EncodedAudio, mux: MuxState, end: Boolean) {
+    /** Starts the muxer once the video format is known and the audio is encoded ([wait]: block for the audio). */
+    private fun startMuxer(muxer: MediaMuxer, mux: MuxState, wait: Boolean) {
+        val vf = mux.videoFormat ?: return
+        if (mux.started || (!wait && !mux.audio.isDone)) return
+        val audio = try { mux.audio.get() } catch (e: java.util.concurrent.ExecutionException) { throw e.cause ?: e }
+        mux.videoTrack = muxer.addTrack(vf)
+        val audioTrack = muxer.addTrack(audio.format)
+        muxer.start()
+        mux.started = true
+        // The whole voice track is encoded: write it in one go, then the video that was waiting.
+        val ai = MediaCodec.BufferInfo()
+        for (s in audio.samples) {
+            ai.set(0, s.data.size, s.ptsUs, s.flags)
+            muxer.writeSampleData(audioTrack, ByteBuffer.wrap(s.data), ai)
+        }
+        for (s in mux.waiting) {
+            ai.set(0, s.data.size, s.ptsUs, s.flags)
+            muxer.writeSampleData(mux.videoTrack, ByteBuffer.wrap(s.data), ai)
+        }
+        mux.waiting.clear()
+    }
+
+    private fun drain(encoder: MediaCodec, info: MediaCodec.BufferInfo, muxer: MediaMuxer, mux: MuxState, end: Boolean) {
         if (end) encoder.signalEndOfInputStream()
+        startMuxer(muxer, mux, wait = false)
         while (true) {
             val idx = encoder.dequeueOutputBuffer(info, if (end) 10_000L else 0L)
             when {
                 idx == MediaCodec.INFO_TRY_AGAIN_LATER -> if (!end) return
                 idx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                    mux.videoTrack = muxer.addTrack(encoder.outputFormat)
-                    val audioTrack = muxer.addTrack(audio.format)
-                    muxer.start()
-                    mux.started = true
-                    // The whole voice track is already encoded: write it in one go.
-                    val ai = MediaCodec.BufferInfo()
-                    for (s in audio.samples) {
-                        ai.set(0, s.data.size, s.ptsUs, s.flags)
-                        muxer.writeSampleData(audioTrack, ByteBuffer.wrap(s.data), ai)
-                    }
+                    mux.videoFormat = encoder.outputFormat
+                    startMuxer(muxer, mux, wait = false)
                 }
                 idx >= 0 -> {
                     val buf = encoder.getOutputBuffer(idx)!!
                     if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) info.size = 0
-                    if (info.size > 0 && mux.started) {
+                    if (info.size > 0) {
                         buf.position(info.offset)
                         buf.limit(info.offset + info.size)
-                        muxer.writeSampleData(mux.videoTrack, buf, info)
+                        if (mux.started) muxer.writeSampleData(mux.videoTrack, buf, info)
+                        else mux.waiting.add(Sample(ByteArray(info.size).also { buf.get(it) }, info.presentationTimeUs, info.flags))
                     }
                     encoder.releaseOutputBuffer(idx, false)
-                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return
+                    if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) { startMuxer(muxer, mux, wait = true); return }
                 }
             }
         }

@@ -238,6 +238,14 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.8: rendering on every core
+
+- **Parallel CPU rendering:** up to 4 painters draw at the same time, one per CPU core (as many as the phone's memory allows). Painter k draws frames k, k+4, k+8… and the encoder takes them in order. The test checks every 7th frame, pixel for pixel, against a single painter: identical in the classic, glass and paper looks, about 3x faster.
+- **Order of methods:** graphics chip first (Android 10+), then all CPU cores, then the safe single thread.
+- **Audio alongside the video:** the voice/music mix and its AAC encoding (5-15 s on a phone) used to happen before the first frame. Now they run during the frames; encoded video waits in memory until the audio track is ready.
+- **Encoder unpaced:** it's told this is not a live stream (non-real-time priority, high operating rate), so it encodes as fast as the chip allows. It has its own fallback level, so variable bitrate and colour tags are never lost.
+- **Time left:** the progress line shows "about 40 s left" while rendering, so it never looks stuck.
+
 ## 3.7: one tap, online first, then offline and fast
 
 - **Where the time went** (10-60 min):

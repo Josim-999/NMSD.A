@@ -161,8 +161,12 @@ sealed class SceneMedia {
     class Lazy(private val loader: () -> SceneMedia?) {
         private var media: SceneMedia? = null
         private var tried = false
+        /** Painters using it right now (several draw at once when rendering in parallel). */
+        private val users = HashSet<Any>()
 
-        fun get(): SceneMedia? {
+        @Synchronized
+        fun get(user: Any = Unit): SceneMedia? {
+            users.add(user)
             if (!tried) {
                 tried = true
                 media = runCatching { loader() }.getOrNull()
@@ -170,7 +174,11 @@ sealed class SceneMedia {
             return media
         }
 
-        fun release() {
+        /** [user] is done with it; freed when no painter needs it any more. */
+        @Synchronized
+        fun release(user: Any = Unit) {
+            users.remove(user)
+            if (users.isNotEmpty()) return
             media?.release()
             media = null
             tried = false

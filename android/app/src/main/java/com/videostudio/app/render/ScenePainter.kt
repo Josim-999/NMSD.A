@@ -447,12 +447,12 @@ class ScenePainter(
     /** Keeps only the clips of the scene on screen (and the one leaving) in memory. */
     private fun manageMedia(index: Int, lt: Double) {
         val keep = if (index > 0 && lt < TRANSITION + 0.05) setOf(index, index - 1) else setOf(index)
-        for ((i, m) in media) if (i !in keep) m.release()
+        for ((i, m) in media) if (i !in keep) m.release(this)
     }
 
     /** Frees every clip; call when rendering is finished. */
     fun release() {
-        media.values.forEach { it.release() }
+        media.values.forEach { it.release(this) }
         logoBitmaps.values.forEach { it?.recycle() }
         grainBitmap.recycle()
         bgLow?.recycle(); bgLow = null
@@ -919,7 +919,7 @@ class ScenePainter(
 
     /** Full-screen stock video (or photo) with a slow zoom, a dark scrim for legibility, and its text. */
     private fun photo(c: Canvas, s: Scene, index: Int, lt: Double, dur: Double) {
-        val m = media[index]?.get()
+        val m = media[index]?.get(this)
         if (m == null) {
             // No picture found: the brand's logo if there is one, else clean typography (never a stock emoji).
             when {
@@ -1100,7 +1100,7 @@ class ScenePainter(
 
     /** A matching picture or clip behind a talking scene, toned into the look so the words stay readable. */
     private fun backdrop(c: Canvas, index: Int, lt: Double, dur: Double) {
-        val m = media[index]?.get() ?: return
+        val m = media[index]?.get(this) ?: return
         val frame = m.frameAt(lt)
         val zoom = max(W / frame.width, H / frame.height) * (1.06f + 0.07f * clamp(lt / dur.coerceAtLeast(1.0)).toFloat())
         val w = frame.width * zoom
@@ -1126,7 +1126,7 @@ class ScenePainter(
     private fun badge(c: Canvas, s: Scene, index: Int, lt: Double) {
         if (s.type == "logo" || s.brand.isBlank()) return
         if (index == 0 && seriesName.isNotBlank()) return // the series badge sits there
-        if (s.type == "photo" && media[index]?.get() == null) return // that scene already became the logo scene
+        if (s.type == "photo" && media[index]?.get(this) == null) return // that scene already became the logo scene
         val logo = logos[index] ?: return
         val pop = spring((lt - 0.15) / 0.6).toFloat()
         if (pop <= 0.01f) return
@@ -1261,7 +1261,7 @@ class ScenePainter(
 
     /** A quote card: big quote marks, the words, and the speaker with their photo in a ring. */
     private fun quote(c: Canvas, s: Scene, index: Int, lt: Double) {
-        val m = media[index]?.get()
+        val m = media[index]?.get(this)
         val cy = zoneMid - 60f
         if (m != null) {
             val k = spring(lt / 0.6).toFloat()

@@ -589,24 +589,34 @@ class Pipeline(
                     log("The graphics-chip render did not finish last time, so this phone now renders on the CPU (Settings can switch it back).")
                 }
                 val modes = (if (android.os.Build.VERSION.SDK_INT >= 29 && settings.gpuRender) listOf(RenderMode.GPU) else emptyList()) +
-                    listOf(RenderMode.TWO_THREADS, RenderMode.ONE_THREAD)
+                    listOf(RenderMode.PARALLEL, RenderMode.ONE_THREAD)
                 for ((n, mode) in modes.withIndex()) {
-                    val label = when (mode) { RenderMode.GPU -> "Rendering the video (graphics chip)"; RenderMode.TWO_THREADS -> "Rendering the video"; RenderMode.ONE_THREAD -> "Rendering the video (safe mode)" }
+                    val name = when (mode) { RenderMode.GPU -> "graphics chip"; RenderMode.PARALLEL -> "CPU cores"; RenderMode.ONE_THREAD -> "safe mode" }
+                    // Several painters draw at once, one per CPU core, as many as the phone's memory allows.
+                    val helpers = if (mode == RenderMode.PARALLEL) List(parallelWorkers() - 1) { newPainter() } else emptyList()
+                    val label = "Rendering the video ($name${if (helpers.isNotEmpty()) " x${helpers.size + 1}" else ""})"
                     step(label, 0f)
                     val t0 = System.currentTimeMillis()
                     if (mode == RenderMode.GPU) settings.gpuAttempt = true
                     try {
-                        renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled, mode) { step(label, it) }
+                        renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled, mode, helpers) { f ->
+                            // Live speed and time left, so a long render never looks stuck.
+                            val secs = (System.currentTimeMillis() - t0) / 1000.0
+                            val left = if (f > 0.03f) (secs / f * (1 - f)).toInt() else -1
+                            step(if (left >= 0) "$label · about ${if (left >= 60) "${left / 60} min ${left % 60} s" else "$left s"} left" else label, f)
+                        }
                         settings.gpuAttempt = false
-                        log(String.format("Rendered on the %s in %d s.", if (mode == RenderMode.GPU) "graphics chip" else "CPU", (System.currentTimeMillis() - t0) / 1000))
+                        log(String.format("Rendered on the %s in %d s.", name, (System.currentTimeMillis() - t0) / 1000))
                         break
                     } catch (e: Throwable) {
                         settings.gpuAttempt = false
                         if (cancelled() || n == modes.lastIndex) throw e
-                        log("Render problem (${(e.message ?: e.javaClass.simpleName).take(90)}); trying again a safer way…")
+                        log("Render problem on the $name (${(e.message ?: e.javaClass.simpleName).take(90)}); trying again a safer way…")
                         runCatching { painter.release() }
                         System.gc()
                         painter = newPainter()
+                    } finally {
+                        helpers.forEach { runCatching { it.release() } }
                     }
                 }
             } finally {
@@ -623,6 +633,17 @@ class Pipeline(
         store.save(p)
         val total = (System.currentTimeMillis() - makeStart) / 1000
         log(String.format("Video ready: rendering took %d s; whole video %d min %02d s.", (System.currentTimeMillis() - started) / 1000, total / 60, total % 60))
+    }
+
+    /** How many painters draw at once on the CPU: one per two cores, up to 4, limited by the memory Android gives the app. */
+    private fun parallelWorkers(): Int {
+        val cores = Runtime.getRuntime().availableProcessors()
+        val heapMb = Runtime.getRuntime().maxMemory() / (1024 * 1024)
+        return when {
+            heapMb >= 380 -> (cores / 2).coerceIn(2, 4)
+            heapMb >= 250 -> 2
+            else -> 1
+        }
     }
 
     /** Pictures are brought down to just cover the 1080x1920 frame, so a render never runs out of memory. */
