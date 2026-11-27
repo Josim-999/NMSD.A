@@ -116,4 +116,17 @@ class FeatureGuardTest {
         assertTrue(com.videostudio.app.ai.MediaFinder.relevance("man sleeping bed", "man sleeping in bed 4821") >= com.videostudio.app.ai.MediaFinder.minRelevance("man sleeping bed"))
         assertTrue(com.videostudio.app.ai.MediaFinder.relevance("man sleeping bed", "city traffic night 22") < com.videostudio.app.ai.MediaFinder.minRelevance("man sleeping bed"))
     }
+
+    @Test fun lightAppAndSafeRenderRules() {
+        // 3.6 rules: no heavy SDKs (the Claude SDK added ~10 MB and a newer Kotlin runtime), more memory for renders,
+        // two frame buffers at most, pictures capped to the frame, and an automatic safe-mode retry.
+        val gradle = File("build.gradle.kts").readText()
+        for (heavy in listOf("com.anthropic", "jackson", "opentelemetry", "kotlin-reflect")) assertTrue("no $heavy dependency", heavy !in gradle)
+        assertTrue(File("src/main/AndroidManifest.xml").readText().contains("android:largeHeap=\"true\""))
+        val renderer = File("src/main/java/com/videostudio/app/render/VideoRenderer.kt").readText()
+        assertTrue(renderer.contains("val buffers = if (twoThreads) 2 else 1"))
+        val pipeline = File("src/main/java/com/videostudio/app/work/Pipeline.kt").readText()
+        assertTrue(pipeline.contains("MediaLoad.fit(f)"))
+        assertTrue(pipeline.contains("twoThreads = false"))
+    }
 }

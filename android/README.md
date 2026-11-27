@@ -238,6 +238,22 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.6: renders never stall, app light again
+
+- **Cause of "frame ... did not finish drawing":** memory. Background photos were decoded at up to 2160x3840 (~33 MB each), with slideshows of three, clip frames and three frame buffers. One render could need ~250+ MB, over a phone's limit, so the phone spent minutes freeing memory on a single frame.
+- **Fix:**
+  - Every picture is scaled to just cover the 1080x1920 frame (~8-10 MB at most; quality unchanged, since the video can't show more).
+  - The app asks Android for its large memory allowance.
+  - Two frame buffers instead of three, and canvases are reused.
+- **Never fails on the first problem:** if a render fails, the app frees memory and renders again in safe mode (one thread, same quality) before it shows any error.
+- **Claude SDK removed:** the premium studio now talks to Claude over plain HTTPS like the other 10 AI services. Same models, same live web search, same passes. The APK is back to about 14 MB, and the Kotlin runtime is back to the 1.9 the app was built and tested with.
+- **New rules, enforced by tests:**
+  - every build renders a full 60 s video frame by frame on two threads (classic and glass looks), with a limit on frame time
+  - pictures stay capped to the frame
+  - no heavy SDKs
+  - one render at a time, with a safe-mode retry
+- The log shows the total making time.
+
 ## 3.5: faster renders and clips, clips that match
 
 - **One render at a time.** Three videos rendering at once shared one hardware encoder and the CPU, so each ran about 3x slower. Now the next video waits in line ("Waiting for the video before it to finish rendering") while it still prepares its voice, pictures and clips, and starts the moment the first one is done. You can stop a waiting video.

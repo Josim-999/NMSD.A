@@ -65,7 +65,7 @@ android {
         targetSdk = 35
         // Always higher than the last build (1.2 was 3), see autoVersionCode above.
         versionCode = maxOf(4, autoVersionCode)
-        versionName = "3.5"
+        versionName = "3.6"
     }
 
     signingConfigs {
@@ -132,8 +132,6 @@ dependencies {
     implementation("androidx.browser:browser:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    // Premium script studio: Claude (official SDK) with live web search.
-    implementation("com.anthropic:anthropic-java:3.3.0")
     // Animated emoji and motion graphics (Lottie, Apache-2.0).
     implementation("com.airbnb.android:lottie:6.6.2")
     // On-device subject cut-out for the "pop-out" photo look (free, runs on the phone).

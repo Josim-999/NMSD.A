@@ -44,6 +44,7 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         audioPlan: AudioMix.Plan,
         out: File,
         cancelled: () -> Boolean,
+        twoThreads: Boolean = true,
         progress: (Float) -> Unit,
     ) {
         val audio = encodeAudio(audioFile, audioPlan)
@@ -74,42 +75,54 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         val egl = Egl(surface)
         val drawer = TextureDrawer()
         // Two threads: the painter draws the next frame while this (GL) thread uploads and encodes
-        // the current one. Three bitmaps rotate between them.
-        val pool = java.util.concurrent.ArrayBlockingQueue<Bitmap>(3)
-        repeat(3) { pool.add(Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)) }
-        val ready = java.util.concurrent.ArrayBlockingQueue<Any>(3)
+        // the current one. Two bitmaps rotate between them (each 8 MB at 1080p). With [twoThreads]
+        // off (the safe retry), one bitmap and one thread, exactly like before 3.3.
+        val buffers = if (twoThreads) 2 else 1
+        val pool = java.util.concurrent.ArrayBlockingQueue<Bitmap>(buffers)
+        val canvases = HashMap<Bitmap, Canvas>()
+        repeat(buffers) { Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { pool.add(it); canvases[it] = Canvas(it) } }
+        val ready = java.util.concurrent.ArrayBlockingQueue<Any>(buffers + 1)
         val scale = width / ScenePainter.W
         val info = MediaCodec.BufferInfo()
         val mux = MuxState()
         val frames = (durationSec * fps).toInt().coerceAtLeast(1)
         val stop = java.util.concurrent.atomic.AtomicBoolean(false)
-        val painterThread = Thread({
+        fun paint(bmp: Bitmap, i: Int) {
+            val canvas = canvases.getValue(bmp)
+            canvas.save()
+            canvas.scale(scale, scale)
+            painter.draw(canvas, i.toDouble() / fps, captions = true)
+            canvas.restore()
+        }
+        val painterThread = if (!twoThreads) null else Thread({
             try {
                 for (i in 0 until frames) {
                     if (stop.get()) return@Thread
                     val bmp = pool.poll(30, java.util.concurrent.TimeUnit.SECONDS) ?: throw RenderError("the encoder stalled")
-                    val canvas = Canvas(bmp)
-                    canvas.save()
-                    canvas.scale(scale, scale)
-                    painter.draw(canvas, i.toDouble() / fps, captions = true)
-                    canvas.restore()
+                    paint(bmp, i)
                     ready.put(bmp)
                 }
             } catch (e: Throwable) {
                 runCatching { ready.put(e) }
             }
         }, "frame-painter")
-        painterThread.start()
+        painterThread?.start()
         try {
             for (i in 0 until frames) {
                 if (cancelled()) throw RenderError("cancelled")
-                // Generous: a scene's pictures load on its first frame. Only a real hang stops the render.
-                val item = ready.poll(FRAME_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS)
-                    ?: throw RenderError("frame ${i + 1} of $frames did not finish drawing in $FRAME_TIMEOUT_S s. Please try again")
-                if (item is Throwable) throw item
-                val bmp = item as Bitmap
+                val bmp: Bitmap
+                if (painterThread == null) {
+                    bmp = pool.peek()!!
+                    paint(bmp, i)
+                } else {
+                    // Generous: a scene's pictures load on its first frame. Only a real hang stops the render.
+                    val item = ready.poll(FRAME_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS)
+                        ?: throw RenderError("frame ${i + 1} of $frames did not finish drawing in $FRAME_TIMEOUT_S s")
+                    if (item is Throwable) throw item
+                    bmp = item as Bitmap
+                }
                 drawer.draw(bmp)
-                pool.put(bmp)
+                if (painterThread != null) pool.put(bmp)
                 egl.present(i * 1_000_000_000L / fps)
                 drain(encoder, info, muxer, audio, mux, end = false)
                 if (i % 15 == 0) progress(i.toFloat() / frames)
@@ -119,8 +132,9 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         } finally {
             stop.set(true)
             pool.clear(); ready.clear()
-            painterThread.interrupt()
-            runCatching { painterThread.join(5000) }
+            painterThread?.interrupt()
+            runCatching { painterThread?.join(5000) }
+            canvases.keys.forEach { runCatching { it.recycle() } }
             runCatching { encoder.stop() }
             encoder.release()
             drawer.release()

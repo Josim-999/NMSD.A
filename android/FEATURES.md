@@ -12,6 +12,10 @@ change, ask the owner first (with options), then update this file and the test i
 - Facts only: every number and claim is true and sourced.
 - Never add accessibility, SMS or notification-listener permissions (Play Protect blocks the APK).
 - Ship as a signed APK in the chat, same signing key (installs over the last version).
+- "Make the video" must never fail or hang, and should finish in about 1-3 minutes without lowering quality (1080p, 30/60 fps stay).
+- Keep the app light: no heavy SDKs or libraries that change the Kotlin runtime (the 3.2 Claude SDK added ~10 MB and broke renders). Talk to AI services over plain HTTPS.
+- Never decode video or large media while rendering; prepare it before. Pictures are capped to the 1080x1920 frame.
+- One render at a time; a failed render retries itself once in safe mode before showing an error.
 
 ## Script
 | Feature | Since | Where |
@@ -76,3 +80,8 @@ change, ask the owner first (with options), then update this file and the test i
 | One render at a time across the phone (others wait in line and keep preparing); at most 2 clips decoded at once | 3.5 | `render/RenderGate.kt`, Pipeline |
 | Clips: smallest file that is sharp enough (~540 px), frames read in one pass on Android 9+, 3 s ping-pong | 3.5 | `ai/Stock.kt`, `MediaFinder.pixabayVideo`, `SceneMedia.Clip` |
 | Clips must match the scene's words (Pixabay tags, Pexels page name), like photos | 3.5 | `Stock.pexelsVideo`, `MediaFinder.pixabayVideo` |
+| Claude premium studio over plain HTTPS (SDK removed: app back to ~14 MB, Kotlin runtime back to 1.9) | 3.6 | `ai/ClaudeStudio.kt` |
+| Memory-safe renders: largeHeap, pictures capped to the frame (`MediaLoad.fit`), 2 frame buffers, reused canvases | 3.6 | `render/MediaLoad.kt`, `VideoRenderer` |
+| Automatic safe-mode retry (fresh painter, one thread, same quality) before any render error | 3.6 | `Pipeline.render` |
+| Every build renders a full 60 s video frame by frame on two threads (classic and glass) and checks frame times | 3.6 | `RenderSafetyTest` |
+| Total making time shown in the log ("whole video 1 min 52 s") | 3.6 | `Pipeline.render` |

@@ -8,3 +8,8 @@
   run `cd android && CENTRAL_MIRROR=1 /opt/gradle/bin/gradle -q :app:testDebugUnitTest :app:assembleRelease`,
   check the signer SHA-256 is `2b18af1117d2e064e5c52e4c4272cb9471658ec4ea3804a4e46432c4f60d6c14`, and send the APK.
 - Never add accessibility, SMS or notification-listener permissions.
+- Renders must never fail or hang: keep `RenderSafetyTest` passing, never decode media during rendering, keep pictures
+  capped with `MediaLoad.fit`, one render at a time, safe-mode retry before any error.
+- Keep the APK light: no heavy SDKs or libraries that pull a newer Kotlin runtime (check the release APK stays ~14-16 MB);
+  call AI services over plain HTTPS with OkHttp.
+

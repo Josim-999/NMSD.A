@@ -1,18 +1,14 @@
 package com.videostudio.app.ai
 
-import com.anthropic.client.AnthropicClient
-import com.anthropic.client.okhttp.AnthropicOkHttpClient
-import com.anthropic.core.JsonValue
-import com.anthropic.models.messages.Message
-import com.anthropic.models.messages.MessageCreateParams
-import com.anthropic.models.messages.MessageParam
-import com.anthropic.models.messages.OutputConfig
-import com.anthropic.models.messages.StopReason
-import com.anthropic.models.messages.UserLocation
-import com.anthropic.models.messages.WebSearchTool20260209
 import com.videostudio.app.data.Project
-import java.time.Duration
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
 import java.time.LocalDate
+import java.util.concurrent.TimeUnit
 
 /**
  * Premium script studio (paid, the user's own Anthropic key). Three passes:
@@ -20,6 +16,8 @@ import java.time.LocalDate
  *  2. Writer: drafts the script from that fact sheet with the full playbook.
  *  3. Editor: scores the draft like a top Shorts editor, fact-checks every number against the
  *     fact sheet and rewrites it. The result is the same JSON scene format as the free writers.
+ * Plain HTTPS with OkHttp, like every other AI service in the app (3.6: the SDK added ~10 MB and a
+ * newer Kotlin runtime to the APK).
  */
 class ClaudeStudio(
     private val apiKey: String,
@@ -28,56 +26,83 @@ class ClaudeStudio(
 ) {
     data class Reply(val text: String, val sources: List<Pair<String, String>>)
 
-    private val client: AnthropicClient by lazy {
-        AnthropicOkHttpClient.builder().apiKey(apiKey).timeout(Duration.ofMinutes(6)).maxRetries(2).build()
+    private val http = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(6, TimeUnit.MINUTES)
+        .callTimeout(8, TimeUnit.MINUTES)
+        .build()
+
+    /** The request body for one round (exposed for tests). */
+    fun body(system: String, user: String, search: Boolean, effort: String = "high", history: JSONArray = JSONArray()): JSONObject {
+        val messages = JSONArray().put(JSONObject().put("role", "user").put("content", user))
+        for (i in 0 until history.length()) messages.put(history.get(i))
+        val o = JSONObject()
+            .put("model", model)
+            .put("max_tokens", 16000)
+            .put("system", system)
+            .put("output_config", JSONObject().put("effort", effort))
+            // If a safety classifier declines, the server retries on a fallback model by itself.
+            .put("fallbacks", "default")
+            .put("messages", messages)
+        if (search) o.put("tools", JSONArray().put(
+            JSONObject().put("type", "web_search_20260209").put("name", "web_search").put("max_uses", 8)
+                .put("user_location", JSONObject().put("type", "approximate").put("country", "US").put("timezone", "America/New_York")),
+        ))
+        return o
     }
+
+    /** Headers sent with every request (exposed for tests; the key itself is never logged). */
+    fun headers(): Map<String, String> = mapOf(
+        "x-api-key" to apiKey,
+        "anthropic-version" to "2023-06-01",
+        "anthropic-beta" to "server-side-fallback-2026-07-01",
+        "content-type" to "application/json",
+    )
 
     /** One request (with live web search when [search]); resumes `pause_turn` until Claude is done. */
-    fun ask(system: String, user: String, search: Boolean = false, effort: OutputConfig.Effort = OutputConfig.Effort.HIGH): Reply {
-        val history = ArrayList<MessageParam>()
+    fun ask(system: String, user: String, search: Boolean = false, effort: String = "high"): Reply {
+        val history = JSONArray()
         val sources = LinkedHashMap<String, String>()
         val text = StringBuilder()
-        var reply: Message? = null
+        var stop = ""
         for (round in 0 until 5) {
-            val r = client.messages().create(params(system, user, search, effort, history))
-            reply = r
-            for (block in r.content()) {
-                block.text().ifPresent { t ->
-                    text.append(t.text())
-                    t.citations().ifPresent { cs -> cs.forEach { c -> c.webSearchResultLocation().ifPresent { w -> sources.putIfAbsent(w.url(), w.title().orElse(w.url())) } } }
+            val req = Request.Builder().url(ENDPOINT).apply { headers().forEach { (k, v) -> header(k, v) } }
+                .post(body(system, user, search, effort, history).toString().toRequestBody("application/json".toMediaType())).build()
+            val r = http.newCall(req).execute().use { resp ->
+                val raw = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    val msg = runCatching { JSONObject(raw).optJSONObject("error")?.optString("message") }.getOrNull().orEmpty()
+                    throw IllegalStateException("Claude HTTP ${resp.code}${if (msg.isNotBlank()) ": " + msg.take(160) else ""}")
                 }
-                block.webSearchToolResult().ifPresent { res ->
-                    res.content().resultBlocks().ifPresent { list -> list.forEach { sources.putIfAbsent(it.url(), it.title()) } }
+                JSONObject(raw)
+            }
+            val content = r.optJSONArray("content") ?: JSONArray()
+            for (i in 0 until content.length()) {
+                val block = content.optJSONObject(i) ?: continue
+                when (block.optString("type")) {
+                    "text" -> {
+                        text.append(block.optString("text"))
+                        block.optJSONArray("citations")?.let { cs ->
+                            for (k in 0 until cs.length()) cs.optJSONObject(k)?.let { c ->
+                                val url = c.optString("url"); if (url.isNotBlank()) sources.putIfAbsent(url, c.optString("title").ifBlank { url })
+                            }
+                        }
+                    }
+                    "web_search_tool_result" -> block.optJSONArray("content")?.let { list ->
+                        for (k in 0 until list.length()) list.optJSONObject(k)?.let { w ->
+                            val url = w.optString("url"); if (url.isNotBlank()) sources.putIfAbsent(url, w.optString("title").ifBlank { url })
+                        }
+                    }
                 }
             }
-            if (r.stopReason().orElse(null) != StopReason.PAUSE_TURN) break
-            // The server paused a long search loop: send the turn back and it carries on.
-            history.add(r.toParam())
+            stop = r.optString("stop_reason")
+            if (stop != "pause_turn") break
+            // The server paused a long search loop: send the turn back unchanged and it carries on.
+            history.put(JSONObject().put("role", "assistant").put("content", content))
         }
-        if (reply?.stopReason()?.orElse(null) == StopReason.REFUSAL) throw IllegalStateException("Claude declined this topic.")
+        if (stop == "refusal") throw IllegalStateException("Claude declined this topic.")
         if (text.isBlank()) throw IllegalStateException("Claude returned no text.")
         return Reply(text.toString(), sources.map { it.value to it.key })
-    }
-
-    /** The request for one round (exposed for tests). */
-    fun params(system: String, user: String, search: Boolean, effort: OutputConfig.Effort, history: List<MessageParam> = emptyList()): MessageCreateParams {
-        val b = MessageCreateParams.builder()
-            .model(model)
-            .maxTokens(16000L)
-            .system(system)
-            .outputConfig(OutputConfig.builder().effort(effort).build())
-            // If a safety classifier declines, the server retries on a fallback model by itself.
-            .putAdditionalHeader("anthropic-beta", "server-side-fallback-2026-07-01")
-            .putAdditionalBodyProperty("fallbacks", JsonValue.from("default"))
-            .addUserMessage(user)
-        if (search) b.addTool(
-            WebSearchTool20260209.builder()
-                .maxUses(8L)
-                .userLocation(UserLocation.builder().country("US").timezone("America/New_York").build())
-                .build(),
-        )
-        history.forEach { b.addMessage(it) }
-        return b.build()
     }
 
     /** Pass 1: live research into a dated fact sheet. */
@@ -89,7 +114,7 @@ class ClaudeStudio(
     /** Pass 2: the draft, from the standard script prompt (which already carries the fact sheet). */
     fun write(scriptPrompt: String, today: LocalDate = LocalDate.now()): Reply {
         notice("Writing the draft with ${label(model)}…")
-        return ask(WRITER_SYSTEM, "Today is $today.\n\n$scriptPrompt\n\n$WRITER_ADDENDUM", effort = OutputConfig.Effort.HIGH)
+        return ask(WRITER_SYSTEM, "Today is $today.\n\n$scriptPrompt\n\n$WRITER_ADDENDUM", effort = "high")
     }
 
     /** Pass 3: editor and fact-checker; returns the improved script JSON. */
@@ -107,11 +132,12 @@ ${if (issues.isEmpty()) "" else "The automatic checker also flagged: " + issues.
 Length: ${words.first}-${words.last} spoken words in total across all "say" fields.
 Return the complete improved script as one JSON object in exactly the same schema as the draft, nothing else.
 """.trim()
-        return ask(EDITOR_SYSTEM, prompt, effort = OutputConfig.Effort.HIGH)
+        return ask(EDITOR_SYSTEM, prompt, effort = "high")
     }
 
     companion object {
         const val DEFAULT_MODEL = "claude-opus-5-5"
+        const val ENDPOINT = "https://api.anthropic.com/v1/messages"
         val MODELS = listOf("claude-opus-5-5" to "Claude Opus 5.5 (best, ~US$0.45 a script)", "claude-sonnet-5-5" to "Claude Sonnet 5.5 (great, ~US$0.25 a script)")
         fun label(id: String) = when (id) { "claude-opus-5-5" -> "Claude Opus 5.5"; "claude-sonnet-5-5" -> "Claude Sonnet 5.5"; else -> id }
 

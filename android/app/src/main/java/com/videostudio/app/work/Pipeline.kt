@@ -35,6 +35,7 @@ import com.videostudio.app.render.Look
 import com.videostudio.app.render.Palettes
 import com.videostudio.app.render.SceneMedia
 import com.videostudio.app.render.MotionPlan
+import com.videostudio.app.render.MediaLoad
 import com.videostudio.app.render.RenderGate
 import com.videostudio.app.render.ScenePainter
 import com.videostudio.app.render.Timeline
@@ -302,6 +303,7 @@ class Pipeline(
     }
 
     fun render(p: Project) {
+        val makeStart = System.currentTimeMillis()
         val dir = p.dir(store.root)
         dir.mkdirs()
         // Old voice and photo files from an earlier render.
@@ -526,10 +528,11 @@ class Pipeline(
         val motion = MotionPlan(p.id.hashCode(), p.scenes.map { it.type.lowercase(Locale.ROOT) }, look, settings.motionHistory)
         settings.motionHistory = listOf(motion.signature) + settings.motionHistory
         log("Motion plan: ${motion.describe()}")
-        val painter = ScenePainter(
+        fun newPainter() = ScenePainter(
             context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media, logos, look, emphasisTimes,
             animated, cutouts, stutter12 = settings.stutter12, motionPlan = motion,
         )
+        var painter = newPainter()
         val (w, h) = if (settings.quality == "720") 720 to 1280 else 1080 to 1920
         val fps = if (settings.smooth60) 60 else 30
         val renderer = VideoRenderer(w, h, fps)
@@ -556,7 +559,19 @@ class Pipeline(
             if (!RenderGate.acquire(RenderGate.render, cancelled) { step("Waiting for the video before it to finish rendering", null); log("Another video is rendering; this one starts right after it.") }) return
             try {
                 step("Rendering the video", 0f)
-                renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled) { step("Rendering the video", it) }
+                try {
+                    renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled) { step("Rendering the video", it) }
+                } catch (e: Throwable) {
+                    if (cancelled()) throw e
+                    // Never give up on the first problem: free memory and render again on one thread,
+                    // at the same quality (the way every version before 3.3 rendered).
+                    log("Render problem (${(e.message ?: e.javaClass.simpleName).take(90)}). Freeing memory and rendering again in safe mode…")
+                    runCatching { painter.release() }
+                    System.gc()
+                    painter = newPainter()
+                    step("Rendering the video (safe mode)", 0f)
+                    renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled, twoThreads = false) { step("Rendering the video (safe mode)", it) }
+                }
             } finally {
                 RenderGate.render.release()
             }
@@ -569,16 +584,12 @@ class Pipeline(
         p.status = if (p.uploads.isNotEmpty()) Status.POSTED else Status.RENDERED
         p.error = ""
         store.save(p)
-        log(String.format("Video ready in %d s.", (System.currentTimeMillis() - started) / 1000))
+        val total = (System.currentTimeMillis() - makeStart) / 1000
+        log(String.format("Video ready: rendering took %d s; whole video %d min %02d s.", (System.currentTimeMillis() - started) / 1000, total / 60, total % 60))
     }
 
-    private fun loadBitmap(f: File): Bitmap? = runCatching {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(f.absolutePath, bounds)
-        var sample = 1
-        while (bounds.outWidth / (sample * 2) >= 1080) sample *= 2
-        BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
-    }.getOrNull()
+    /** Pictures are brought down to just cover the 1080x1920 frame, so a render never runs out of memory. */
+    private fun loadBitmap(f: File): Bitmap? = MediaLoad.fit(f)
 
     /** Direct YouTube upload with the user's own Google Cloud client (advanced). */
     fun uploadYouTube(p: Project, visibility: String) {
