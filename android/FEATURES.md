@@ -100,9 +100,12 @@ change, ask the owner first (with options), then update this file and the test i
 | Encoder unpaced (KEY_PRIORITY non-realtime + KEY_OPERATING_RATE), with its own fallback level so quality settings stay | 3.8 | `VideoRenderer.videoFormat` |
 | Live render speed: "about 40 s left" on the progress line | 3.8 | `Pipeline.render` |
 | Gemini premium studio: best Gemini Pro on the key (Flash backup), live Google Search research, writer, editor/fact-checker | 3.9 | `ai/GeminiStudio.kt`, Settings `geminiPremium` |
-| Content gate before every render: no built-in script, no cut-off cards, complete last line, no repeats, stays on topic (ending too), no encyclopedia/company-bio sentences, only sourced numbers; the editor fixes up to twice, else no video | 3.9 | `ai/ContentGate.kt`, Pipeline |
+| Content gate before every render: no built-in script, no cut-off cards (questions and sentences count as complete), complete last line, no repeats, never off-topic (stems + title; softer drift is editor advice), no encyclopedia/company-bio sentences, only sourced numbers | 3.9 / 3.10 | `ai/ContentGate.kt`, Pipeline |
 | Stricter writing rules in every prompt (topic, story, grammar, complete phrases, no repeats, stat only for quantities, filmable query) | 3.9 | `Prompts`, `ClaudeStudio` |
 | Pictures: only the script's own filmable search (never words guessed from a line); abstract searches get none; Gemini looks at every picture and clip and rejects unrelated ones | 3.9 | `MediaFinder.isAbstract`, `ai/VisionCheck.kt` |
 | Years never count up on screen; every text colour checked for WCAG 4.5:1 contrast | 3.9 | `ScenePainter.stat/readable` |
 | Acronyms spelled for the voice (RLHF -> R-L-H-F) | 3.9 | `voice/Speech.kt` |
+| Self-repair: "Make the video" fixes a failing script by itself (premium editor, then any AI with quota) before rendering | 3.10 | `Pipeline.fixScript`, `Pipeline.render` |
+| Gemini key tier detection: a free-tier quota error explains billing (a Gemini Advanced subscription does not cover the API) in the log and Settings | 3.10 | `Gemini.quotaInfo/keyOnFreeTier/BILLING_HELP` |
+| Premium chain ranks newer Gemini families (e.g. omni) above numbered ones | 3.10 | `Gemini.premiumChain` |
 

@@ -40,6 +40,28 @@ object ContentGate {
 
     private fun norm(s: String) = words(s.lowercase(Locale.ROOT)).joinToString(" ")
 
+    /** Word stems that identify the subject, from the topic and the title ("subscriptions" -> "subscr"). */
+    fun topicStems(p: Project): List<String> = (topicWords(p.topic) + topicWords(p.title)).map { if (it.length > 6) it.take(6) else it }.distinct()
+
+    private fun mentions(s: Scene, stems: List<String>): Boolean {
+        val t = (s.say + " " + s.text + " " + s.brand + " " + s.items.joinToString(" ")).lowercase(Locale.ROOT)
+        return stems.any { t.contains(it) }
+    }
+
+    /** How many scenes mention the topic. */
+    fun topicHits(p: Project): Int { val st = topicStems(p); return if (st.isEmpty()) p.scenes.size else p.scenes.count { mentions(it, st) } }
+
+    /** Things the editor should improve that do not block the video (topic focus). */
+    fun advice(p: Project): List<String> {
+        val st = topicStems(p)
+        if (st.isEmpty() || p.scenes.size < 3) return emptyList()
+        val out = ArrayList<String>()
+        val hits = topicHits(p)
+        if (hits < kotlin.math.ceil(p.scenes.size * 0.3)) out += "Bring the topic (${st.take(3).joinToString("/")}) into more scenes: only $hits of ${p.scenes.size} mention it."
+        if (p.scenes.drop(p.scenes.size * 2 / 3).none { mentions(it, st) }) out += "Bring the ending back to the topic (${st.take(3).joinToString("/")})."
+        return out
+    }
+
     /** Every rule the script breaks, in plain words (empty = ready to make). */
     fun check(p: Project, writer: String = p.writer, builtIn: String = "built-in writer"): List<String> {
         val issues = ArrayList<String>()
@@ -51,6 +73,8 @@ object ContentGate {
         scenes.forEachIndexed { i, s ->
             val shown = listOf(s.text) + s.items
             for (t in shown.filter { it.isNotBlank() }) {
+                // A full question or sentence ("What AI tools do you pay for?") is complete, whatever its last word.
+                if (t.trimEnd().endsWith("?") || t.trimEnd().endsWith("!") || t.trimEnd().endsWith(".")) continue
                 val last = words(t).lastOrNull()?.lowercase(Locale.ROOT)?.trim('\'') ?: continue
                 if (last in DANGLING || t.trimEnd().endsWith(":") || t.trimEnd().endsWith(",")) issues += "Scene ${i + 1}: on-screen text is cut off (\"$t\"). Use a complete 2-6 word phrase."
             }
@@ -72,18 +96,8 @@ object ContentGate {
             if (sameText || overlap >= 0.8) issues += "Scenes ${i + 1} and ${j + 1} repeat the same line or card. Every scene must say something new."
         }
 
-        // 4. The video stays on its topic, including the ending.
-        val topic = topicWords(p.topic)
-        if (topic.isNotEmpty()) {
-            fun mentions(s: Scene): Boolean {
-                val t = (s.say + " " + s.text + " " + s.brand).lowercase(Locale.ROOT)
-                return topic.any { t.contains(it) }
-            }
-            val hits = scenes.count { mentions(it) }
-            val need = kotlin.math.ceil(scenes.size * 0.4).toInt()
-            if (hits < need) issues += "The script drifts off the topic: only $hits of ${scenes.size} scenes mention ${topic.take(3).joinToString("/")}. Keep every scene about the topic."
-            else if (scenes.drop(scenes.size * 2 / 3).none { mentions(it) }) issues += "The ending drifts away from the topic (${topic.take(3).joinToString("/")}). Bring the last third back to it."
-        }
+        // 4. Blatant topic drift only (a script that never mentions its subject). Softer drift is advice for the editor.
+        if (topicHits(p) == 0) issues += "The script never mentions its topic (${topicStems(p).take(3).joinToString("/")}). Keep every scene about the topic."
 
         // 5. Facts only: every number must be in the research or the sources.
         val nums = ScriptCheck.numbers(scenes)

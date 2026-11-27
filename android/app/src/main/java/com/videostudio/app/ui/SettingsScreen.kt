@@ -47,6 +47,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -112,6 +113,10 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
 
             Section("Gemini (research and script)") {
                 var gp by remember { mutableStateOf(s.geminiPremium) }
+                if (com.videostudio.app.ai.Gemini.keyOnFreeTier == true) {
+                    Text(com.videostudio.app.ai.Gemini.BILLING_HELP, color = Color(0xFFFF6B6B), fontSize = 13.sp)
+                    TextButton(onClick = { open("https://aistudio.google.com/apikey") }) { Text("Set up billing for my key") }
+                }
                 ToggleRow("Gemini premium scripts (recommended)", "The best Gemini Pro model on your key writes every script in three passes: live Google Search research, the writer, then an editor and fact-checker. Turn on billing for your key at aistudio.google.com for full use; Gemini Flash is the backup. No video is ever made from the built-in (non-AI) writer.", gp) { gp = it; s.geminiPremium = it }
                 var cp by remember { mutableStateOf(s.checkPictures) }
                 ToggleRow("Check every picture with Gemini", "Before a picture or clip goes into the video, Gemini looks at it and throws it away if it does not show what the scene is about.", cp) { cp = it; s.checkPictures = it }

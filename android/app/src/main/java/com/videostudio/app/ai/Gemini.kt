@@ -77,7 +77,7 @@ class Gemini(
                 return call(prompt, m, json, search, image).copy(model = m)
             } catch (e: OutOfQuota) {
                 if (e.daily) markExhausted(m) else markResting(m)
-                lastProblem = if (e.daily) "$m: free daily quota used up" else "$m: busy for a minute"
+                lastProblem = if (e.daily) "$m: ${if (keyOnFreeTier == true) "free-tier daily quota used up" else "daily limit reached"}" else "$m: busy for a minute"
             } catch (e: ModelMissing) {
                 lastProblem = "$m is not available"
             }
@@ -136,6 +136,7 @@ class Gemini(
                         Thread.sleep(q.retryMs)
                         continue
                     }
+                    keyOnFreeTier = q.freeTier
                     throw OutOfQuota(reason(text), daily = q.daily)
                 }
                 code == 400 && (text.contains("not supported", true) || text.contains("not enabled", true) ||
@@ -244,8 +245,12 @@ class Gemini(
             "computer-use", "vision", "learnlm", "nano", "deep-research", "lyria", "gemma-3n", "-1b-it", "-4b-it", "-2b-it",
         )
 
-        private fun version(name: String): Double =
-            Regex("(?:gemini|gemma)-(\\d+(?:\\.\\d+)?)").find(name)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+        /** Model generation: "gemini-2.5-pro" -> 2.5; newer named families ("gemini-omni-1.2-pro") rank above numbered ones. */
+        private fun version(name: String): Double {
+            val v = Regex("(?:gemini|gemma)-(?:[a-z]+-)?(\\d+(?:\\.\\d+)?)").find(name)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
+            return if (Regex("^gemini-[a-z]+-").containsMatchIn(name) && !Regex("^gemini-\\d").containsMatchIn(name) &&
+                !name.startsWith("gemini-pro") && !name.startsWith("gemini-flash")) v + 10 else v
+        }
 
         private fun size(name: String): Int = Regex("(\\d+)b").find(name)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 
@@ -276,11 +281,23 @@ class Gemini(
         /** For tests. */
         fun forgetModels() { cachedModels = null }
 
-        data class Quota(val daily: Boolean, val retryMs: Long)
+        data class Quota(val daily: Boolean, val retryMs: Long, val freeTier: Boolean = false)
+
+        /**
+         * What the last quota error said about the key: true = a FREE-tier quota ran out (billing is not on for
+         * this key; a Gemini Advanced / Google One subscription does not cover the API), false = a paid-tier
+         * limit, null = not seen yet.
+         */
+        @Volatile var keyOnFreeTier: Boolean? = null
+
+        const val BILLING_HELP = "Your Gemini API key is on Google's FREE tier: Gemini Pro allows only a few requests a day there. " +
+            "A Gemini Advanced / Google One AI Premium subscription does NOT cover the API. To use Gemini premium for every script, " +
+            "open aistudio.google.com → API keys → set up billing for the project of this key (pay per use, a few cents a script), then make the video again."
 
         /** Reads Gemini's 429 details: which quota ran out and how long to wait. */
         fun quotaInfo(text: String): Quota {
-            val err = runCatching { JSONObject(text).getJSONObject("error") }.getOrNull() ?: return Quota(daily = true, retryMs = 0)
+            val free = text.contains("free_tier", true) || text.contains("FreeTier", true)
+            val err = runCatching { JSONObject(text).getJSONObject("error") }.getOrNull() ?: return Quota(daily = true, retryMs = 0, freeTier = free)
             var daily = false
             var retry = 0L
             val details = err.optJSONArray("details") ?: JSONArray()
@@ -298,7 +315,7 @@ class Gemini(
                 }
             }
             if (details.length() == 0 && err.optString("message").contains("quota", true)) daily = true
-            return Quota(daily, retry)
+            return Quota(daily, retry, free)
         }
 
         private val exhausted = ConcurrentHashMap<String, Long>()

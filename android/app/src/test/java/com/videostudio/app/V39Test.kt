@@ -54,7 +54,11 @@ class V39Test {
                 Scene("So what will it build next?", type = "outro", text = "What comes next?"),
             )
         }
-        assertTrue(ContentGate.check(p).joinToString().contains("drifts off the topic"))
+        // 3.10: softer drift is advice for the editor (not a block); a script that never mentions its topic is blocked.
+        assertTrue(ContentGate.advice(p).joinToString().contains("Bring the topic"))
+        p.scenes[0] = Scene("A new kind of attacker just showed up.", type = "hook", text = "A new kind of attacker")
+        p.title = ""
+        assertTrue(ContentGate.check(p).joinToString().contains("never mentions its topic"))
     }
 
     @Test fun aCleanSourcedScriptPasses() {
@@ -95,5 +99,38 @@ class V39Test {
     @Test fun acronymsAreSpelledForTheVoiceOnly() {
         assertEquals("Models learn from R-L-H-F and G-P-Ts.", Speech.forVoice("Models learn from RLHF and GPTs."))
         assertEquals("NASA and AI stay as they are.", Speech.forVoice("NASA and AI stay as they are."))
+    }
+
+    @Test fun ownersAiSubscriptionScriptIsNotWronglyBlocked() {
+        val p = Project(id = "subs", topic = "AI Subscription Trap").apply {
+            writer = "Gemini 2.5 Pro studio"
+            title = "AI Subscription Trap"
+            researchNotes = "FACTS: ChatGPT Plus costs 20 dollars a month | 2026 | OpenAI pricing | https://openai.com/chatgpt/pricing"
+            scenes = mutableListOf(
+                Scene("You might be paying for three AI subscriptions and using one.", type = "hook", text = "Paying for three AIs?"),
+                Scene("ChatGPT Plus alone costs 20 dollars every month.", type = "stat", text = "20 dollars a month", value = "$20"),
+                Scene("Add Gemini and Claude plans and the bill quietly triples.", type = "statement", text = "The bill triples"),
+                Scene("Most of us forget to cancel the trial we started.", type = "statement", text = "Forgotten free trials"),
+                Scene("Check your app store today and cancel what you do not use.", type = "list", text = "Do this today", items = listOf("Open subscriptions", "Cancel unused plans")),
+                Scene("So before you renew, ask which AI subscription you really need.", type = "outro", text = "What AI tools do you pay for?"),
+            )
+        }
+        val issues = ContentGate.check(p)
+        assertEquals(issues.joinToString("\n"), 0, issues.size)
+    }
+
+    @Test fun freeTierKeyIsRecognised() {
+        val err = """{"error":{"code":429,"message":"You exceeded your current quota","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaMetric":"generativelanguage.googleapis.com/generate_content_free_tier_requests","quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaValue":"50"}]}]}}"""
+        val q = Gemini.quotaInfo(err)
+        assertTrue(q.daily && q.freeTier)
+        val paid = """{"error":{"code":429,"message":"quota","details":[{"violations":[{"quotaId":"GenerateRequestsPerMinutePerProjectPerModel","quotaValue":"1000"}]}]}}"""
+        assertTrue(!Gemini.quotaInfo(paid).freeTier)
+        assertTrue(Gemini.BILLING_HELP.contains("billing") && Gemini.BILLING_HELP.contains("does NOT cover the API"))
+    }
+
+    @Test fun newestProFamilyFirst() {
+        val chain = Gemini.premiumChain(listOf("gemini-2.5-pro", "gemini-omni-1.2-pro", "gemini-omni-1.1-flash", "gemini-2.5-flash"))
+        assertEquals("gemini-omni-1.2-pro", chain.first())
+        assertTrue(chain.indexOf("gemini-2.5-pro") < chain.indexOf("gemini-omni-1.1-flash"))
     }
 }

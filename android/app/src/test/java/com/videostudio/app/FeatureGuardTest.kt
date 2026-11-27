@@ -179,4 +179,15 @@ class FeatureGuardTest {
         for (rule in listOf("Stay on the exact topic", "COMPLETE phrase", "Never repeat a line", "never for years", "COMPLETE sentence"))
             assertTrue("prompt keeps: $rule", prompts.contains(rule))
     }
+
+    @Test fun selfRepairAndClearKeyHelp() {
+        // 3.10: a failing check is fixed by the AI before rendering; a free-tier key is explained, not hidden.
+        val pipeline = File("src/main/java/com/videostudio/app/work/Pipeline.kt").readText()
+        assertTrue(pipeline.contains("private fun fixScript(") && pipeline.contains("Fixing the script before making the video"))
+        assertTrue("a used-up editor hands over to the free chain", pipeline.contains("// Free AI chain as the last editor."))
+        assertTrue(pipeline.contains("Gemini.BILLING_HELP"))
+        val gate = File("src/main/java/com/videostudio/app/ai/ContentGate.kt").readText()
+        assertTrue("questions are complete phrases", gate.contains("endsWith(\"?\")"))
+        assertTrue("topic by stems and title; drift beyond that is advice", gate.contains("fun topicStems(") && gate.contains("fun advice("))
+    }
 }

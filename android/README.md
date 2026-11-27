@@ -238,6 +238,16 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.10: no false stops, self-repair, clear Gemini key help
+
+- **Fairer check:**
+  - an on-screen question or sentence ("What AI tools do you pay for?") is complete, whatever its last word
+  - the topic is matched by word stems and the title ("subscriptions" counts for "subscription")
+  - only a script that never mentions its topic is blocked; softer drift goes to the editor as advice
+- **Self-repair:** if the check finds anything, "Make the video" has the AI fix it (premium editor first, then any AI with quota left), re-checks it and goes on, instead of stopping.
+- **Gemini key help:** Google's quota error says whether the key is on the free tier. If it is, the log and Settings say so plainly: a Gemini Advanced / Google One AI Premium subscription does not cover the API, and billing must be set up for the key in AI Studio to use Gemini Pro for every script.
+- The premium order ranks newer Gemini families (e.g. "omni") above the numbered ones.
+
 ## 3.9: reputation first (the specialist's audit)
 
 - **Gemini premium writes the scripts** (owner's choice). The best Gemini Pro model on the key, with Flash as the backup, does three passes: live Google Search research into a dated fact sheet, the writer, then an editor and fact-checker. The Claude studio is still used first when its key is set.

@@ -84,6 +84,7 @@ class Pipeline(
             val done = runCatching { studioScript(p, feedback, studio) }.onFailure {
                 if (cancelled()) throw it
                 log("${studio.name} studio failed (${it.message?.take(100)}); trying the next writer.")
+                if (studio is GeminiStudio && Gemini.keyOnFreeTier == true) log(Gemini.BILLING_HELP)
             }.getOrDefault(false)
             if (done) return
         }
@@ -133,7 +134,8 @@ class Pipeline(
                 p.status = Status.SCRIPTED
                 store.save(p)
             }
-            throw GeminiQuotaError("No AI could write a checked script right now, so no video was made (a draft without AI is saved, not for posting).")
+            throw GeminiQuotaError("No AI could write a checked script right now, so no video was made (a draft without AI is saved, not for posting)." +
+                if (Gemini.keyOnFreeTier == true) " " + Gemini.BILLING_HELP else "")
         }
         p.writer = reply.model
         applyScript(p, extractJson(reply.text))
@@ -162,19 +164,10 @@ class Pipeline(
         }
         ensureLength(p, reply.model != BUILT_IN)
         // Content gate: anything that would embarrass the channel goes back to the AI once more.
-        val gate = ContentGate.check(p, reply.model, BUILT_IN)
+        val gate = ContentGate.check(p, reply.model, BUILT_IN) + ContentGate.advice(p)
         if (gate.isNotEmpty()) {
-            log("Checking accuracy and craft: ${gate.size} problem(s); fixing them…")
-            runCatching {
-                val current3 = JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).toString(1)
-                val fixed = scriptReply(Prompts.script(
-                    p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags,
-                    "Fix ALL of these problems, keep everything else: " + gate.joinToString(" "),
-                    current3, stockFootage = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank(), take = p.take,
-                ))
-                val o = extractJson(fixed.text)
-                if (objects(o.optJSONArray("scenes")).size >= 3) applyScript(p, o)
-            }.onFailure { log("Could not fix them (${it.message?.take(60)}).") }
+            log("Checking accuracy and craft: ${gate.size} point(s); fixing them…")
+            fixScript(p, gate)
         }
         check = ScriptCheck.check(p.scenes, p.lengthSec, research = p.researchNotes, sources = p.sources.map { it.claim + " " + it.url })
         p.scriptScore = check.score
@@ -183,6 +176,39 @@ class Pipeline(
         store.save(p)
         val words = p.scenes.sumOf { it.say.split(Regex("\\s+")).size }
         log("Script ready with ${reply.model}: ${p.scenes.size} scenes, $words words.")
+    }
+
+    /**
+     * Fixes the listed problems with the best AI that answers: the premium editor first, then any free AI with
+     * quota left (so one used-up model never blocks a fix). Returns true when the script changed.
+     */
+    private fun fixScript(p: Project, issues: List<String>, studio: ScriptStudio? = null): Boolean {
+        if (issues.isEmpty()) return false
+        val editors = ArrayList<ScriptStudio>()
+        if (studio != null) editors += studio
+        if (settings.premiumScript && settings.anthropicKey.isNotBlank() && editors.none { it is ClaudeStudio }) editors += ClaudeStudio(settings.anthropicKey, settings.premiumModel, notice = log)
+        if (settings.geminiPremium && settings.geminiKey.isNotBlank() && editors.none { it is GeminiStudio }) editors += GeminiStudio(settings.geminiKey, notice = log)
+        val json = JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() }))
+            .put("sources", JSONArray(p.sources.map { JSONObject().put("claim", it.claim).put("url", it.url) }))
+        for (e in editors) {
+            val ok = runCatching {
+                val fixed = extractJson(e.edit(json.toString(1), p.researchNotes, issues, Prompts.wordRange(p.lengthSec)).text)
+                if (objects(fixed.optJSONArray("scenes")).size >= 3) { applyScript(p, fixed); true } else false
+            }.onFailure { log("${e.name} could not fix it (${it.message?.take(70)}).") }.getOrDefault(false)
+            if (ok) return true
+        }
+        // Free AI chain as the last editor.
+        return runCatching {
+            scriptDeadline = maxOf(scriptDeadline, System.currentTimeMillis() + 90_000)
+            val fixed = scriptReply(Prompts.script(
+                p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags,
+                "Fix ALL of these problems, keep everything else and every fact: " + issues.joinToString(" "),
+                JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).toString(1),
+                stockFootage = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank(), take = p.take,
+            ))
+            val o = extractJson(fixed.text)
+            if (objects(o.optJSONArray("scenes")).size >= 3) { applyScript(p, o); true } else false
+        }.onFailure { log("No AI could fix it right now (${it.message?.take(70)}).") }.getOrDefault(false)
     }
 
     /** The premium three-pass studio. Returns true when the script is ready. */
@@ -221,16 +247,13 @@ class Pipeline(
             } else log("The editor's version was incomplete; keeping the draft.")
         }.onFailure { log("Editing pass failed (${it.message?.take(80)}); keeping the draft.") }
         ensureLength(p, true)
-        // Content gate: up to two more editor passes for anything that breaks the accuracy and craft rules.
+        // Content gate: up to two more editor passes for anything that breaks the accuracy and craft rules
+        // (topic advice included); a used-up editor hands over to the next AI.
         for (round in 1..2) {
-            val gate = ContentGate.check(p, "studio", BUILT_IN)
+            val gate = ContentGate.check(p, "studio", BUILT_IN) + ContentGate.advice(p)
             if (gate.isEmpty() || cancelled()) break
-            log("Accuracy and craft check: ${gate.size} problem(s) (${gate.first().take(90)}); the editor fixes them…")
-            runCatching {
-                val json = JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).put("sources", JSONArray(p.sources.map { JSONObject().put("claim", it.claim).put("url", it.url) }))
-                val fixed = extractJson(studio.edit(json.toString(1), p.researchNotes, gate, Prompts.wordRange(p.lengthSec)).text)
-                if (objects(fixed.optJSONArray("scenes")).size >= 3) applyScript(p, fixed)
-            }.onFailure { log("Fix pass failed (${it.message?.take(80)}).") }
+            log("Accuracy and craft check: ${gate.size} point(s) (${gate.first().take(90)}); fixing them…")
+            if (!fixScript(p, gate, studio)) break
         }
         val name = studio.name
         p.writer = "$name studio"
@@ -335,9 +358,21 @@ class Pipeline(
     fun render(p: Project) {
         val makeStart = System.currentTimeMillis()
         // Content gate: nothing that breaks the accuracy and craft rules is ever made into a video.
-        val gate = ContentGate.check(p, p.writer, BUILT_IN)
+        var gate = ContentGate.check(p, p.writer, BUILT_IN)
+        // Self-repair: the AI fixes what the check found (up to twice) before anything is given up.
+        var round = 0
+        while (gate.isNotEmpty() && p.writer != BUILT_IN && round < 2 && !cancelled()) {
+            round++
+            step("Fixing the script before making the video", null)
+            gate.forEach { log("To fix: $it") }
+            if (!fixScript(p, gate + ContentGate.advice(p))) break
+            store.save(p)
+            gate = ContentGate.check(p, p.writer, BUILT_IN)
+            if (gate.isEmpty()) log("Script fixed and checked; making the video.")
+        }
         if (gate.isNotEmpty()) {
             gate.forEach { log("Not ready: $it") }
+            if (Gemini.keyOnFreeTier == true) log(Gemini.BILLING_HELP)
             throw IllegalStateException("Not made, to protect your channel: ${gate.first()}${if (gate.size > 1) " (+${gate.size - 1} more, see the log)" else ""} Tap Rewrite to let the AI fix it.")
         }
         val dir = p.dir(store.root)
