@@ -108,4 +108,6 @@ change, ask the owner first (with options), then update this file and the test i
 | Self-repair: "Make the video" fixes a failing script by itself (premium editor, then any AI with quota) before rendering | 3.10 | `Pipeline.fixScript`, `Pipeline.render` |
 | Gemini key tier detection: a free-tier quota error explains billing (a Gemini Advanced subscription does not cover the API) in the log and Settings | 3.10 | `Gemini.quotaInfo/keyOnFreeTier/BILLING_HELP` |
 | Premium chain ranks newer Gemini families (e.g. omni) above numbered ones | 3.10 | `Gemini.premiumChain` |
+| Settings → "Test my Gemini key": one request to the best Pro model; shows the model, or Google's exact reason, free-tier status and the key's project number | 3.11 | `Gemini.test/quotaDetail`, `SettingsScreen` |
+| Gemini premium quality: research 0.2, writer 0.75, editor 0.35 temperature; a new key clears old quota marks | 3.11 | `GeminiStudio`, `Settings.geminiKey` |
 

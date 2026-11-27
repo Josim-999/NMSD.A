@@ -238,6 +238,13 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.11: use the paid Gemini credit
+
+- Billing is per **project**. A key only uses the paid credit if it was created inside the billed project (for the owner, "Gemini Project"); a key from any other project stays on the free tier. The app's help text now says exactly this.
+- **Settings → "Test my Gemini key":** one tiny request to the best Gemini Pro model on the key. It shows "Gemini premium works: <model>", or Google's exact reason, with the quota name, the limit and the key's project number, so it can be matched with the billed project.
+- **Quality per pass:** research and the fact-checking editor run at a low temperature (precise), the writer at 0.75 (lively, still on the facts).
+- Changing the key clears old quota marks, so a new paid key works at once.
+
 ## 3.10: no false stops, self-repair, clear Gemini key help
 
 - **Fairer check:**

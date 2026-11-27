@@ -124,6 +124,18 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 Hint("Free key: aistudio.google.com/apikey → Create API key. Paste it here.")
                 TextButton(onClick = { open("https://aistudio.google.com/apikey") }) { Text("Open Google AI Studio") }
                 SecretField("Gemini API key", s.geminiKey) { s.geminiKey = it }
+                // One tiny request to the best Pro model: shows whether Gemini premium works with this key.
+                var testing by remember { mutableStateOf(false) }
+                var testResult by remember { mutableStateOf("") }
+                var testOk by remember { mutableStateOf(false) }
+                TextButton(enabled = !testing && s.geminiKey.isNotBlank(), onClick = {
+                    testing = true
+                    scope.launch {
+                        val r = withContext(Dispatchers.IO) { com.videostudio.app.ai.Gemini(s.geminiKey).test() }
+                        testResult = r.message; testOk = r.ok; testing = false
+                    }
+                }) { Text(if (testing) "Testing…" else "Test my Gemini key") }
+                if (testResult.isNotBlank()) Text(testResult, color = if (testOk) Good else Color(0xFFFF6B6B), fontSize = 13.sp)
                 Spacer(Modifier.height(6.dp))
                 PlainField("Script model", s.scriptModel) { s.scriptModel = it }
                 Spacer(Modifier.height(6.dp))

@@ -190,4 +190,14 @@ class FeatureGuardTest {
         assertTrue("questions are complete phrases", gate.contains("endsWith(\"?\")"))
         assertTrue("topic by stems and title; drift beyond that is advice", gate.contains("fun topicStems(") && gate.contains("fun advice("))
     }
+
+    @Test fun paidGeminiQualityAndKeyTest() {
+        // 3.11: the owner's paid Gemini credit is used for scripts; quality settings per pass; key test in Settings.
+        val studio = File("src/main/java/com/videostudio/app/ai/GeminiStudio.kt").readText()
+        assertTrue("precise research and fact-check, lively writer", studio.contains("temperature = 0.2") && studio.contains("temperature = 0.75") && studio.contains("temperature = 0.35"))
+        val gemini = File("src/main/java/com/videostudio/app/ai/Gemini.kt").readText()
+        assertTrue(gemini.contains("fun test(): KeyTest") && gemini.contains("fun quotaDetail("))
+        assertTrue(File("src/main/java/com/videostudio/app/ui/SettingsScreen.kt").readText().contains("Test my Gemini key"))
+        assertTrue("a new key clears old quota marks", File("src/main/java/com/videostudio/app/data/Settings.kt").readText().contains("Gemini.forgetQuotas()"))
+    }
 }

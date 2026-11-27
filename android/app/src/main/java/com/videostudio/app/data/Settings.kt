@@ -12,7 +12,7 @@ class Settings(context: Context) {
 
     var geminiKey: String
         get() = str("gemini_key")
-        set(v) = put("gemini_key", v.trim())
+        set(v) { if (v.trim() != str("gemini_key")) { com.videostudio.app.ai.Gemini.forgetQuotas(); com.videostudio.app.ai.Gemini.keyOnFreeTier = null }; put("gemini_key", v.trim()) }
 
     var scriptModel: String
         get() = str("script_model", "gemini-3.1-flash-lite")

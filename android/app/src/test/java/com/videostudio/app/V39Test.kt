@@ -133,4 +133,11 @@ class V39Test {
         assertEquals("gemini-omni-1.2-pro", chain.first())
         assertTrue(chain.indexOf("gemini-2.5-pro") < chain.indexOf("gemini-omni-1.1-flash"))
     }
+
+    @Test fun quotaDetailNamesTheProject() {
+        val err = """{"error":{"code":429,"message":"Quota exceeded for quota metric 'Generate Content API requests per day' of service 'generativelanguage.googleapis.com' for consumer 'project_number:123456789012'.","details":[{"violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier","quotaValue":"50"}]}]}}"""
+        val d = Gemini.quotaDetail(err)
+        assertTrue(d, d.contains("FreeTier") && d.contains("limit 50") && d.contains("project 123456789012"))
+        assertTrue(Gemini.BILLING_HELP.contains("Billing is per PROJECT"))
+    }
 }

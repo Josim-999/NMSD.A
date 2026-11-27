@@ -16,20 +16,20 @@ class GeminiStudio(apiKey: String, private val notice: (String) -> Unit = {}) : 
 
     override val name: String get() = "Gemini ${used.ifBlank { chain.firstOrNull() ?: "Pro" }}".replace("Gemini gemini-", "Gemini ")
 
-    private fun run(system: String, prompt: String, json: Boolean, search: Boolean): ClaudeStudio.Reply {
-        val r = gemini.generate("$system\n\n$prompt", chain.first(), json = json, search = search, fallbacks = chain.drop(1))
+    private fun run(system: String, prompt: String, json: Boolean, search: Boolean, temperature: Double): ClaudeStudio.Reply {
+        val r = gemini.generate("$system\n\n$prompt", chain.first(), json = json, search = search, fallbacks = chain.drop(1), temperature = temperature)
         used = r.model
         return ClaudeStudio.Reply(r.text, r.sources)
     }
 
     override fun research(p: Project, today: LocalDate): ClaudeStudio.Reply {
         notice("Researching with Google Search on ${chain.firstOrNull() ?: "Gemini Pro"}…")
-        return run(ClaudeStudio.RESEARCH_SYSTEM, ClaudeStudio.researchPrompt(p, today), json = false, search = true)
+        return run(ClaudeStudio.RESEARCH_SYSTEM, ClaudeStudio.researchPrompt(p, today), json = false, search = true, temperature = 0.2)
     }
 
     override fun write(scriptPrompt: String, today: LocalDate): ClaudeStudio.Reply {
         notice("Writing the draft with $name…")
-        return run(ClaudeStudio.WRITER_SYSTEM, "Today is $today.\n\n$scriptPrompt\n\n${ClaudeStudio.WRITER_ADDENDUM}", json = true, search = false)
+        return run(ClaudeStudio.WRITER_SYSTEM, "Today is $today.\n\n$scriptPrompt\n\n${ClaudeStudio.WRITER_ADDENDUM}", json = true, search = false, temperature = 0.75)
     }
 
     override fun edit(draftJson: String, factSheet: String, issues: List<String>, words: IntRange, today: LocalDate): ClaudeStudio.Reply {
@@ -46,6 +46,6 @@ ${if (issues.isEmpty()) "" else "The automatic checker also flagged: " + issues.
 Length: ${words.first}-${words.last} spoken words in total across all "say" fields.
 Return the complete improved script as one JSON object in exactly the same schema as the draft, nothing else.
 """.trim()
-        return run(ClaudeStudio.EDITOR_SYSTEM, prompt, json = true, search = false)
+        return run(ClaudeStudio.EDITOR_SYSTEM, prompt, json = true, search = false, temperature = 0.35)
     }
 }

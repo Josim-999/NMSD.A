@@ -59,6 +59,8 @@ class Gemini(
         fallbacks: List<String> = emptyList(),
         /** A JPEG to look at (picture checks). */
         image: ByteArray? = null,
+        /** Lower for research and fact-checking (precise), higher for the writer (lively). */
+        temperature: Double = 0.8,
     ): GeminiReply {
         if (apiKey.isBlank()) throw GeminiError("Add your Gemini API key in Settings (free at aistudio.google.com/apikey).")
         val extra = if (strict) emptyList() else if (autoSwitch) available() else FALLBACK_MODELS
@@ -74,7 +76,7 @@ class Gemini(
             if (tried.isNotEmpty()) notice("Switching to $m (${lastProblem}).")
             tried.add(m)
             try {
-                return call(prompt, m, json, search, image).copy(model = m)
+                return call(prompt, m, json, search, image, temperature).copy(model = m)
             } catch (e: OutOfQuota) {
                 if (e.daily) markExhausted(m) else markResting(m)
                 lastProblem = if (e.daily) "$m: ${if (keyOnFreeTier == true) "free-tier daily quota used up" else "daily limit reached"}" else "$m: busy for a minute"
@@ -88,12 +90,12 @@ class Gemini(
         )
     }
 
-    private fun call(prompt: String, model: String, json: Boolean, search: Boolean, image: ByteArray? = null): GeminiReply {
+    private fun call(prompt: String, model: String, json: Boolean, search: Boolean, image: ByteArray? = null, temperature: Double = 0.8): GeminiReply {
         val parts = JSONArray().put(JSONObject().put("text", prompt))
         if (image != null) parts.put(JSONObject().put("inline_data", JSONObject().put("mime_type", "image/jpeg")
             .put("data", android.util.Base64.encodeToString(image, android.util.Base64.NO_WRAP))))
         val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", parts)))
-        val config = JSONObject().put("temperature", 0.8)
+        val config = JSONObject().put("temperature", temperature)
         // Gemma on the Gemini API has no JSON mode; the prompt already asks for JSON and extractJson reads it.
         if (json && !isGemma(model)) config.put("responseMimeType", "application/json")
         body.put("generationConfig", config)
@@ -137,6 +139,7 @@ class Gemini(
                         continue
                     }
                     keyOnFreeTier = q.freeTier
+                    lastQuota = "$model: " + quotaDetail(text)
                     throw OutOfQuota(reason(text), daily = q.daily)
                 }
                 code == 400 && (text.contains("not supported", true) || text.contains("not enabled", true) ||
@@ -189,6 +192,36 @@ class Gemini(
         val ranked = if (names.isNullOrEmpty()) FALLBACK_MODELS + GEMMA_FALLBACKS else rank(names)
         if (!names.isNullOrEmpty()) cachedModels = System.currentTimeMillis() to ranked
         return ranked
+    }
+
+    /** Result of [test]: whether the premium model answered, and what Google said if it did not. */
+    data class KeyTest(val ok: Boolean, val model: String, val message: String)
+
+    /**
+     * Settings → "Test my Gemini key": one tiny request to the best Pro model on the key. Shows the model,
+     * and on failure Google's exact reason, whether it is a free-tier quota and the key's project number,
+     * so it can be matched with the billed project in AI Studio.
+     */
+    fun test(): KeyTest {
+        forgetQuotas()
+        val chain = premiumChain(runCatching { available() }.getOrDefault(emptyList()))
+        val model = chain.first()
+        val body = JSONObject()
+            .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", "Reply with the single word OK.")))))
+        return try {
+            val (code, text) = http.newCall(Request.Builder().url(base.format(model)).header("x-goog-api-key", apiKey)
+                .post(body.toString().toRequestBody("application/json".toMediaType())).build()).execute().use { it.code to (it.body?.string() ?: "") }
+            when (code) {
+                200 -> { keyOnFreeTier = keyOnFreeTier.takeIf { it == false }; KeyTest(true, model, "Gemini premium works: $model answered. Scripts use it first (then ${chain.drop(1).take(2).joinToString()}).") }
+                429 -> {
+                    val q = quotaInfo(text); keyOnFreeTier = q.freeTier
+                    KeyTest(false, model, (if (q.freeTier) BILLING_HELP + " " else "$model is at its limit right now. ") + "Google says: " + quotaDetail(text))
+                }
+                else -> KeyTest(false, model, "$model: " + explain(code, text))
+            }
+        } catch (e: Exception) {
+            KeyTest(false, model, "Could not reach Gemini (${e.message}). Check the internet connection.")
+        }
     }
 
     private fun reason(text: String): String =
@@ -290,9 +323,22 @@ class Gemini(
          */
         @Volatile var keyOnFreeTier: Boolean? = null
 
+        /** The last quota error in plain words (for the log and Settings). */
+        @Volatile var lastQuota: String = ""
+
+        /** "quota GenerateRequestsPerDay...-FreeTier (limit 50) on project 123456789" from a 429 body. */
+        fun quotaDetail(text: String): String {
+            val id = Regex("\"quotaId\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
+            val limit = Regex("\"quotaValue\"\\s*:\\s*\"([^\"]+)\"").find(text)?.groupValues?.get(1)
+            val project = Regex("projects/(\\d+)|project[_ ]number[\"=: ]+(\\d+)", RegexOption.IGNORE_CASE).find(text)?.groupValues?.drop(1)?.firstOrNull { it.isNotBlank() }
+            val parts = listOfNotNull(id?.let { "quota $it" }, limit?.let { "limit $it" }, project?.let { "on project $it" })
+            return if (parts.isEmpty()) (runCatching { JSONObject(text).getJSONObject("error").getString("message") }.getOrNull() ?: text.take(160)) else parts.joinToString(", ")
+        }
+
         const val BILLING_HELP = "Your Gemini API key is on Google's FREE tier: Gemini Pro allows only a few requests a day there. " +
             "A Gemini Advanced / Google One AI Premium subscription does NOT cover the API. To use Gemini premium for every script, " +
-            "open aistudio.google.com → API keys → set up billing for the project of this key (pay per use, a few cents a script), then make the video again."
+            "Billing is per PROJECT: in aistudio.google.com → API keys, create the key inside your billed project (e.g. \"Gemini Project\") " +
+            "and paste that key in Settings. A key from any other project stays on the free tier even when your billing account has credit."
 
         /** Reads Gemini's 429 details: which quota ran out and how long to wait. */
         fun quotaInfo(text: String): Quota {
