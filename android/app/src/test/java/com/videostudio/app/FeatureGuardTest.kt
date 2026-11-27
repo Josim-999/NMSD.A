@@ -94,4 +94,26 @@ class FeatureGuardTest {
         assertEquals(54, clip.width)
         clip.release()
     }
+
+    @Test fun oneRenderAtATimeAndClipsMatchTheScene() {
+        // 3.5: several renders at once each ran ~3x slower; they now queue.
+        assertEquals(1, com.videostudio.app.render.RenderGate.render.availablePermits())
+        val pipeline = File("src/main/java/com/videostudio/app/work/Pipeline.kt").readText()
+        assertTrue(pipeline.contains("RenderGate.acquire(RenderGate.render"))
+        assertTrue(pipeline.contains("RenderGate.with(RenderGate.decode)"))
+        // A queued video waits and can be stopped while waiting.
+        val gate = java.util.concurrent.Semaphore(1); gate.acquire()
+        var stop = false
+        val t = Thread { Thread.sleep(300); stop = true }; t.start()
+        assertTrue(!com.videostudio.app.render.RenderGate.acquire(gate, { stop }))
+        gate.release()
+        assertTrue(com.videostudio.app.render.RenderGate.acquire(gate, { false })); gate.release()
+        // Clips must match the scene's words, like photos.
+        val stock = File("src/main/java/com/videostudio/app/ai/Stock.kt").readText()
+        val finder = File("src/main/java/com/videostudio/app/ai/MediaFinder.kt").readText()
+        assertTrue(stock.contains("MediaFinder.relevance(query, slug)"))
+        assertTrue(finder.contains("relevance(query, h.optString(\"tags\")) < minRelevance(query)) return@mapNotNull null"))
+        assertTrue(com.videostudio.app.ai.MediaFinder.relevance("man sleeping bed", "man sleeping in bed 4821") >= com.videostudio.app.ai.MediaFinder.minRelevance("man sleeping bed"))
+        assertTrue(com.videostudio.app.ai.MediaFinder.relevance("man sleeping bed", "city traffic night 22") < com.videostudio.app.ai.MediaFinder.minRelevance("man sleeping bed"))
+    }
 }

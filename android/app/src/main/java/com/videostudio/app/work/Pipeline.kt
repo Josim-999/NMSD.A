@@ -35,6 +35,7 @@ import com.videostudio.app.render.Look
 import com.videostudio.app.render.Palettes
 import com.videostudio.app.render.SceneMedia
 import com.videostudio.app.render.MotionPlan
+import com.videostudio.app.render.RenderGate
 import com.videostudio.app.render.ScenePainter
 import com.videostudio.app.render.Timeline
 import com.videostudio.app.render.VideoRenderer
@@ -363,7 +364,7 @@ class Pipeline(
                 ?: runCatching { finder.pixabayVideo(query, clip, seconds) }.getOrNull() ?: return false
             // Decode the clip now, in parallel with the other downloads, never during rendering.
             val frameDir = File(dir, "clip_frames_$i")
-            if (SceneMedia.Clip.prepare(clip, seconds, frameDir) == 0) return false
+            if (RenderGate.with(RenderGate.decode) { SceneMedia.Clip.prepare(clip, seconds, frameDir) } == 0) return false
             credits.add(credit)
             found[i] = SceneMedia.Lazy { SceneMedia.Clip.loadFrames(frameDir) }
             return true
@@ -547,11 +548,18 @@ class Pipeline(
             drops = drops,
             pulses = pulses,
         )
-        step("Rendering the video", 0f)
+        step("Getting ready to render", null)
         log(String.format("Rendering ${w}x$h at $fps fps, %.1f s…", timeline.duration))
         val started = System.currentTimeMillis()
         try {
-            renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled) { step("Rendering the video", it) }
+            // One render at a time on the phone: it is much faster than several sharing it.
+            if (!RenderGate.acquire(RenderGate.render, cancelled) { step("Waiting for the video before it to finish rendering", null); log("Another video is rendering; this one starts right after it.") }) return
+            try {
+                step("Rendering the video", 0f)
+                renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled) { step("Rendering the video", it) }
+            } finally {
+                RenderGate.render.release()
+            }
             val first = timeline.spans.first()
             renderer.thumbnail(painter, minOf(first.start + 1.2, (first.end - 0.2).coerceAtLeast(0.5)), p.thumb(store.root))
         } finally {

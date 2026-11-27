@@ -60,10 +60,14 @@ object Stock {
         val candidates = (0 until videos.length()).mapNotNull { videos.optJSONObject(it) }
             .sortedByDescending { if (it.optDouble("duration", 0.0) >= minSeconds) 1 else 0 }
         for (v in candidates) {
+            // The clip must be about the scene: its page name ("/video/man-sleeping-in-bed-123/") holds the search words.
+            val slug = v.optString("url").substringAfter("/video/", "").replace('-', ' ')
+            if (slug.isNotBlank() && com.videostudio.app.ai.MediaFinder.relevance(query, slug) < com.videostudio.app.ai.MediaFinder.minRelevance(query)) continue
             val files = v.optJSONArray("video_files") ?: continue
+            // A background needs ~540 px: the smallest file at least that wide downloads and decodes far faster than full HD.
             val best = (0 until files.length()).mapNotNull { files.optJSONObject(it) }
                 .filter { it.optString("file_type") == "video/mp4" && it.optInt("height") > it.optInt("width") && it.optInt("width") in 540..1920 }
-                .minByOrNull { kotlin.math.abs(it.optInt("width") - 1080) }
+                .minByOrNull { it.optInt("width") }
                 ?: continue
             val link = best.optString("link")
             if (link.isBlank()) continue

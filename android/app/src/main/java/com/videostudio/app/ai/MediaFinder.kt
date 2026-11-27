@@ -360,12 +360,15 @@ class MediaFinder(
         val picks = (0 until hits.length()).mapNotNull { i ->
             val h = hits.optJSONObject(i) ?: return@mapNotNull null
             if (h.optDouble("duration", 0.0) < minSeconds * 0.8) return@mapNotNull null
+            // The clip must be about the scene (same rule as photos).
+            if (relevance(query, h.optString("tags")) < minRelevance(query)) return@mapNotNull null
             val v = h.optJSONObject("videos") ?: return@mapNotNull null
-            val file = listOf("large", "medium").mapNotNull { v.optJSONObject(it) }
-                .firstOrNull { it.optString("url").isNotBlank() && maxOf(it.optInt("width"), it.optInt("height")) in 960..2160 }
+            // Smallest file with at least 540 px on its short side: fast to download and decode, sharp enough behind text.
+            val file = listOf("tiny", "small", "medium", "large").mapNotNull { v.optJSONObject(it) }
+                .firstOrNull { it.optString("url").isNotBlank() && minOf(it.optInt("width"), it.optInt("height")) >= 540 }
                 ?: return@mapNotNull null
             Pick(h, file.optString("url"), file.optInt("height") > file.optInt("width"))
-        }.sortedByDescending { it.portrait }
+        }.sortedWith(compareByDescending<Pick> { relevance(query, it.hit.optString("tags")) }.thenByDescending { it.portrait })
         for (p in picks.take(3)) {
             val ok = runCatching {
                 http.newCall(get(p.url)).execute().use { r ->

@@ -73,3 +73,6 @@ change, ask the owner first (with options), then update this file and the test i
 | Drawing and encoding run on two threads at once | 3.3 | `render/VideoRenderer.kt` |
 | Pictures, clips and logos download in parallel (6 at once) | 3.3 | `work/Pipeline.kt` |
 | Clips are decoded once, before rendering and in parallel, into JPEG frames (never during drawing); frame timeout 240 s with the frame number | 3.4 | `SceneMedia.Clip.prepare`, `VideoRenderer` |
+| One render at a time across the phone (others wait in line and keep preparing); at most 2 clips decoded at once | 3.5 | `render/RenderGate.kt`, Pipeline |
+| Clips: smallest file that is sharp enough (~540 px), frames read in one pass on Android 9+, 3 s ping-pong | 3.5 | `ai/Stock.kt`, `MediaFinder.pixabayVideo`, `SceneMedia.Clip` |
+| Clips must match the scene's words (Pixabay tags, Pexels page name), like photos | 3.5 | `Stock.pexelsVideo`, `MediaFinder.pixabayVideo` |

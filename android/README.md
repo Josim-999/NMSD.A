@@ -238,6 +238,15 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.5: faster renders and clips, clips that match
+
+- **One render at a time.** Three videos rendering at once shared one hardware encoder and the CPU, so each ran about 3x slower. Now the next video waits in line ("Waiting for the video before it to finish rendering") while it still prepares its voice, pictures and clips, and starts the moment the first one is done. You can stop a waiting video.
+- **Faster clips:**
+  - The smallest stock file that is sharp enough is downloaded (about 540 px instead of full HD), so downloads are about 4x smaller.
+  - Frames are read in one pass on Android 9+, instead of seeking for every frame.
+  - Clips are 3 s that play forward and back, and at most 2 are decoded at once.
+- **Clips that match:** a Pixabay clip's tags, or a Pexels clip's page name, must contain the scene's search words (the same rule as photos). Otherwise the next match is tried, then a matching photo.
+
 ## 3.4: fix "drawing a frame took too long"
 
 - Cause: in 3.3, the new background clips were decoded inside the render, frame by frame (up to 48 slow seeks per clip). On a phone one frame could take over a minute, so the 60 s safety stop fired.

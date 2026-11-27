@@ -63,7 +63,8 @@ sealed class SceneMedia {
 
         companion object {
             const val FPS = 12
-            private const val MAX_FRAMES = 48
+            /** 3 seconds at 12 fps; a clip plays forward then backward, so longer scenes never jump. */
+            private const val MAX_FRAMES = 36
 
             /**
              * Decodes up to [seconds] of [file] once, before rendering, into small JPEG frames in [dir]
@@ -107,6 +108,9 @@ sealed class SceneMedia {
                     val th = (vh.toLong() * tw / vw).toInt()
                     val count = minOf(MAX_FRAMES, ((minOf(seconds, durMs / 1000.0)) * FPS).toInt().coerceAtLeast(1))
                     val frames = ArrayList<Bitmap>(count)
+                    // Android 9+: decode the frames in one pass (one seek), much faster than seeking per frame.
+                    if (Build.VERSION.SDK_INT >= 28) runCatching { sequential(r, durMs, count, tw, th, frames) }.onFailure { frames.forEach { it.recycle() }; frames.clear() }
+                    if (frames.isNotEmpty()) return Clip(frames)
                     for (i in 0 until count) {
                         val us = i * 1_000_000L / FPS
                         val raw = if (Build.VERSION.SDK_INT >= 27) {
@@ -121,6 +125,32 @@ sealed class SceneMedia {
                     r.release()
                 }
             }.getOrNull()
+        }
+    }
+
+    private companion object Sequential {
+        /** Frames [count] at [Clip.FPS] from the start, read in short consecutive batches. */
+        @android.annotation.TargetApi(28)
+        fun sequential(r: MediaMetadataRetriever, durMs: Long, count: Int, tw: Int, th: Int, out: MutableList<Bitmap>) {
+            val total = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull() ?: return
+            if (total <= 0 || durMs <= 0) return
+            val srcFps = total * 1000.0 / durMs
+            val wanted = (0 until count).map { k -> (k * srcFps / Clip.FPS).toInt().coerceAtMost(total - 1) }
+            val params = MediaMetadataRetriever.BitmapParams().apply { preferredConfig = Bitmap.Config.RGB_565 }
+            var i = 0
+            while (i < wanted.size) {
+                // A batch of about 8 source frames, decoded in one go from the nearest keyframe.
+                val start = wanted[i]
+                var j = i
+                while (j + 1 < wanted.size && wanted[j + 1] - start < 8) j++
+                val batch = r.getFramesAtIndex(start, wanted[j] - start + 1, params)
+                for (k in i..j) {
+                    val src = batch.getOrNull(wanted[k] - start) ?: continue
+                    out.add(if (src.width == tw && src.height == th) src.copy(Bitmap.Config.RGB_565, false) else Bitmap.createScaledBitmap(src, tw, th, true))
+                }
+                batch.forEach { it.recycle() }
+                i = j + 1
+            }
         }
     }
 
