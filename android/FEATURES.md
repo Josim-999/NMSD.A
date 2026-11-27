@@ -110,4 +110,5 @@ change, ask the owner first (with options), then update this file and the test i
 | Premium chain ranks newer Gemini families (e.g. omni) above numbered ones | 3.10 | `Gemini.premiumChain` |
 | Settings → "Test my Gemini key": one request to the best Pro model; shows the model, or Google's exact reason, free-tier status and the key's project number | 3.11 | `Gemini.test/quotaDetail`, `SettingsScreen` |
 | Gemini premium quality: research 0.2, writer 0.75, editor 0.35 temperature; a new key clears old quota marks | 3.11 | `GeminiStudio`, `Settings.geminiKey` |
+| Gemini model order like the original app: the Settings models first (gemini-3.8-flash with Google Search), then newest generation first (Pro before Flash within a generation), named preview families last | 3.12 | `Gemini.premiumChain`, `GeminiStudio(preferred)` |
 

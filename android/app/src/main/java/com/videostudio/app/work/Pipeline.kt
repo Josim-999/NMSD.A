@@ -79,7 +79,7 @@ class Pipeline(
         // Gemini premium (Pro models on the Gemini key). The free chain is only the backup.
         val studios = ArrayList<ScriptStudio>()
         if (settings.premiumScript && settings.anthropicKey.isNotBlank()) studios += ClaudeStudio(settings.anthropicKey, settings.premiumModel, notice = log)
-        if (settings.geminiPremium && settings.geminiKey.isNotBlank()) studios += GeminiStudio(settings.geminiKey, notice = log)
+        if (settings.geminiPremium && settings.geminiKey.isNotBlank()) studios += GeminiStudio(settings.geminiKey, notice = log, preferred = listOf(settings.researchModel, settings.scriptModel))
         for (studio in studios) {
             val done = runCatching { studioScript(p, feedback, studio) }.onFailure {
                 if (cancelled()) throw it
@@ -187,7 +187,7 @@ class Pipeline(
         val editors = ArrayList<ScriptStudio>()
         if (studio != null) editors += studio
         if (settings.premiumScript && settings.anthropicKey.isNotBlank() && editors.none { it is ClaudeStudio }) editors += ClaudeStudio(settings.anthropicKey, settings.premiumModel, notice = log)
-        if (settings.geminiPremium && settings.geminiKey.isNotBlank() && editors.none { it is GeminiStudio }) editors += GeminiStudio(settings.geminiKey, notice = log)
+        if (settings.geminiPremium && settings.geminiKey.isNotBlank() && editors.none { it is GeminiStudio }) editors += GeminiStudio(settings.geminiKey, notice = log, preferred = listOf(settings.researchModel, settings.scriptModel))
         val json = JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() }))
             .put("sources", JSONArray(p.sources.map { JSONObject().put("claim", it.claim).put("url", it.url) }))
         for (e in editors) {

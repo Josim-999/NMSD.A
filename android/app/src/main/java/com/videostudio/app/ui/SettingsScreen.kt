@@ -131,7 +131,7 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 TextButton(enabled = !testing && s.geminiKey.isNotBlank(), onClick = {
                     testing = true
                     scope.launch {
-                        val r = withContext(Dispatchers.IO) { com.videostudio.app.ai.Gemini(s.geminiKey).test() }
+                        val r = withContext(Dispatchers.IO) { com.videostudio.app.ai.Gemini(s.geminiKey).test(listOf(s.researchModel, s.scriptModel)) }
                         testResult = r.message; testOk = r.ok; testing = false
                     }
                 }) { Text(if (testing) "Testing…" else "Test my Gemini key") }

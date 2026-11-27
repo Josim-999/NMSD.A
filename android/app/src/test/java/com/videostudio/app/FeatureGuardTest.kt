@@ -196,8 +196,15 @@ class FeatureGuardTest {
         val studio = File("src/main/java/com/videostudio/app/ai/GeminiStudio.kt").readText()
         assertTrue("precise research and fact-check, lively writer", studio.contains("temperature = 0.2") && studio.contains("temperature = 0.75") && studio.contains("temperature = 0.35"))
         val gemini = File("src/main/java/com/videostudio/app/ai/Gemini.kt").readText()
-        assertTrue(gemini.contains("fun test(): KeyTest") && gemini.contains("fun quotaDetail("))
+        assertTrue(gemini.contains("fun test(testPreferred: List<String> = emptyList()): KeyTest") && gemini.contains("fun quotaDetail("))
         assertTrue(File("src/main/java/com/videostudio/app/ui/SettingsScreen.kt").readText().contains("Test my Gemini key"))
         assertTrue("a new key clears old quota marks", File("src/main/java/com/videostudio/app/data/Settings.kt").readText().contains("Gemini.forgetQuotas()"))
+    }
+
+    @Test fun originalAppGeminiModelsFirst() {
+        // 3.12: scripts use the same Gemini API models as the owner's original app (research + script on gemini-3.8-flash).
+        assertEquals("gemini-3.8-flash", settings.researchModel)
+        val pipeline = File("src/main/java/com/videostudio/app/work/Pipeline.kt").readText()
+        assertTrue(pipeline.contains("preferred = listOf(settings.researchModel, settings.scriptModel)"))
     }
 }

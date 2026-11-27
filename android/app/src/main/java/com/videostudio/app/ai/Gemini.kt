@@ -202,9 +202,9 @@ class Gemini(
      * and on failure Google's exact reason, whether it is a free-tier quota and the key's project number,
      * so it can be matched with the billed project in AI Studio.
      */
-    fun test(): KeyTest {
+    fun test(testPreferred: List<String> = emptyList()): KeyTest {
         forgetQuotas()
-        val chain = premiumChain(runCatching { available() }.getOrDefault(emptyList()))
+        val chain = premiumChain(runCatching { available() }.getOrDefault(emptyList()), testPreferred)
         val model = chain.first()
         val body = JSONObject()
             .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", "Reply with the single word OK.")))))
@@ -255,11 +255,22 @@ class Gemini(
          * Premium order for the script studio: Gemini Pro models (the "latest" alias, then newest first),
          * then Gemini Flash as the backup. Works with whatever names Google currently offers on the key.
          */
-        fun premiumChain(names: List<String>): List<String> {
-            val usable = names.map { it.removePrefix("models/") }.filter { n -> n.startsWith("gemini-") && SKIP.none { n.contains(it) } }
-            val pro = usable.filter { it.contains("pro") }.sortedWith(compareByDescending<String> { it.contains("latest") }.thenByDescending { version(it) }.thenBy { it.contains("preview") })
-            val flash = usable.filter { it.contains("flash") && !it.contains("lite") }.sortedWith(compareByDescending<String> { it.contains("latest") }.thenByDescending { version(it) })
-            return (pro + flash).distinct().ifEmpty { listOf("gemini-pro-latest", "gemini-2.5-pro", "gemini-flash-latest", "gemini-2.5-flash") }
+        fun premiumChain(names: List<String>, preferred: List<String> = emptyList()): List<String> {
+            val usable = names.map { it.removePrefix("models/") }.filter { n ->
+                n.startsWith("gemini-") && SKIP.none { n.contains(it) } && (n.contains("pro") || n.contains("flash")) && !n.contains("lite")
+            }
+            // Newest generation first (3.8 Flash beats 2.5 Pro); within a generation Pro first, stable before preview;
+            // the "pro-latest" alias (always the newest Pro) leads; other named families (omni) after the numbered ones.
+            val ranked = usable.sortedWith(
+                compareByDescending<String> { it == "gemini-pro-latest" }
+                    .thenBy { Regex("^gemini-\\d").containsMatchIn(it).not() && !it.endsWith("-latest") }
+                    .thenByDescending { version(it) }
+                    .thenByDescending { it.contains("pro") }
+                    .thenBy { it.contains("preview") || it.contains("exp") },
+            )
+            // The models chosen in Settings (the original app's gemini-3.8-flash) come first when the key has them.
+            val chosen = preferred.map { it.trim().removePrefix("models/") }.filter { it.isNotBlank() && !it.contains("lite") && (names.isEmpty() || it in usable) }
+            return (chosen + ranked).distinct().ifEmpty { listOf("gemini-3.8-flash", "gemini-pro-latest", "gemini-2.5-pro", "gemini-2.5-flash") }
         }
 
         /** Fast models for picture checks (Flash-Lite first). */
@@ -278,12 +289,9 @@ class Gemini(
             "computer-use", "vision", "learnlm", "nano", "deep-research", "lyria", "gemma-3n", "-1b-it", "-4b-it", "-2b-it",
         )
 
-        /** Model generation: "gemini-2.5-pro" -> 2.5; newer named families ("gemini-omni-1.2-pro") rank above numbered ones. */
-        private fun version(name: String): Double {
-            val v = Regex("(?:gemini|gemma)-(?:[a-z]+-)?(\\d+(?:\\.\\d+)?)").find(name)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
-            return if (Regex("^gemini-[a-z]+-").containsMatchIn(name) && !Regex("^gemini-\\d").containsMatchIn(name) &&
-                !name.startsWith("gemini-pro") && !name.startsWith("gemini-flash")) v + 10 else v
-        }
+        /** Model generation: "gemini-3.8-flash" -> 3.8. */
+        private fun version(name: String): Double =
+            Regex("(?:gemini|gemma)-(?:[a-z]+-)?(\\d+(?:\\.\\d+)?)").find(name)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
 
         private fun size(name: String): Int = Regex("(\\d+)b").find(name)?.groupValues?.get(1)?.toIntOrNull() ?: 0
 

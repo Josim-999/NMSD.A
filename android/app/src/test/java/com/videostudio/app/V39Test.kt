@@ -128,10 +128,17 @@ class V39Test {
         assertTrue(Gemini.BILLING_HELP.contains("billing") && Gemini.BILLING_HELP.contains("does NOT cover the API"))
     }
 
-    @Test fun newestProFamilyFirst() {
-        val chain = Gemini.premiumChain(listOf("gemini-2.5-pro", "gemini-omni-1.2-pro", "gemini-omni-1.1-flash", "gemini-2.5-flash"))
-        assertEquals("gemini-omni-1.2-pro", chain.first())
-        assertTrue(chain.indexOf("gemini-2.5-pro") < chain.indexOf("gemini-omni-1.1-flash"))
+    @Test fun newestGenerationFirstLikeTheOriginalApp() {
+        // The owner's key (from the log): the original app used gemini-3.8-flash; 2.5 Pro and omni previews must not lead.
+        val names = listOf("gemini-2.5-pro", "gemini-3.8-flash", "gemini-omni-1.1-flash", "gemini-omni-1.2-flash", "gemini-omni-flash-preview", "gemini-2.5-flash", "gemini-3.1-flash-lite")
+        val chain = Gemini.premiumChain(names)
+        assertEquals("gemini-3.8-flash", chain.first())
+        assertTrue(chain.indexOf("gemini-2.5-pro") < chain.indexOf("gemini-2.5-flash"))
+        assertTrue("named preview families after the numbered ones", chain.indexOf("gemini-omni-1.2-flash") > chain.indexOf("gemini-2.5-flash"))
+        assertTrue(chain.none { it.contains("lite") })
+        val withSettings = Gemini.premiumChain(names, listOf("gemini-3.8-flash", "gemini-3.1-flash-lite"))
+        assertEquals("gemini-3.8-flash", withSettings.first())
+        assertTrue("a newer Pro of the same generation still wins", Gemini.premiumChain(listOf("gemini-3.8-flash", "gemini-3.8-pro")).first() == "gemini-3.8-pro")
     }
 
     @Test fun quotaDetailNamesTheProject() {

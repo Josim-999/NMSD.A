@@ -238,6 +238,17 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.12: the same Gemini models as the original app
+
+- The owner's original app (the APK shared at the start) researched and wrote with `gemini-3.8-flash` (Google Search for research), with `gemini-3.1-flash-lite` and `gemini-2.5-flash` as backups.
+- 3.9-3.11 put "Pro" models first, so `gemini-2.5-pro`, an older generation, was tried before 3.8, and 3.10 even ranked the omni previews higher.
+- **Now:**
+  - the models chosen in Settings (the original's `gemini-3.8-flash`) come first
+  - then the newest generation (a 3.x Pro would come before 3.8 Flash)
+  - named preview families last
+  - the three passes (research with Google Search, writer, editor/fact-checker) and the content gate stay
+- "Test my Gemini key" tests the same first model.
+
 ## 3.11: use the paid Gemini credit
 
 - Billing is per **project**. A key only uses the paid credit if it was created inside the billed project (for the owner, "Gemini Project"); a key from any other project stays on the free tier. The app's help text now says exactly this.
