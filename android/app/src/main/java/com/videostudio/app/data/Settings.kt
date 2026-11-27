@@ -257,4 +257,14 @@ class Settings(context: Context) {
     var gpuAttempt: Boolean
         get() = str("gpu_attempt", "false") == "true"
         set(v) = put("gpu_attempt", v.toString())
+
+    /** Gemini premium studio (Pro models on the Gemini key) writes the scripts. */
+    var geminiPremium: Boolean
+        get() = str("gemini_premium", "true") == "true"
+        set(v) = put("gemini_premium", v.toString())
+
+    /** Gemini looks at every picture and clip before it is used. */
+    var checkPictures: Boolean
+        get() = str("check_pictures", "true") == "true"
+        set(v) = put("check_pictures", v.toString())
 }

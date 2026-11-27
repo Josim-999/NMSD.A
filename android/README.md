@@ -238,6 +238,30 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.9: reputation first (the specialist's audit)
+
+- **Gemini premium writes the scripts** (owner's choice). The best Gemini Pro model on the key, with Flash as the backup, does three passes: live Google Search research into a dated fact sheet, the writer, then an editor and fact-checker. The Claude studio is still used first when its key is set.
+- **The built-in (non-AI) writer never makes a video again.** It caused the stitched Wikipedia script, the off-topic Scale AI bio, the cut-off fact cards, the repeated hook line, "behind AI agent" and the dangling "And that is exactly why". It now only saves a draft marked not for posting, and the AI writes the script again by itself.
+- **Content gate before every render.** A script is never made into a video if it:
+  - came from the built-in writer
+  - has cut-off on-screen text or items
+  - has on-screen text over 9 words
+  - has a last line that is not a complete sentence
+  - repeats a line or card
+  - drifts off the topic (fewer than 40% of scenes on it, or an off-topic ending)
+  - contains encyclopedia or company-profile sentences
+  - has numbers that are not in the research or sources
+
+  The editor gets the list and fixes it (up to twice). Otherwise the video is stopped with the reasons.
+- **Stricter writing rules** in every prompt: the exact topic in every scene, a real example told as a story, correct grammar and plurals, complete 2-6 word on-screen phrases, no repeats, "stat" only for quantities (not years), a complete last sentence, and a filmable picture search per scene.
+- **Pictures:**
+  - only the script's own filmable search (no more words guessed from a line, which brought in the guitar, sarcophagus and trail sign)
+  - abstract searches get no picture
+  - Gemini looks at every picture and clip and rejects anything that does not show the scene's subject; the next candidate is tried
+- **Screen fixes:** years appear as they are (no more "1926" counting up to 2010), and every text colour is checked for WCAG 4.5:1 contrast, so the outro question is always readable.
+- **Voice:** acronyms are spelled out (RLHF -> R-L-H-F); the captions keep the written words.
+- No more pasted Wikipedia sentences to pad the length.
+
 ## 3.8: rendering on every core
 
 - **Parallel CPU rendering:** up to 4 painters draw at the same time, one per CPU core (as many as the phone's memory allows). Painter k draws frames k, k+4, k+8… and the encoder takes them in order. The test checks every 7th frame, pixel for pixel, against a single painter: identical in the classic, glass and paper looks, about 3x faster.

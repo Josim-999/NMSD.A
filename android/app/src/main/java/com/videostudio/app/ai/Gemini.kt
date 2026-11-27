@@ -36,6 +36,8 @@ class Gemini(
     /** Try every model the key can use (Gemini Flash, then Gemma) when the usual ones run out. */
     private val autoSwitch: Boolean = true,
     private val listUrl: String = "https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000",
+    /** Only the given model and fallbacks (premium: never drop to a cheaper model on its own). */
+    private val strict: Boolean = false,
 ) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -55,9 +57,11 @@ class Gemini(
         json: Boolean = false,
         search: Boolean = false,
         fallbacks: List<String> = emptyList(),
+        /** A JPEG to look at (picture checks). */
+        image: ByteArray? = null,
     ): GeminiReply {
         if (apiKey.isBlank()) throw GeminiError("Add your Gemini API key in Settings (free at aistudio.google.com/apikey).")
-        val extra = if (autoSwitch) available() else FALLBACK_MODELS
+        val extra = if (strict) emptyList() else if (autoSwitch) available() else FALLBACK_MODELS
         val chain = (listOf(model) + fallbacks + extra).map { it.trim().removePrefix("models/") }
             .filter { it.isNotEmpty() }.distinct()
             // Google Search grounding only works on Gemini models, not on Gemma.
@@ -70,7 +74,7 @@ class Gemini(
             if (tried.isNotEmpty()) notice("Switching to $m (${lastProblem}).")
             tried.add(m)
             try {
-                return call(prompt, m, json, search).copy(model = m)
+                return call(prompt, m, json, search, image).copy(model = m)
             } catch (e: OutOfQuota) {
                 if (e.daily) markExhausted(m) else markResting(m)
                 lastProblem = if (e.daily) "$m: free daily quota used up" else "$m: busy for a minute"
@@ -84,11 +88,11 @@ class Gemini(
         )
     }
 
-    private fun call(prompt: String, model: String, json: Boolean, search: Boolean): GeminiReply {
-        val body = JSONObject().put(
-            "contents",
-            JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", prompt))))
-        )
+    private fun call(prompt: String, model: String, json: Boolean, search: Boolean, image: ByteArray? = null): GeminiReply {
+        val parts = JSONArray().put(JSONObject().put("text", prompt))
+        if (image != null) parts.put(JSONObject().put("inline_data", JSONObject().put("mime_type", "image/jpeg")
+            .put("data", android.util.Base64.encodeToString(image, android.util.Base64.NO_WRAP))))
+        val body = JSONObject().put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", parts)))
         val config = JSONObject().put("temperature", 0.8)
         // Gemma on the Gemini API has no JSON mode; the prompt already asks for JSON and extractJson reads it.
         if (json && !isGemma(model)) config.put("responseMimeType", "application/json")
@@ -212,6 +216,24 @@ class Gemini(
         const val MAX_TRIES = 16
 
         @Volatile private var cachedModels: Pair<Long, List<String>>? = null
+
+        /**
+         * Premium order for the script studio: Gemini Pro models (the "latest" alias, then newest first),
+         * then Gemini Flash as the backup. Works with whatever names Google currently offers on the key.
+         */
+        fun premiumChain(names: List<String>): List<String> {
+            val usable = names.map { it.removePrefix("models/") }.filter { n -> n.startsWith("gemini-") && SKIP.none { n.contains(it) } }
+            val pro = usable.filter { it.contains("pro") }.sortedWith(compareByDescending<String> { it.contains("latest") }.thenByDescending { version(it) }.thenBy { it.contains("preview") })
+            val flash = usable.filter { it.contains("flash") && !it.contains("lite") }.sortedWith(compareByDescending<String> { it.contains("latest") }.thenByDescending { version(it) })
+            return (pro + flash).distinct().ifEmpty { listOf("gemini-pro-latest", "gemini-2.5-pro", "gemini-flash-latest", "gemini-2.5-flash") }
+        }
+
+        /** Fast models for picture checks (Flash-Lite first). */
+        fun visionChain(names: List<String>): List<String> {
+            val usable = names.map { it.removePrefix("models/") }.filter { n -> n.startsWith("gemini-") && SKIP.none { n.contains(it) } && n.contains("flash") }
+            return usable.sortedWith(compareByDescending<String> { it.contains("lite") }.thenByDescending { it.contains("latest") }.thenByDescending { version(it) })
+                .ifEmpty { listOf("gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-flash-latest") }
+        }
 
         fun isGemma(model: String) = model.startsWith("gemma")
 

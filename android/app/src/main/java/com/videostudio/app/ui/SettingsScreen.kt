@@ -111,6 +111,11 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
             }
 
             Section("Gemini (research and script)") {
+                var gp by remember { mutableStateOf(s.geminiPremium) }
+                ToggleRow("Gemini premium scripts (recommended)", "The best Gemini Pro model on your key writes every script in three passes: live Google Search research, the writer, then an editor and fact-checker. Turn on billing for your key at aistudio.google.com for full use; Gemini Flash is the backup. No video is ever made from the built-in (non-AI) writer.", gp) { gp = it; s.geminiPremium = it }
+                var cp by remember { mutableStateOf(s.checkPictures) }
+                ToggleRow("Check every picture with Gemini", "Before a picture or clip goes into the video, Gemini looks at it and throws it away if it does not show what the scene is about.", cp) { cp = it; s.checkPictures = it }
+                Spacer(Modifier.height(6.dp))
                 Hint("Free key: aistudio.google.com/apikey → Create API key. Paste it here.")
                 TextButton(onClick = { open("https://aistudio.google.com/apikey") }) { Text("Open Google AI Studio") }
                 SecretField("Gemini API key", s.geminiKey) { s.geminiKey = it }

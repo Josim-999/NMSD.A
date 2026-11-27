@@ -9,7 +9,7 @@ change, ask the owner first (with options), then update this file and the test i
 - When in doubt, ask the owner with clickable options; otherwise keep both the old and the new behaviour.
 - Same cost: free tiers by default; paid only where the owner chose it (premium script studio, own key).
 - Target: YouTube monetization, US audience, 50-60 s faceless educational Shorts.
-- Facts only: every number and claim is true and sourced.
+- Facts only: every number and claim is true and sourced. Nothing hallucinated ever reaches the audience: the content gate blocks any script that breaks the rules.
 - Never add accessibility, SMS or notification-listener permissions (Play Protect blocks the APK).
 - Ship as a signed APK in the chat, same signing key (installs over the last version).
 - "Make the video" must never fail or hang, and should finish in about 1-3 minutes without lowering quality (1080p, 30/60 fps stay).
@@ -26,11 +26,11 @@ change, ask the owner first (with options), then update this file and the test i
 | Gemini research with Google Search, then script | 1.0 | `work/Pipeline.writeScript`, `ai/Prompts.research` |
 | Gemini model auto-switch (Flash, Flash-Lite, Pro, Gemma), daily reset retry job | 1.5 / 1.9 | `ai/Gemini.kt` |
 | 10 free backup AIs with instant switching (Z.ai, NVIDIA, Groq, Alibaba, Mistral, OpenRouter, SiliconFlow, Cloudflare, Pollinations) | 2.0 / 2.1 | `ai/BackupAi.kt` |
-| Built-in writer (no AI): the script step never fails | 2.2 | `ai/BuiltInWriter.kt` |
+| Built-in writer (no AI): saves a draft only, NEVER made into a video (owner decision 3.9: "use Gemini premium"); the AI retries by itself | 2.2 / 3.9 | `ai/BuiltInWriter.kt`, Pipeline |
 | Playbook: hook formulas, 5 hook options scored, re-hooks, banned clichés, comment trigger | 2.7 | `ai/Prompts.kt` |
 | Quality gate 0-100 with one targeted rewrite | 2.7 | `ai/ScriptCheck.kt` |
-| 50-60 s (50/55/60, default 60), 140-160 words, lengthen guarantee (AI, Wikipedia facts, recap) | 2.9 / 3.0 | `Prompts.wordRange`, `Pipeline.ensureLength` |
-| Micro-payoffs, mid-thought loop ending, format templates, FACTS ONLY with on-phone number check | 3.0 | `Prompts`, `ScriptCheck` |
+| 50-60 s (50/55/60, default 60), 140-160 words, AI lengthening + ending hold (no pasted Wikipedia sentences since 3.9) | 2.9 / 3.9 | `Prompts.wordRange`, `Pipeline.ensureLength` |
+| Micro-payoffs, loop ending (a complete last sentence that leads back to the hook since 3.9), format templates, FACTS ONLY with on-phone number check | 3.0 | `Prompts`, `ScriptCheck` |
 | Your own take, emphasis words, titles of 4-6 words, 3-5 hashtags | 1.7 | `Prompts` |
 | YouTube rules: advertiser-friendly, honest titles, careful health/finance, disclaimers | 1.8 | `Prompts`, YouTube check |
 | Premium script studio: Claude Opus 5.5 (or Sonnet 5.5) live web research, writer, editor and fact-checker | 3.2 | `ai/ClaudeStudio.kt` |
@@ -99,3 +99,10 @@ change, ask the owner first (with options), then update this file and the test i
 | Audio mix + AAC encoding run alongside the frames (video waits in memory until the audio track is ready) | 3.8 | `VideoRenderer.render/startMuxer` |
 | Encoder unpaced (KEY_PRIORITY non-realtime + KEY_OPERATING_RATE), with its own fallback level so quality settings stay | 3.8 | `VideoRenderer.videoFormat` |
 | Live render speed: "about 40 s left" on the progress line | 3.8 | `Pipeline.render` |
+| Gemini premium studio: best Gemini Pro on the key (Flash backup), live Google Search research, writer, editor/fact-checker | 3.9 | `ai/GeminiStudio.kt`, Settings `geminiPremium` |
+| Content gate before every render: no built-in script, no cut-off cards, complete last line, no repeats, stays on topic (ending too), no encyclopedia/company-bio sentences, only sourced numbers; the editor fixes up to twice, else no video | 3.9 | `ai/ContentGate.kt`, Pipeline |
+| Stricter writing rules in every prompt (topic, story, grammar, complete phrases, no repeats, stat only for quantities, filmable query) | 3.9 | `Prompts`, `ClaudeStudio` |
+| Pictures: only the script's own filmable search (never words guessed from a line); abstract searches get none; Gemini looks at every picture and clip and rejects unrelated ones | 3.9 | `MediaFinder.isAbstract`, `ai/VisionCheck.kt` |
+| Years never count up on screen; every text colour checked for WCAG 4.5:1 contrast | 3.9 | `ScenePainter.stat/readable` |
+| Acronyms spelled for the voice (RLHF -> R-L-H-F) | 3.9 | `voice/Speech.kt` |
+

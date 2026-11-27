@@ -19,11 +19,21 @@ import java.util.concurrent.TimeUnit
  * Plain HTTPS with OkHttp, like every other AI service in the app (3.6: the SDK added ~10 MB and a
  * newer Kotlin runtime to the APK).
  */
+/** A premium script writer: live research, a writer pass and an editor/fact-checker pass. */
+interface ScriptStudio {
+    /** Shown in the log and on the Script tab. */
+    val name: String
+    fun research(p: Project, today: LocalDate = LocalDate.now()): ClaudeStudio.Reply
+    fun write(scriptPrompt: String, today: LocalDate = LocalDate.now()): ClaudeStudio.Reply
+    fun edit(draftJson: String, factSheet: String, issues: List<String>, words: IntRange, today: LocalDate = LocalDate.now()): ClaudeStudio.Reply
+}
+
 class ClaudeStudio(
     private val apiKey: String,
     val model: String = DEFAULT_MODEL,
     private val notice: (String) -> Unit = {},
-) {
+) : ScriptStudio {
+    override val name: String get() = label(model)
     data class Reply(val text: String, val sources: List<Pair<String, String>>)
 
     private val http = OkHttpClient.Builder()
@@ -106,19 +116,19 @@ class ClaudeStudio(
     }
 
     /** Pass 1: live research into a dated fact sheet. */
-    fun research(p: Project, today: LocalDate = LocalDate.now()): Reply {
+    override fun research(p: Project, today: LocalDate): Reply {
         notice("Researching the live web with ${label(model)}…")
         return ask(RESEARCH_SYSTEM, researchPrompt(p, today), search = true)
     }
 
     /** Pass 2: the draft, from the standard script prompt (which already carries the fact sheet). */
-    fun write(scriptPrompt: String, today: LocalDate = LocalDate.now()): Reply {
+    override fun write(scriptPrompt: String, today: LocalDate): Reply {
         notice("Writing the draft with ${label(model)}…")
         return ask(WRITER_SYSTEM, "Today is $today.\n\n$scriptPrompt\n\n$WRITER_ADDENDUM", effort = "high")
     }
 
     /** Pass 3: editor and fact-checker; returns the improved script JSON. */
-    fun edit(draftJson: String, factSheet: String, issues: List<String>, words: IntRange, today: LocalDate = LocalDate.now()): Reply {
+    override fun edit(draftJson: String, factSheet: String, issues: List<String>, words: IntRange, today: LocalDate): Reply {
         notice("Editing and fact-checking with ${label(model)}…")
         val prompt = """
 Today is $today.
@@ -161,14 +171,14 @@ HOOK SEEDS: 5 opening lines of under 12 words, each using a different technique 
 Never invent a fact, number, quote, name or date. If you could not verify something, leave it out.
 """.trim()
 
-        private const val RESEARCH_SYSTEM = "You are the head researcher for a fact-checked educational Shorts channel. " +
+        const val RESEARCH_SYSTEM = "You are the head researcher for a fact-checked educational Shorts channel. " +
             "You verify every number against its source, prefer the newest primary data, and say plainly when something could not be confirmed."
 
-        private const val WRITER_SYSTEM = "You are a top YouTube Shorts scriptwriter for faceless educational channels with US audiences. " +
+        const val WRITER_SYSTEM = "You are a top YouTube Shorts scriptwriter for faceless educational channels with US audiences. " +
             "Your scripts hold attention for the full minute because every line either raises a question or pays one off, " +
             "and every number is true and sourced. You write the way people talk: short words, short sentences, concrete images."
 
-        private const val WRITER_ADDENDUM = """
+        const val WRITER_ADDENDUM = """
 Before writing, privately draft five hooks with different techniques and keep the strongest; do not output the others.
 Craft standards for this script:
 - Hook (first scene, under 2.5 seconds): a concrete, surprising claim or question tied to the viewer. No greetings, no "did you know", no channel name.
@@ -177,14 +187,20 @@ Craft standards for this script:
 - Every number comes from the research with its source in "sources"; say how recent it is when that matters ("as of 2026", "last year").
 - Make big numbers feel real with one comparison the research supports.
 - One idea per scene; vary sentence length; no filler, no hype words ("insane", "mind-blowing"), no clichés.
+- Every scene stays on the exact topic; the ending too. No encyclopedia sentences, no corporate bios.
+- On-screen "text" is a complete 2-6 word phrase; list items are complete 1-4 word phrases; nothing is cut off.
+- The last line is a complete sentence that leads back into the hook (never "and that is exactly why").
+- Correct grammar, plurals and spelling of every name and term; no repeated lines or cards.
+- Every scene has a "query": 2-4 concrete, filmable words for its background picture.
 """
 
-        private const val EDITOR_SYSTEM = """You are the executive editor and fact-checker of a large educational Shorts channel. You get a draft script as JSON and the fact sheet it was written from.
+        const val EDITOR_SYSTEM = """You are the executive editor and fact-checker of a large educational Shorts channel. You get a draft script as JSON and the fact sheet it was written from.
 
 Do this privately, then output only the final JSON:
 1. Fact-check every claim, number, date, name and quote against the fact sheet. Anything not supported is cut or rewritten to what the sources say. Keep each "sources" entry matched to a real claim and URL from the fact sheet.
-2. Score the draft from 1 to 10 on: hook strength in the first 2 seconds, curiosity running through the whole video, a real story or example, specific data made vivid, pacing (no line wasted), clarity for a 12-year-old, and an ending that loops into the start.
-3. Rewrite every part that scored under 9. Keep the same schema and field names, the same scene types where they still fit, and the length asked for.
+2. Check the craft rules: every scene on the exact topic (no drift to other subjects); no encyclopedia or corporate-bio sentences; on-screen "text" and items are complete short phrases (never cut off); no repeated lines; correct grammar, plurals and spelling (e.g. "AI winters", not "AI winners"); the last line is a complete sentence; "stat" only for quantities, not years; every scene has a concrete filmable "query". Fix every break.
+3. Score the draft from 1 to 10 on: hook strength in the first 2 seconds, curiosity running through the whole video, a real story or example, specific data made vivid, pacing (no line wasted), clarity for a 12-year-old, and an ending that loops into the start.
+4. Rewrite every part that scored under 9. Keep the same schema and field names, the same scene types where they still fit, and the length asked for.
 Never add a fact that is not in the fact sheet."""
     }
 }

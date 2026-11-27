@@ -78,7 +78,7 @@ object ScriptCheck {
 
         // No verbal sign-off: the last line should flow back into the hook.
         val ending = scenes.takeLast(2).joinToString(" ") { it.say }.lowercase(Locale.ROOT)
-        SIGN_OFFS.firstOrNull { ending.contains(it) }?.let { fail(10, "Remove the sign-off \"$it\": end mid-thought so the last line runs into the hook.") }
+        SIGN_OFFS.firstOrNull { ending.contains(it) }?.let { fail(10, "Remove the sign-off \"$it\": end with a complete sentence that leads back into the hook.") }
 
         // Facts only: every number must come from the research or the listed sources.
         val nums = numbers(scenes)

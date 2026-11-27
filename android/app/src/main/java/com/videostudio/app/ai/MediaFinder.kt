@@ -503,6 +503,16 @@ class MediaFinder(
             "these", "they", "thing", "things", "those", "through", "very", "want", "were", "when", "where", "which", "while", "will", "would", "years", "year",
             "actually", "almost", "always", "never", "nothing", "something", "everything", "people", "percent", "million", "billion", "single", "today", "right")
 
+        private val ABSTRACT = setOf("part", "parts", "people", "thing", "things", "way", "ways", "story", "stories", "fact", "facts", "truth", "reason",
+            "reasons", "secret", "secrets", "idea", "ideas", "miss", "missed", "know", "real", "really", "most", "more", "important", "concept", "problem",
+            "answer", "question", "moment", "time", "world", "future", "change", "power", "reality", "mind", "life", "everything", "nothing", "something")
+
+        /** A search with no filmable word ("the part most people miss") would only find random pictures. */
+        fun isAbstract(query: String): Boolean {
+            val k = query.lowercase(Locale.ROOT).split(Regex("[^\\p{L}\\p{N}]+")).filter { it.length >= 3 && it !in STOP }
+            return k.isEmpty() || k.all { it in ABSTRACT || it in TALK_STOP }
+        }
+
         /** A short picture search for a spoken line: its 3 most concrete words, else the topic. */
         fun keywords(text: String, topic: String): String {
             val words = text.split(Regex("[^\\p{L}]+")).filter { it.length >= 4 && it.lowercase(Locale.ROOT) !in TALK_STOP && it.lowercase(Locale.ROOT) !in STOP }

@@ -160,4 +160,23 @@ class FeatureGuardTest {
         assertTrue("time left shown while rendering", pipeline.contains("left\""))
         assertTrue(File("src/main/java/com/videostudio/app/render/SceneMedia.kt").readText().contains("private val users = HashSet<Any>()"))
     }
+
+    @Test fun reputationRules() {
+        // 3.9: the specialist's audit. Nothing hallucinated, cut off, repeated or off-topic reaches the audience.
+        assertTrue(settings.geminiPremium)
+        assertTrue(settings.checkPictures)
+        val pipeline = File("src/main/java/com/videostudio/app/work/Pipeline.kt").readText()
+        assertTrue("gate before every render", pipeline.contains("ContentGate.check(p, p.writer, BUILT_IN)") && pipeline.contains("Not made, to protect your channel"))
+        assertTrue("built-in writer saves a draft only and never makes a video", pipeline.contains("p.writer = BUILT_IN") && pipeline.contains("throw GeminiQuotaError(\"No AI could write a checked script"))
+        assertTrue("no pasted Wikipedia sentences to pad the length", !pipeline.contains("BuiltInWriter().facts(p.topic) }.getOrDefault(emptyList())\n            .map"))
+        assertTrue("Gemini premium studio is used", pipeline.contains("GeminiStudio(settings.geminiKey"))
+        assertTrue("backdrops only from the script's own search", pipeline.contains("MediaFinder.isAbstract(query)") && !pipeline.contains("scene.query.ifBlank { MediaFinder.keywords("))
+        assertTrue("every picture checked", pipeline.contains("checkedPhoto(") && pipeline.contains("VisionCheck("))
+        val painter = File("src/main/java/com/videostudio/app/render/ScenePainter.kt").readText()
+        assertTrue("years do not count up", painter.contains("val isYear"))
+        assertTrue("text contrast guard", painter.contains("private fun readable(color: Int)") && painter.contains("ratio >= 4.5"))
+        val prompts = File("src/main/java/com/videostudio/app/ai/Prompts.kt").readText()
+        for (rule in listOf("Stay on the exact topic", "COMPLETE phrase", "Never repeat a line", "never for years", "COMPLETE sentence"))
+            assertTrue("prompt keeps: $rule", prompts.contains(rule))
+    }
 }

@@ -25,7 +25,7 @@ object Prompts {
         "PROMISE (by about 3 s, line 2 at the latest): say what the viewer will know by the end.",
         "PROOF (most of the video): one idea only, shown in beats of 3 to 5 seconds: escalate, break a myth, give a specific fact with its source.",
         "PAYOFF (the last 10-15 s): the answer that closes the loop the hook opened.",
-        "LOOP (last line): no sign-off. The last spoken line breaks off mid-thought and flows straight into the hook's first words, so the replay sounds like one continuous sentence.",
+        "LOOP (last line): no sign-off. The last spoken line is a COMPLETE sentence whose meaning leads straight back into the hook, so a replay feels natural (never a dangling half-sentence like \"and that is exactly why\").",
     )
 
     fun research(p: Project): String {
@@ -93,7 +93,7 @@ B. STRUCTURE (for ${p.lengthSec} seconds; scale the timings):
 - About every 12 seconds a RE-HOOK line that re-opens curiosity ("But here's the part nobody mentions.", "Wait, it gets better.", "This is where most people mess up.").
 - Middle: 2 or 3 escalating beats, each one concrete: a number, a named tool, an exact step or prompt, a real example. Each beat is better than the last.
 - PAYOFF (last 10-15 s): closes the hook's loop with the answer or the result. Give ONE thing the viewer can do today.
-- END: NO verbal sign-off at all: never "in conclusion", "so remember", "subscribe", "follow for more", "save this", "let me know in the comments", "thanks for watching". The last spoken line ends mid-thought and grammatically runs into the hook's first words (e.g. last line "...and that is exactly why" + hook "your brain deletes 90% of what you learn"). The comment question goes ONLY in the on-screen outro text and "comment_question", not in the spoken lines.
+- END: NO verbal sign-off at all: never "in conclusion", "so remember", "subscribe", "follow for more", "save this", "let me know in the comments", "thanks for watching". The last spoken line is a complete, grammatical sentence that points back to the hook's question, so the replay feels continuous (e.g. hook "Your brain deletes 90% of what you learn" ... last line "So tonight, test yourself once, before your brain does the deleting."). Never end on a dangling clause ("and that is exactly why", "because", "which means"). The comment question goes ONLY in the on-screen outro text and "comment_question", not in the spoken lines.
 B2. FORMAT: pick the ONE proven format that fits the topic best and put its name in "format":
 - what_if ("What happens if..."): premise, step-by-step consequences that escalate, the surprising end state.
 - myth_vs_fact: the common belief, why people believe it, the evidence that breaks it, what is actually true.
@@ -138,9 +138,17 @@ For every scene choose ONE visual from this list (the app animates them), and fi
 - {"type":"tier","text":"short title","items":["S: best thing", "A: next", "B: ...", "C: worst", "3-6 items, each 'Tier: name' with tiers S, A, B, C or D"]}   (ranking things: viewers love to argue in the comments)
 - {"type":"document","text":"one real sentence or stat from a source, under 22 words","label":"the source, e.g. NASA, 2024 or Reuters","highlight":"2-5 key words from text"}   (citing a fact: shown as a highlighted article card)
 - {"type":"map","place":"exact English country name","lat":0.0,"lon":0.0,"text":"2-5 words"}   (a place matters: the map zooms to it; lat/lon of the city or spot if relevant, else 0)
-- {"type":"outro","text":"the comment question, short (on screen only)","emoji":"one emoji"}  (last scene; its spoken line is the mid-thought loop line)
+- {"type":"outro","text":"the comment question, short (on screen only)","emoji":"one emoji"}  (last scene; its spoken line is the complete loop line)
 Vary the visuals; never use the same type more than twice in a row. On-screen text must be short.
 Real pictures are found automatically: use "photo" for 2 or 3 scenes where a real image helps (people, places, objects, events), with a concrete visual query${if (stockFootage) "; these can play as real stock video" else ""}.
+ACCURACY AND CRAFT RULES (the channel's reputation depends on them; a script that breaks one is rejected):
+- Stay on the exact topic in EVERY scene. Never drift to another company, product or subject unless that one sentence directly explains the topic. The ending is about the topic too.
+- Write as a storyteller with one concrete, real example. Never copy encyclopedia sentences ("X, Inc. is an American company based in...").
+- Every number, date, name and quote must be in the research; if it is not, leave it out. Spell names and terms exactly (e.g. "AI winters", not "AI winners").
+- Correct grammar everywhere, including plurals and articles ("AI agents", "an AI agent").
+- On-screen "text": 2-6 words, a COMPLETE phrase that makes sense alone (never cut off mid-sentence like "This period is sometimes"). List/chart items: 1-4 words each, complete.
+- Never repeat a line, headline or card; every scene says something new.
+- "stat" scenes are for quantities (percent, money, counts), never for years; put years in the text instead.
 Every scene (not only photo scenes) gets a "query": 2-4 concrete English words for a background picture or clip that shows exactly what that line is about (e.g. "man sleeping bedroom night", "server room data center"). Use things a camera can film, never abstract words.
 Whenever a line names a company, product, app or organisation, either use the "logo" visual for it, or add "brand" and "domain" to that scene's visual so its logo appears as a badge. Logos are checked against the official website, so: use the exact official name ("Google Gemini", not "Gemini"; "Microsoft Copilot", not "Copilot"), the exact official domain of that product (gemini.google.com, chatgpt.com, claude.ai, copilot.microsoft.com), and never put a brand on a scene that does not name it. If you are not sure of the official domain, leave "brand" empty.
 

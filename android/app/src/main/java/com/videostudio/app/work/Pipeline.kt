@@ -3,6 +3,10 @@ package com.videostudio.app.work
 import com.videostudio.app.compliance.YouTubeCheck
 import com.videostudio.app.ai.BrandSpotter
 import com.videostudio.app.ai.ClaudeStudio
+import com.videostudio.app.ai.VisionCheck
+import com.videostudio.app.ai.ScriptStudio
+import com.videostudio.app.ai.GeminiStudio
+import com.videostudio.app.ai.ContentGate
 import com.videostudio.app.ai.BackupAi
 import com.videostudio.app.ai.BuiltInWriter
 import com.videostudio.app.ai.ScriptCheck
@@ -44,6 +48,7 @@ import com.videostudio.app.render.VideoRenderer
 import com.videostudio.app.upload.YouTube
 import com.videostudio.app.voice.DeviceTts
 import com.videostudio.app.voice.EdgeTts
+import com.videostudio.app.voice.Speech
 import com.videostudio.app.voice.GeminiTts
 import com.videostudio.app.voice.VoiceResult
 import com.videostudio.app.voice.Voices
@@ -70,11 +75,15 @@ class Pipeline(
         scriptDeadline = System.currentTimeMillis() + SCRIPT_LIMIT_MS
         // Every video is 50-60 s (older projects may still say 30 or 45).
         p.lengthSec = p.lengthSec.coerceIn(Prompts.MIN_SEC, Prompts.MAX_SEC)
-        // Premium studio first (live research, writer, editor/fact-checker); the free chain is the backup.
-        if (settings.premiumScript && settings.anthropicKey.isNotBlank()) {
-            val done = runCatching { studioScript(p, feedback) }.onFailure {
+        // Premium studios first (live research, writer, editor/fact-checker): Claude with its own key, then
+        // Gemini premium (Pro models on the Gemini key). The free chain is only the backup.
+        val studios = ArrayList<ScriptStudio>()
+        if (settings.premiumScript && settings.anthropicKey.isNotBlank()) studios += ClaudeStudio(settings.anthropicKey, settings.premiumModel, notice = log)
+        if (settings.geminiPremium && settings.geminiKey.isNotBlank()) studios += GeminiStudio(settings.geminiKey, notice = log)
+        for (studio in studios) {
+            val done = runCatching { studioScript(p, feedback, studio) }.onFailure {
                 if (cancelled()) throw it
-                log("Premium studio failed (${it.message?.take(100)}); using the free writers instead.")
+                log("${studio.name} studio failed (${it.message?.take(100)}); trying the next writer.")
             }.getOrDefault(false)
             if (done) return
         }
@@ -115,9 +124,16 @@ class Pipeline(
             scriptReply(prompt)
         } catch (e: Exception) {
             if (cancelled()) throw e
-            log(if (e is GeminiQuotaError) "Every free AI is busy right now, so the built-in writer is writing this script (no limits)."
-                else "The AI could not be reached (${e.message?.take(80)}), so the built-in writer is writing this script.")
-            GeminiReply(BuiltInWriter().write(p, settings.defaultHashtags).toString(), emptyList(), BUILT_IN)
+            // Owner's rule (3.9): no video is ever made from the built-in (non-AI) writer. It only saves a draft
+            // to look at; the AI writes the real script again by itself.
+            log("No AI could write the script right now (${e.message?.take(80)}). Saving a draft only; it will not be made into a video.")
+            runCatching {
+                applyScript(p, BuiltInWriter().write(p, settings.defaultHashtags))
+                p.writer = BUILT_IN
+                p.status = Status.SCRIPTED
+                store.save(p)
+            }
+            throw GeminiQuotaError("No AI could write a checked script right now, so no video was made (a draft without AI is saved, not for posting).")
         }
         p.writer = reply.model
         applyScript(p, extractJson(reply.text))
@@ -145,6 +161,21 @@ class Pipeline(
             }.onFailure { log("Could not improve the script (${it.message?.take(60)}); keeping it.") }
         }
         ensureLength(p, reply.model != BUILT_IN)
+        // Content gate: anything that would embarrass the channel goes back to the AI once more.
+        val gate = ContentGate.check(p, reply.model, BUILT_IN)
+        if (gate.isNotEmpty()) {
+            log("Checking accuracy and craft: ${gate.size} problem(s); fixing them…")
+            runCatching {
+                val current3 = JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).toString(1)
+                val fixed = scriptReply(Prompts.script(
+                    p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags,
+                    "Fix ALL of these problems, keep everything else: " + gate.joinToString(" "),
+                    current3, stockFootage = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank(), take = p.take,
+                ))
+                val o = extractJson(fixed.text)
+                if (objects(o.optJSONArray("scenes")).size >= 3) applyScript(p, o)
+            }.onFailure { log("Could not fix them (${it.message?.take(60)}).") }
+        }
         check = ScriptCheck.check(p.scenes, p.lengthSec, research = p.researchNotes, sources = p.sources.map { it.claim + " " + it.url })
         p.scriptScore = check.score
         p.status = Status.SCRIPTED
@@ -155,9 +186,7 @@ class Pipeline(
     }
 
     /** The premium three-pass studio. Returns true when the script is ready. */
-    private fun studioScript(p: Project, feedback: String): Boolean {
-        val studio = ClaudeStudio(settings.anthropicKey, settings.premiumModel, notice = log)
-        val name = ClaudeStudio.label(studio.model)
+    private fun studioScript(p: Project, feedback: String, studio: ScriptStudio): Boolean {
         // Fresh research every new script (rewrites reuse the sheet they were written from).
         if (feedback.isBlank() || !p.researchNotes.startsWith(STUDIO_MARK)) {
             step("Researching the live web", null)
@@ -191,8 +220,20 @@ class Pipeline(
                 log("Edited and fact-checked: ${check.score}/100.")
             } else log("The editor's version was incomplete; keeping the draft.")
         }.onFailure { log("Editing pass failed (${it.message?.take(80)}); keeping the draft.") }
-        p.writer = "$name studio"
         ensureLength(p, true)
+        // Content gate: up to two more editor passes for anything that breaks the accuracy and craft rules.
+        for (round in 1..2) {
+            val gate = ContentGate.check(p, "studio", BUILT_IN)
+            if (gate.isEmpty() || cancelled()) break
+            log("Accuracy and craft check: ${gate.size} problem(s) (${gate.first().take(90)}); the editor fixes them…")
+            runCatching {
+                val json = JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).put("sources", JSONArray(p.sources.map { JSONObject().put("claim", it.claim).put("url", it.url) }))
+                val fixed = extractJson(studio.edit(json.toString(1), p.researchNotes, gate, Prompts.wordRange(p.lengthSec)).text)
+                if (objects(fixed.optJSONArray("scenes")).size >= 3) applyScript(p, fixed)
+            }.onFailure { log("Fix pass failed (${it.message?.take(80)}).") }
+        }
+        val name = studio.name
+        p.writer = "$name studio"
         check = ScriptCheck.check(p.scenes, p.lengthSec, research = p.researchNotes, sources = src())
         p.scriptScore = check.score
         p.status = Status.SCRIPTED
@@ -205,8 +246,8 @@ class Pipeline(
     private fun words(p: Project) = p.scenes.sumOf { it.say.split(Regex("\\s+")).filter { w -> w.isNotBlank() }.size }
 
     /**
-     * Guarantees a 50+ second script: asks the AI once more for a longer version, then, if still
-     * short, adds fact scenes from Wikipedia (keyless) before the ending, then a recap line.
+     * Aims for a 50+ second script: asks the AI once more for a longer version. Never pads with
+     * pasted Wikipedia sentences (3.9).
      */
     private fun ensureLength(p: Project, ai: Boolean) {
         val range = Prompts.wordRange(p.lengthSec)
@@ -224,28 +265,9 @@ class Pipeline(
             val n = objects(o.optJSONArray("scenes")).sumOf { it.optString("say").split(Regex("\\s+")).filter { w -> w.isNotBlank() }.size }
             if (n > have) applyScript(p, o)
         }.onFailure { log("Could not lengthen with AI (${it.message?.take(60)}).") }
-        if (words(p) >= range.first) { log("Script length: ${words(p)} words."); return }
-        // Still short: real facts (Wikipedia, no key) as scenes just before the payoff and ending.
-        val facts = runCatching { BuiltInWriter().facts(p.topic) }.getOrDefault(emptyList())
-            .map { it.copy(text = BuiltInWriter.speakable(it.text)) }
-            .filter { f -> f.text.split(" ").size in 6..28 && p.scenes.none { it.say.contains(f.text.take(30)) } }
-        val at = (p.scenes.size - 2).coerceAtLeast(1)
-        var added = 0
-        for (fact in facts) {
-            if (words(p) >= range.first) break
-            val f = fact.text
-            val short = BuiltInWriter.shortText(f, 8)
-            p.scenes.add(at + added, Scene(f, type = "document", text = BuiltInWriter.shortText(f, 20), label = "Wikipedia: ${fact.page}", highlight = short.split(" ").take(3).joinToString(" ")))
-            // Facts only: every added fact carries its source.
-            if (fact.url.isNotBlank()) p.sources = p.sources + Source(f.take(80), fact.url)
-            added++
-        }
-        if (words(p) < range.first) {
-            // Offline and still short: a recap of the key points keeps the video above 50 s.
-            val points = p.scenes.drop(1).dropLast(1).map { BuiltInWriter.shortText(it.say, 6) }.filter { it.isNotBlank() }.distinct().take(3)
-            if (points.isNotEmpty()) p.scenes.add((p.scenes.size - 1).coerceAtLeast(1),
-                Scene("Quick recap. " + points.joinToString(". ") + ".", type = "list", text = "Quick recap", items = points))
-        }
+        // 3.9: no more Wikipedia sentences pasted in to pad the length (the specialist's "Frankenstein" scripts).
+        // A short script is held at the end for a few seconds, and the gate asks the AI to lengthen it.
+        val added = 0
         log("Script length: ${words(p)} words${if (added > 0) " ($added fact scene(s) added)" else ""}.")
     }
 
@@ -312,6 +334,12 @@ class Pipeline(
 
     fun render(p: Project) {
         val makeStart = System.currentTimeMillis()
+        // Content gate: nothing that breaks the accuracy and craft rules is ever made into a video.
+        val gate = ContentGate.check(p, p.writer, BUILT_IN)
+        if (gate.isNotEmpty()) {
+            gate.forEach { log("Not ready: $it") }
+            throw IllegalStateException("Not made, to protect your channel: ${gate.first()}${if (gate.size > 1) " (+${gate.size - 1} more, see the log)" else ""} Tap Rewrite to let the AI fix it.")
+        }
         val dir = p.dir(store.root)
         dir.mkdirs()
         // Old voice and photo files from an earlier render.
@@ -339,16 +367,36 @@ class Pipeline(
         val pictures = java.util.concurrent.atomic.AtomicInteger()
         val backdrops = java.util.concurrent.atomic.AtomicInteger()
         val stock = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank()
+        // Every picture and clip is looked at by Gemini before use: unrelated ones are thrown away.
+        val vision = if (settings.geminiKey.isNotBlank() && settings.checkPictures) VisionCheck(settings.geminiKey, log) else null
+        val rejected = java.util.concurrent.atomic.AtomicInteger()
+        fun fits(f: File, query: String, line: String): Boolean {
+            val ok = vision?.fits(f, query, line) != false
+            if (!ok) { rejected.incrementAndGet(); log("Picture rejected (does not show \"${query.take(40)}\").") }
+            return ok
+        }
+        /** The best matching photo that also passes the picture check (up to 3 candidates). */
+        fun checkedPhoto(query: String, wiki: String, f: File, library: String, line: String): com.videostudio.app.ai.Found? {
+            repeat(3) {
+                val hit = runCatching { finder.photo(query, wiki, f, library) }.getOrNull() ?: return null
+                if (fits(f, query.ifBlank { wiki }, line)) return hit
+                f.delete()
+            }
+            return null
+        }
         // Everything downloads at the same time (6 at once) instead of one after another.
         val pool = java.util.concurrent.Executors.newFixedThreadPool(6)
         val jobs = ArrayList<java.util.concurrent.Future<*>>()
-        fun clipFor(i: Int, query: String, seconds: Double): Boolean {
+        fun clipFor(i: Int, query: String, seconds: Double, line: String = ""): Boolean {
             val clip = File(dir, "photo_$i.mp4")
             val credit = runCatching { Stock.pexelsVideo(settings.pexelsKey, query, clip, seconds) }.getOrNull()
                 ?: runCatching { finder.pixabayVideo(query, clip, seconds) }.getOrNull() ?: return false
             // Decode the clip now, in parallel with the other downloads, never during rendering.
             val frameDir = File(dir, "clip_frames_$i")
             if (RenderGate.with(RenderGate.decode) { SceneMedia.Clip.prepare(clip, seconds, frameDir) } == 0) return false
+            // The picture check looks at a frame from the middle of the clip.
+            val mid = frameDir.listFiles { x -> x.name.endsWith(".jpg") }?.sortedBy { it.name }?.let { it.getOrNull(it.size / 2) }
+            if (mid != null && !fits(mid, query, line)) { frameDir.deleteRecursively(); return false }
             credits.add(credit)
             found[i] = SceneMedia.Lazy { SceneMedia.Clip.loadFrames(frameDir) }
             return true
@@ -357,9 +405,9 @@ class Pipeline(
             if (cancelled()) return@submit
             val query = scene.query.ifBlank { scene.text }
             val seconds = est[i]
-            if (stock && scene.library.isBlank() && clipFor(i, query, seconds)) { clips.incrementAndGet(); return@submit }
+            if (stock && scene.library.isBlank() && clipFor(i, query, seconds, scene.say)) { clips.incrementAndGet(); return@submit }
             val f = File(dir, "photo_$i.jpg")
-            val hit = runCatching { finder.photo(query, scene.wiki, f, scene.library) }.getOrNull() ?: return@submit
+            val hit = checkedPhoto(query, scene.wiki, f, scene.library, scene.say) ?: return@submit
             credits.add(hit.credit)
             pictures.incrementAndGet()
             // Long scenes get one or two more pictures, so the image changes every ~2 seconds.
@@ -371,7 +419,7 @@ class Pipeline(
             val files = arrayListOf(f)
             for (k in 1..extra) {
                 val g = File(dir, "photo_${i}_$k.jpg")
-                val more = runCatching { finder.photo(query.ifBlank { scene.wiki }, "", g, scene.library) }.getOrNull() ?: break
+                val more = checkedPhoto(query.ifBlank { scene.wiki }, "", g, scene.library, scene.say) ?: break
                 credits.add(more.credit)
                 files.add(g)
             }
@@ -394,12 +442,14 @@ class Pipeline(
         }
         for ((i, scene) in backdropScenes) jobs += pool.submit {
             if (cancelled()) return@submit
-            val query = scene.query.ifBlank { MediaFinder.keywords(scene.text.ifBlank { scene.say }, p.topic) }
-            if (query.isBlank()) return@submit
+            // Only the script's own filmable search; never words guessed from a spoken line (that gave guitars
+            // and sarcophagi behind "the part most people miss"). Abstract searches get no picture.
+            val query = scene.query.trim()
+            if (query.isBlank() || MediaFinder.isAbstract(query)) return@submit
             val seconds = est[i]
-            if (stock && clipFor(i, query, seconds)) { backdrops.incrementAndGet(); return@submit }
+            if (stock && clipFor(i, query, seconds, scene.say)) { backdrops.incrementAndGet(); return@submit }
             val f = File(dir, "photo_$i.jpg")
-            runCatching { finder.photo(query, "", f) }.getOrNull()?.let { hit ->
+            checkedPhoto(query, "", f, "", scene.say)?.let { hit ->
                 credits.add(hit.credit)
                 backdrops.incrementAndGet()
                 found[i] = SceneMedia.Lazy { loadBitmap(f)?.let { SceneMedia.Photo(it) } }
@@ -421,7 +471,8 @@ class Pipeline(
         for (e in emojis) jobs += pool.submit { AnimatedEmoji.load(e, File(context.cacheDir, "emoji"))?.let { animatedFound[e] = it } }
         pool.shutdown()
 
-        val script = p.scenes.joinToString(" ") { it.say.trim() }
+        // Acronyms are spelled out for the voice (RLHF -> R-L-H-F); the captions keep the written words.
+        val script = Speech.forVoice(p.scenes.joinToString(" ") { it.say.trim() })
         step("Recording the voice", null)
         val expressive: VoiceResult? = if (settings.expressiveVoice && settings.geminiKey.isNotBlank()) runCatching {
             log("Voice: expressive Gemini voice (${settings.expressiveVoiceName})…")
@@ -466,6 +517,7 @@ class Pipeline(
         if (credits.isNotEmpty()) File(dir, "credits.txt").writeText(synchronized(credits) { credits.joinToString("\n") })
         if (photoScenes.isNotEmpty()) log("Pictures: ${clips.get()} video clip(s), ${pictures.get()} photo(s) for ${photoScenes.size} photo scene(s).")
         if (backdropScenes.isNotEmpty()) log("Backgrounds: ${backdrops.get()} of ${backdropScenes.size} talking scenes got a matching picture or clip.")
+        if (vision != null) log("Picture check: ${rejected.get()} unrelated picture(s) or clip(s) thrown away.")
         if (brandScenes.isNotEmpty()) log("Logos: ${logosFinal.size} of ${brandScenes.size} brand scene(s).")
 
         // A look of its own for every video (captions, transitions, background), different from the last one.

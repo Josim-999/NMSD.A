@@ -182,9 +182,9 @@ class ScenePainter(
             val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 typeface = face
                 textSize = size
-                this.color = color
+                this.color = readable(color)
                 // Soft drop shadow: text stays readable over photos, video and bright colours.
-                if (luminance(color) < 0.4) setShadowLayer(size * 0.10f, 0f, size * 0.03f, Color.argb(110, 255, 255, 255))
+                if (luminance(readable(color)) < 0.4) setShadowLayer(size * 0.10f, 0f, size * 0.03f, Color.argb(110, 255, 255, 255))
                 else setShadowLayer(size * 0.12f, 0f, size * 0.05f, Color.argb(150, 0, 0, 0))
             }
             layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, maxWidth.toInt())
@@ -202,6 +202,33 @@ class ScenePainter(
         }
         layouts[cacheKey] = layout
         return layout
+    }
+
+    /** How bright the screen behind the text is (0 black .. 1 white). */
+    private fun backgroundLuminance(): Double = when {
+        look.kinetic -> 0.01
+        look.paper -> 0.85
+        else -> (luminance(palette.bgTop) + luminance(palette.bgBottom)) / 2
+    }
+
+    /** [color] if it reads well on this background, else white or near-black (never dark grey on dark red again). */
+    private fun readable(color: Int): Int {
+        val bg = when {
+            look.kinetic -> relLum(Color.rgb(9, 9, 14))
+            look.paper -> relLum(Color.rgb(244, 237, 222))
+            else -> (relLum(palette.bgTop) + relLum(palette.bgBottom)) / 2
+        }
+        val fg = relLum(color)
+        // WCAG contrast; 4.5:1 is the standard for readable text.
+        val ratio = (maxOf(fg, bg) + 0.05) / (minOf(fg, bg) + 0.05)
+        if (ratio >= 4.5) return color
+        return if (bg < 0.18) Color.WHITE else Color.rgb(20, 20, 28)
+    }
+
+    /** WCAG relative luminance (gamma-correct). */
+    private fun relLum(c: Int): Double {
+        fun ch(v: Int): Double { val x = v / 255.0; return if (x <= 0.03928) x / 12.92 else Math.pow((x + 0.055) / 1.055, 2.4) }
+        return 0.2126 * ch(Color.red(c)) + 0.7152 * ch(Color.green(c)) + 0.0722 * ch(Color.blue(c))
     }
 
     /** Draws [layout] with each line centred on [cx], the block centred on [cy]. */
@@ -729,7 +756,9 @@ class ScenePainter(
             val raw = m.groupValues[2].replace(",", "")
             val target = raw.toDoubleOrNull() ?: 0.0
             val decimals = raw.substringAfter('.', "").length
-            val v = target * outCubic(lt / 0.9)
+            // A year never counts up (it showed "1926" on the way to 2010): it appears as it is.
+            val isYear = decimals == 0 && !m.groupValues[2].contains(',') && target in 1000.0..2100.0 && !m.groupValues[3].trimStart().startsWith("%")
+            val v = if (isYear) target else target * outCubic(lt / 0.9)
             val num = when {
                 decimals > 0 -> String.format(Locale.US, "%.${decimals}f", v)
                 m.groupValues[2].contains(',') -> String.format(Locale.US, "%,d", v.toLong())
