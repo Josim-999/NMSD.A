@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>تموينات القبس المضيء للمواد الغذائية | Al-Qabas Al-Mudee Groceries</title>
+<meta name="description" content="تموينات القبس المضيء للمواد الغذائية – فرع 2. مواد غذائية، خضار وفواكه، ألبان، مشروبات، وجبات خفيفة ومنظفات. Al-Qabas Al-Mudee Groceries – Branch 2.">
+<meta name="theme-color" content="#0d3b2a">
+<meta property="og:title" content="تموينات القبس المضيء | Al-Qabas Al-Mudee Groceries">
+<meta property="og:description" content="بقالتك القريبة لكل احتياجات البيت – Your neighbourhood grocery for everything at home.">
+<meta property="og:image" content="/storefront.jpg">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800&family=Tajawal:wght@400;500;700&display=swap">
+<style>
+/* ============================================================
+   EDIT YOUR STORE DETAILS IN THE <script> CONFIG AT THE BOTTOM
+   ============================================================ */
+:root{
+  --night:#0d3b2a;      /* dark green of the sign */
+  --night-2:#124a35;
+  --leaf:#22b14c;       /* bright green of the shopfront */
+  --leaf-soft:#e6f6ea;
+  --sun:#f5c400;        /* yellow cart */
+  --sun-soft:#fff6cc;
+  --paper:#f7f8f4;
+  --card:#ffffff;
+  --ink:#14241c;
+  --muted:#5a6b61;
+  --line:#dfe6df;
+  --display:"Cairo","Tajawal",system-ui,sans-serif;
+  --body:"Tajawal","Cairo",system-ui,sans-serif;
+  --r:14px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --paper:#0f1814;--card:#16221c;--ink:#e9f0eb;--muted:#9fb1a6;--line:#25352d;
+  --leaf-soft:#173325;--sun-soft:#3a3212;color-scheme:dark}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.7 var(--body)}
+img{max-width:100%;display:block}
+a{color:inherit}
+h1,h2,h3{font-family:var(--display);line-height:1.25;margin:0;text-wrap:balance}
+p{margin:0}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(18px,env(safe-area-inset-left));padding-right:max(18px,env(safe-area-inset-right))}
+:focus-visible{outline:3px solid var(--sun);outline-offset:2px;border-radius:6px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* header */
+.top{position:sticky;top:0;z-index:20;background:var(--night);color:#fff;box-shadow:0 2px 0 var(--leaf)}
+.top .wrap{display:flex;align-items:center;gap:14px;padding-block:10px;min-height:64px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;min-width:0}
+.brand svg{flex:none;width:40px;height:40px}
+.brand b{font:800 1.05rem/1.2 var(--display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand small{display:block;font-size:.75rem;color:var(--sun);font-weight:500}
+nav.links{display:flex;gap:4px;margin-inline-start:auto}
+nav.links a{text-decoration:none;padding:8px 12px;border-radius:8px;font-weight:500;font-size:.95rem}
+nav.links a:hover{background:var(--night-2)}
+.lang{margin-inline-start:6px;background:var(--sun);color:var(--night);border:0;border-radius:999px;padding:8px 16px;font:700 .9rem var(--body);cursor:pointer;flex:none}
+.lang:hover{filter:brightness(1.05)}
+@media (max-width:860px){nav.links{display:none}.lang{margin-inline-start:auto}}
+
+/* hero */
+.hero{background:var(--night);color:#fff;overflow:hidden}
+.hero .wrap{display:grid;grid-template-columns:1.05fr 1fr;gap:40px;align-items:center;padding-block:56px 64px}
+.hero h1{font-size:clamp(2rem,4.6vw,3.3rem);font-weight:800}
+.hero h1 span{color:var(--sun)}
+.hero p.lead{font-size:1.15rem;color:#cfe3d7;margin-top:14px;max-width:46ch}
+.badge{display:inline-flex;align-items:center;gap:8px;background:var(--night-2);border:1px solid #1f6a4c;color:var(--sun);padding:6px 14px;border-radius:999px;font-weight:700;font-size:.85rem;margin-bottom:16px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;border:0;cursor:pointer;font:700 1rem var(--body);padding:13px 22px;border-radius:12px}
+.btn.primary{background:var(--leaf);color:#fff}
+.btn.primary:hover{background:#1c9a41}
+.btn.ghost{background:transparent;color:#fff;box-shadow:inset 0 0 0 2px #2d7a5a}
+.btn.ghost:hover{box-shadow:inset 0 0 0 2px var(--sun)}
+.photo{position:relative;border-radius:20px;overflow:hidden;box-shadow:0 20px 50px #0007;border:3px solid var(--leaf)}
+.photo img{aspect-ratio:4/3;object-fit:cover;width:100%;height:auto}
+.photo figcaption{position:absolute;inset:auto 0 0 0;padding:28px 16px 12px;background:linear-gradient(transparent,#000a);font-size:.85rem;color:#e9f3ec}
+@media (max-width:860px){.hero .wrap{grid-template-columns:1fr;padding-block:36px 44px}}
+
+/* sections */
+section{padding-block:64px}
+.head{display:grid;gap:8px;margin-bottom:28px;max-width:62ch}
+.eyebrow{color:var(--leaf);font-weight:700;font-size:.9rem;letter-spacing:.02em}
+.head h2{font-size:clamp(1.6rem,3.2vw,2.2rem)}
+.head p{color:var(--muted)}
+
+.why{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.why div{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:grid;gap:8px;align-content:start}
+.why .ic{width:46px;height:46px;border-radius:12px;background:var(--leaf-soft);display:grid;place-items:center}
+.why .ic svg{width:24px;height:24px;stroke:var(--leaf)}
+.why h3{font-size:1.1rem}
+.why p{color:var(--muted);font-size:.95rem}
+@media (max-width:900px){.why{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:460px){.why{grid-template-columns:1fr}}
+
+/* categories */
+.cats-bg{background:var(--card);border-block:1px solid var(--line)}
+.tabs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+.tab{border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:999px;padding:9px 16px;font:500 .95rem var(--body);cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+.tab[aria-selected="true"]{background:var(--night);color:#fff;border-color:var(--night)}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.item{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.item span{min-width:0}
+.add{flex:none;width:36px;height:36px;border-radius:10px;border:0;background:var(--leaf);color:#fff;font:700 1.3rem/1 var(--body);cursor:pointer}
+.add:hover{background:#1c9a41}
+.add.on{background:var(--sun);color:var(--night)}
+.note{margin-top:16px;color:var(--muted);font-size:.9rem}
+
+/* list builder */
+.order{display:grid;grid-template-columns:1.1fr 1fr;gap:24px;align-items:start}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}
+.panel h3{font-size:1.2rem;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.count{background:var(--sun);color:var(--night);border-radius:999px;font-size:.85rem;padding:2px 10px}
+ul.list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+ul.list li{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+ul.list li .nm{flex:1;min-width:0}
+.qty{display:flex;align-items:center;gap:6px}
+.qty button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink);cursor:pointer;font:700 1rem var(--body)}
+.qty output{min-width:1.6em;text-align:center;font-variant-numeric:tabular-nums;font-weight:700}
+.rm{background:none;border:0;color:var(--muted);cursor:pointer;font-size:1.2rem}
+.empty{color:var(--muted);border:2px dashed var(--line);border-radius:12px;padding:22px;text-align:center}
+.addrow{display:flex;gap:8px;margin-top:14px}
+.addrow input,textarea{flex:1;min-width:0;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:10px;padding:11px 12px;font:1rem var(--body)}
+textarea{width:100%;min-height:80px;resize:vertical;margin-top:4px}
+label{font-weight:700;font-size:.95rem;display:block;margin-top:14px}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.btn.wa{background:#1fa855;color:#fff}
+.btn.sec{background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.toast{margin-top:10px;font-weight:700;color:var(--leaf);min-height:1.5em}
+.steps{display:grid;gap:14px;counter-reset:s}
+.steps div{display:grid;grid-template-columns:40px 1fr;gap:12px;align-items:start}
+.steps div::before{counter-increment:s;content:counter(s);width:40px;height:40px;border-radius:50%;background:var(--night);color:var(--sun);display:grid;place-items:center;font:800 1.1rem var(--display)}
+.steps b{display:block;font-family:var(--display)}
+.steps p{color:var(--muted);font-size:.95rem}
+@media (max-width:860px){.order{grid-template-columns:1fr}}
+
+/* visit */
+.visit{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.info{display:grid;gap:14px}
+.row{display:flex;gap:14px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+.row svg{flex:none;width:24px;height:24px;stroke:var(--leaf);margin-top:3px}
+.row b{display:block;font-family:var(--display)}
+.row span,.row a{color:var(--muted)}
+.row a{font-weight:700;color:var(--leaf);direction:ltr;unicode-bidi:embed}
+.signcard{background:var(--night);color:#fff;border-radius:18px;padding:28px;display:grid;gap:12px;align-content:center;text-align:center}
+.signcard .ar{font:800 clamp(1.4rem,3vw,2rem) var(--display)}
+.signcard .en{color:var(--sun);font-weight:700}
+.signcard p{color:#cfe3d7}
+@media (max-width:860px){.visit{grid-template-columns:1fr}}
+
+footer{background:var(--night);color:#cfe3d7;padding-block:28px;font-size:.9rem}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+footer b{color:#fff}
+
+.float{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom));inset-inline-end:calc(18px + env(safe-area-inset-right));z-index:30;background:var(--sun);color:var(--night);border-radius:999px;padding:12px 18px;font-weight:800;text-decoration:none;box-shadow:0 8px 24px #0004;display:flex;gap:8px;align-items:center}
+.float output{background:var(--night);color:var(--sun);border-radius:999px;padding:0 9px;font-size:.85rem}
+[hidden]{display:none!important}
+html[dir="ltr"] body{font-size:16.5px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#home">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#124a35"/><path d="M12 18h8l6 22h22l4-14H24" fill="none" stroke="#f5c400" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="29" cy="49" r="4" fill="#f5c400"/><circle cx="45" cy="49" r="4" fill="#f5c400"/></svg>
+      <span><b data-i="brand"></b><small data-i="branch"></small></span>
+    </a>
+    <nav class="links" aria-label="main">
+      <a href="#products" data-i="nav_products"></a>
+      <a href="#order" data-i="nav_order"></a>
+      <a href="#visit" data-i="nav_visit"></a>
+    </nav>
+    <button class="lang" id="langBtn" type="button" aria-label="Switch language"></button>
+  </div>
+</header>
+
+<main id="home">
+  <div class="hero">
+    <div class="wrap">
+      <div>
+        <span class="badge">● <span data-i="badge"></span></span>
+        <h1 data-i="hero_title" data-html></h1>
+        <p class="lead" data-i="hero_lead"></p>
+        <div class="cta">
+          <a class="btn primary" href="#order" data-i="cta_order"></a>
+          <a class="btn ghost" href="#products" data-i="cta_browse"></a>
+        </div>
+      </div>
+      <figure class="photo" style="margin:0">
+        <img src="/storefront.jpg" width="960" height="720" alt="" id="heroImg">
+        <figcaption data-i="photo_cap"></figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <section>
+    <div class="wrap">
+      <div class="head"><span class="eyebrow" data-i="why_eb"></span><h2 data-i="why_h"></h2></div>
+      <div class="why">
+        <div><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10Z"/><path d="M2 21c0-3 1.9-5.4 5.1-6"/></svg></span><h3 data-i="w1h"></h3><p data-i="w1p"></p></div>
+        <div><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/><circle cx="7" cy="7" r="1.5"/></svg></span><h3 data-i="w2h"></h3><p data-i="w2p"></p></div>
+        <div><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span><h3 data-i="w3h"></h3><p data-i="w3p"></p></div>
+        <div><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg></span><h3 data-i="w4h"></h3><p data-i="w4p"></p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cats-bg" id="products">
+    <div class="wrap">
+      <div class="head"><span class="eyebrow" data-i="prod_eb"></span><h2 data-i="prod_h"></h2><p data-i="prod_p"></p></div>
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <div class="items" id="items" role="tabpanel"></div>
+      <p class="note" data-i="prod_note"></p>
+    </div>
+  </section>
+
+  <section id="order">
+    <div class="wrap">
+      <div class="head"><span class="eyebrow" data-i="ord_eb"></span><h2 data-i="ord_h"></h2><p data-i="ord_p"></p></div>
+      <div class="order">
+        <div class="panel">
+          <h3><span data-i="list_h"></span><span class="count" id="count">0</span></h3>
+          <ul class="list" id="list"></ul>
+          <p class="empty" id="empty" data-i="list_empty"></p>
+          <form class="addrow" id="addForm">
+            <label class="sr" for="custom" data-i="custom_lbl"></label>
+            <input id="custom" autocomplete="off" data-ph="custom_ph">
+            <button class="btn primary" type="submit" data-i="add_btn"></button>
+          </form>
+          <label for="name" data-i="name_lbl"></label>
+          <input id="name" autocomplete="name" style="width:100%;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:10px;padding:11px 12px;font:1rem var(--body);margin-top:4px">
+          <label for="notes" data-i="notes_lbl"></label>
+          <textarea id="notes" data-ph="notes_ph"></textarea>
+          <div class="actions">
+            <button class="btn wa" id="sendWa" type="button" hidden>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.6-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.3.5-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.2Z"/></svg>
+              <span data-i="send_wa"></span>
+            </button>
+            <button class="btn sec" id="copyBtn" type="button" data-i="copy"></button>
+            <button class="btn sec" id="clearBtn" type="button" data-i="clear"></button>
+          </div>
+          <p class="toast" id="toast" role="status"></p>
+        </div>
+        <div class="steps">
+          <div><span><b data-i="s1h"></b><p data-i="s1p"></p></span></div>
+          <div><span><b data-i="s2h"></b><p data-i="s2p"></p></span></div>
+          <div><span><b data-i="s3h"></b><p data-i="s3p"></p></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="visit" style="padding-top:0">
+    <div class="wrap">
+      <div class="head"><span class="eyebrow" data-i="vis_eb"></span><h2 data-i="vis_h"></h2></div>
+      <div class="visit">
+        <div class="info" id="info"></div>
+        <div class="signcard">
+          <div class="ar">تموينات القبس المضيء للمواد الغذائية</div>
+          <div class="en">Al-Qabas Al-Mudee Groceries</div>
+          <p data-i="sign_p"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span><b data-i="brand"></b> · <span data-i="branch"></span></span>
+    <span>© <span id="yr"></span> · <span data-i="rights"></span></span>
+  </div>
+</footer>
+
+<a class="float" href="#order" id="floatBtn" hidden><span data-i="my_list"></span><output id="fcount">0</output></a>
+
+<script>
+/* =================== STORE SETTINGS — EDIT HERE =================== */
+const CONFIG = {
+  whatsapp: "",          // e.g. "9665XXXXXXXX" (country code, no + or spaces). Enables "Send on WhatsApp".
+  phone: "",             // e.g. "+966 5X XXX XXXX"
+  hours_ar: "",          // e.g. "يومياً من ٧ صباحاً حتى ١ بعد منتصف الليل"
+  hours_en: "",          // e.g. "Daily, 7 am – 1 am"
+  address_ar: "",        // e.g. "حي ...، المدينة"
+  address_en: "",
+  mapsUrl: ""            // Google Maps link to the shop
+};
+/* ================================================================== */
+
+const T = {
+ ar:{
+  brand:"تموينات القبس المضيء", branch:"للمواد الغذائية · فرع ٢", nav_products:"المنتجات", nav_order:"قائمة الطلب", nav_visit:"زورونا",
+  badge:"فرع ٢ · مفتوح لخدمتكم", hero_title:"كل احتياجات بيتك <span>في مكان واحد</span>",
+  hero_lead:"بقالة الحي التي تعرفها: مواد غذائية، خضار وفواكه، ألبان، مشروبات، وجبات خفيفة ومنظفات، بأسعار مناسبة وخدمة سريعة.",
+  cta_order:"جهّز قائمة طلبك", cta_browse:"تصفح المنتجات", photo_cap:"واجهة تموينات القبس المضيء – فرع ٢",
+  why_eb:"لماذا القبس المضيء؟", why_h:"بقالة قريبة منك، بخدمة تعرفك",
+  w1h:"منتجات طازجة", w1p:"خضار وفواكه وألبان وخبز تصلنا باستمرار.",
+  w2h:"أسعار مناسبة", w2p:"أسعار عادلة لاحتياجاتك اليومية والشهرية.",
+  w3h:"قريبة منك", w3p:"في حيّك، بدون زحمة الأسواق الكبيرة.",
+  w4h:"اطلب بسهولة", w4p:"جهّز قائمتك هنا وأرسلها لنا، ونجهّزها لك.",
+  prod_eb:"الأقسام", prod_h:"ماذا تجد عندنا", prod_p:"اختر القسم واضغط + لإضافة الصنف إلى قائمة طلبك.",
+  prod_note:"الأصناف أمثلة على ما يتوفر عادةً، وقد يختلف المتوفر من يوم لآخر. اسأل في المحل عن أي صنف لا تجده.",
+  ord_eb:"قائمة الطلب", ord_h:"جهّز قائمتك قبل أن تصل", ord_p:"أضف الأصناف والكميات، ثم أرسلها لنا أو احفظها معك.",
+  list_h:"قائمتي", list_empty:"قائمتك فارغة. أضف أصنافاً من الأقسام أو اكتب صنفاً بالأسفل.",
+  custom_lbl:"صنف آخر", custom_ph:"اكتب صنفاً غير موجود… مثال: هيل ١٠٠ جم", add_btn:"أضف",
+  name_lbl:"الاسم (اختياري)", notes_lbl:"ملاحظات (اختياري)", notes_ph:"مثال: الحليب كامل الدسم، الخبز أسمر…",
+  send_wa:"أرسل عبر واتساب", copy:"انسخ القائمة", clear:"امسح القائمة",
+  copied:"تم نسخ القائمة", cleared:"تم مسح القائمة", empty_err:"أضف صنفاً واحداً على الأقل",
+  s1h:"اختر الأصناف", s1p:"من الأقسام أو اكتب ما تريد.",
+  s2h:"أرسل القائمة", s2p:"عبر واتساب أو انسخها وأرسلها بالطريقة التي تناسبك.",
+  s3h:"استلم طلبك", s3p:"نجهّز طلبك في المحل ونتواصل معك لتأكيده.",
+  vis_eb:"زورونا", vis_h:"نسعد بزيارتكم",
+  sign_p:"ابحث عن اللافتة الخضراء وعربة التسوق الصفراء.",
+  addr:"العنوان", hours:"ساعات العمل", phone:"الهاتف", map:"افتح في الخرائط", branch2:"فرع ٢",
+  addr_default:"تموينات القبس المضيء – فرع ٢", rights:"جميع الحقوق محفوظة", my_list:"قائمتي",
+  msg_hi:"السلام عليكم، أرغب في طلب:", msg_name:"الاسم", msg_notes:"ملاحظات", lang_btn:"English",
+  c_fresh:"خضار وفواكه", c_dairy:"ألبان وأجبان", c_bakery:"مخبوزات", c_pantry:"أرز وبقوليات", c_spices:"زيوت وبهارات",
+  c_drinks:"مشروبات", c_snacks:"وجبات خفيفة", c_frozen:"مجمدات", c_clean:"منظفات", c_care:"عناية شخصية"
+ },
+ en:{
+  brand:"Al-Qabas Al-Mudee", branch:"Groceries · Branch 2", nav_products:"Products", nav_order:"Order list", nav_visit:"Visit us",
+  badge:"Branch 2 · Here to serve you", hero_title:"Everything your home needs, <span>in one place</span>",
+  hero_lead:"Your neighbourhood grocery: food staples, fruit and vegetables, dairy, drinks, snacks and cleaning supplies, at fair prices with quick service.",
+  cta_order:"Build your order list", cta_browse:"Browse products", photo_cap:"Al-Qabas Al-Mudee Groceries – Branch 2 storefront",
+  why_eb:"Why Al-Qabas?", why_h:"A grocery close to home, with service that knows you",
+  w1h:"Fresh products", w1p:"Vegetables, fruit, dairy and bread restocked regularly.",
+  w2h:"Fair prices", w2p:"Honest prices for your daily and monthly needs.",
+  w3h:"Close to you", w3p:"Right in your neighbourhood, without big-store crowds.",
+  w4h:"Easy ordering", w4p:"Build your list here, send it to us and we prepare it.",
+  prod_eb:"Departments", prod_h:"What you'll find", prod_p:"Pick a department and tap + to add an item to your order list.",
+  prod_note:"Items are examples of what we usually stock; availability changes day to day. Ask in store for anything you can't see.",
+  ord_eb:"Order list", ord_h:"Get your list ready before you arrive", ord_p:"Add items and quantities, then send the list to us or keep it with you.",
+  list_h:"My list", list_empty:"Your list is empty. Add items from the departments or type one below.",
+  custom_lbl:"Other item", custom_ph:"Type any item… e.g. Cardamom 100 g", add_btn:"Add",
+  name_lbl:"Name (optional)", notes_lbl:"Notes (optional)", notes_ph:"e.g. full-fat milk, brown bread…",
+  send_wa:"Send on WhatsApp", copy:"Copy list", clear:"Clear list",
+  copied:"List copied", cleared:"List cleared", empty_err:"Add at least one item",
+  s1h:"Choose items", s1p:"From the departments, or type what you need.",
+  s2h:"Send the list", s2p:"On WhatsApp, or copy it and send it any way you like.",
+  s3h:"Collect your order", s3p:"We prepare it in store and contact you to confirm.",
+  vis_eb:"Visit us", vis_h:"We'd love to see you",
+  sign_p:"Look for the green sign with the yellow shopping cart.",
+  addr:"Address", hours:"Opening hours", phone:"Phone", map:"Open in Maps", branch2:"Branch 2",
+  addr_default:"Al-Qabas Al-Mudee Groceries – Branch 2", rights:"All rights reserved", my_list:"My list",
+  msg_hi:"Hello, I'd like to order:", msg_name:"Name", msg_notes:"Notes", lang_btn:"العربية",
+  c_fresh:"Fruit & veg", c_dairy:"Dairy & cheese", c_bakery:"Bakery", c_pantry:"Rice & pulses", c_spices:"Oils & spices",
+  c_drinks:"Drinks", c_snacks:"Snacks", c_frozen:"Frozen", c_clean:"Cleaning", c_care:"Personal care"
+ }
+};
+
+const CATS = [
+ ["c_fresh","🥬",[["طماطم","Tomatoes"],["بصل","Onions"],["بطاطس","Potatoes"],["خيار","Cucumbers"],["ليمون","Lemons"],["موز","Bananas"],["تفاح","Apples"],["برتقال","Oranges"],["بقدونس","Parsley"],["فلفل رومي","Bell peppers"]]],
+ ["c_dairy","🥛",[["حليب طازج","Fresh milk"],["لبن","Laban"],["زبادي","Yoghurt"],["جبنة بيضاء","White cheese"],["جبنة شرائح","Cheese slices"],["لبنة","Labneh"],["زبدة","Butter"],["بيض","Eggs"],["قشطة","Cream"]]],
+ ["c_bakery","🍞",[["خبز صامولي","Samoli bread"],["خبز عربي","Arabic bread"],["خبز توست","Toast bread"],["كرواسون","Croissants"],["كعك","Ka'ak"],["بسكويت","Biscuits"]]],
+ ["c_pantry","🍚",[["أرز بسمتي","Basmati rice"],["أرز مزة","Mazza rice"],["عدس","Lentils"],["حمص","Chickpeas"],["فول معلب","Canned foul"],["معكرونة","Pasta"],["سكر","Sugar"],["طحين","Flour"],["تونة","Tuna"],["معجون طماطم","Tomato paste"]]],
+ ["c_spices","🫒",[["زيت دوار الشمس","Sunflower oil"],["زيت زيتون","Olive oil"],["سمن","Ghee"],["ملح","Salt"],["بهارات كبسة","Kabsa spice"],["هيل","Cardamom"],["كمون","Cumin"],["فلفل أسود","Black pepper"],["زعفران","Saffron"]]],
+ ["c_drinks","🥤",[["مياه","Water"],["عصير","Juice"],["مشروبات غازية","Soft drinks"],["شاي","Tea"],["قهوة عربية","Arabic coffee"],["نسكافيه","Instant coffee"],["حليب نكهات","Flavoured milk"]]],
+ ["c_snacks","🍫",[["شيبس","Chips"],["شوكولاتة","Chocolate"],["مكسرات","Nuts"],["تمر","Dates"],["حلويات","Sweets"],["علك","Chewing gum"],["بسكويت ويفر","Wafers"]]],
+ ["c_frozen","❄️",[["دجاج مجمد","Frozen chicken"],["سمبوسة","Sambousa"],["خضار مجمدة","Frozen vegetables"],["بطاطس مقلية","French fries"],["آيس كريم","Ice cream"],["برجر","Burgers"]]],
+ ["c_clean","🧼",[["مسحوق غسيل","Laundry powder"],["سائل جلي","Dish soap"],["كلوركس","Bleach"],["مناديل","Tissues"],["أكياس قمامة","Bin bags"],["معطر جو","Air freshener"],["ورق ألمنيوم","Aluminium foil"]]],
+ ["c_care","🧴",[["صابون","Soap"],["شامبو","Shampoo"],["معجون أسنان","Toothpaste"],["فرشاة أسنان","Toothbrush"],["حفاضات","Diapers"],["مناديل مبللة","Wet wipes"]]]
+];
+
+const $ = s => document.querySelector(s);
+const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const qs = new URLSearchParams(location.search).get("lang");
+let lang = (qs==="en"||qs==="ar") ? qs : store.get("lang","ar");
+let cat = 0;
+let list = store.get("list",[]); // [{ar,en,q}]
+
+const t = k => T[lang][k] ?? k;
+const nameOf = it => it[lang] || it.ar || it.en;
+
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang==="ar" ? "rtl" : "ltr";
+  document.title = lang==="ar" ? "تموينات القبس المضيء للمواد الغذائية | فرع ٢" : "Al-Qabas Al-Mudee Groceries | Branch 2";
+  document.querySelectorAll("[data-i]").forEach(el=>{
+    const v=t(el.dataset.i); if(el.hasAttribute("data-html")) el.innerHTML=v; else el.textContent=v;
+  });
+  document.querySelectorAll("[data-ph]").forEach(el=>el.placeholder=t(el.dataset.ph));
+  $("#langBtn").textContent = t("lang_btn");
+  $("#heroImg").alt = t("photo_cap");
+  store.set("lang",lang);
+  renderTabs(); renderItems(); renderList(); renderInfo();
+}
+
+function renderTabs(){
+  $("#tabs").innerHTML = CATS.map((c,i)=>`<button class="tab" role="tab" type="button" aria-selected="${i===cat}" data-c="${i}"><span aria-hidden="true">${c[1]}</span>${t(c[0])}</button>`).join("");
+}
+function inList(ar){return list.find(x=>x.ar===ar)}
+function renderItems(){
+  $("#items").innerHTML = CATS[cat][2].map(([ar,en])=>{
+    const on=!!inList(ar), nm=lang==="ar"?ar:en;
+    return `<div class="item"><span>${nm}</span><button class="add ${on?"on":""}" type="button" data-ar="${ar}" data-en="${en}" aria-label="${(on?"✓ ":"+ ")+nm}">${on?"✓":"+"}</button></div>`;
+  }).join("");
+}
+function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function renderList(){
+  const n=list.reduce((a,x)=>a+x.q,0);
+  $("#count").textContent=list.length; $("#fcount").textContent=list.length;
+  $("#floatBtn").hidden = list.length===0;
+  $("#empty").hidden = list.length>0;
+  $("#list").innerHTML = list.map((x,i)=>`<li><span class="nm">${esc(nameOf(x))}</span>
+    <span class="qty"><button type="button" data-d="-1" data-k="${i}" aria-label="-">−</button><output>${x.q}</output><button type="button" data-d="1" data-k="${i}" aria-label="+">+</button></span>
+    <button class="rm" type="button" data-r="${i}" aria-label="remove">×</button></li>`).join("");
+  $("#sendWa").hidden = !CONFIG.whatsapp;
+  store.set("list",list);
+}
+function renderInfo(){
+  const ico={pin:'<path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',clock:'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/>'};
+  const row=(i,h,b)=>`<div class="row"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ico[i]}</svg><div><b>${h}</b>${b}</div></div>`;
+  const addr = (lang==="ar"?CONFIG.address_ar:CONFIG.address_en) || t("addr_default");
+  let h = row("pin",t("addr"),`<span>${esc(addr)}</span>${CONFIG.mapsUrl?`<br><a href="${esc(CONFIG.mapsUrl)}" target="_blank" rel="noopener">${t("map")} ↗</a>`:""}`);
+  const hrs = lang==="ar"?CONFIG.hours_ar:CONFIG.hours_en;
+  if(hrs) h += row("clock",t("hours"),`<span>${esc(hrs)}</span>`);
+  if(CONFIG.phone) h += row("phone",t("phone"),`<a href="tel:${esc(CONFIG.phone.replace(/\s/g,""))}">${esc(CONFIG.phone)}</a>`);
+  $("#info").innerHTML = h;
+}
+function msg(){
+  const lines=[t("msg_hi"),""].concat(list.map((x,i)=>`${i+1}. ${nameOf(x)} × ${x.q}`));
+  const nm=$("#name").value.trim(), no=$("#notes").value.trim();
+  if(nm) lines.push("",`${t("msg_name")}: ${nm}`);
+  if(no) lines.push(`${t("msg_notes")}: ${no}`);
+  return lines.join("\n");
+}
+function toast(s){const el=$("#toast");el.textContent=s;clearTimeout(toast.h);toast.h=setTimeout(()=>el.textContent="",2600)}
+
+$("#langBtn").onclick=()=>{lang=lang==="ar"?"en":"ar";applyLang()};
+$("#tabs").onclick=e=>{const b=e.target.closest("[data-c]");if(!b)return;cat=+b.dataset.c;renderTabs();renderItems()};
+$("#items").onclick=e=>{const b=e.target.closest(".add");if(!b)return;const ex=inList(b.dataset.ar);
+  if(ex) list=list.filter(x=>x!==ex); else list.push({ar:b.dataset.ar,en:b.dataset.en,q:1});
+  renderItems();renderList()};
+$("#list").onclick=e=>{const d=e.target.closest("[data-d]"),r=e.target.closest("[data-r]");
+  if(d){const x=list[+d.dataset.k];x.q=Math.max(1,x.q+ +d.dataset.d)}
+  if(r){list.splice(+r.dataset.r,1)}
+  if(d||r){renderList();renderItems()}};
+$("#addForm").onsubmit=e=>{e.preventDefault();const v=$("#custom").value.trim();if(!v)return;
+  list.push({ar:v,en:v,q:1});$("#custom").value="";renderList();renderItems()};
+$("#copyBtn").onclick=async()=>{if(!list.length)return toast(t("empty_err"));
+  try{await navigator.clipboard.writeText(msg());toast(t("copied"))}
+  catch(e){const ta=document.createElement("textarea");ta.value=msg();document.body.appendChild(ta);ta.select();try{document.execCommand("copy");toast(t("copied"))}catch(_){}ta.remove()}};
+$("#sendWa").onclick=()=>{if(!list.length)return toast(t("empty_err"));
+  location.href=`https://wa.me/${CONFIG.whatsapp}?text=${encodeURIComponent(msg())}`};
+$("#clearBtn").onclick=()=>{list=[];renderList();renderItems();toast(t("cleared"))};
+$("#yr").textContent=new Date().getFullYear();
+applyLang();
+</script>
+</body>
+</html>
