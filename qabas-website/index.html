@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>تموينات القبس المضيء للمواد الغذائية | Al-Qabas Al-Mudee Groceries</title>
-<meta name="description" content="تموينات القبس المضيء للمواد الغذائية – فرع 2. مواد غذائية، خضار وفواكه، ألبان، مشروبات، وجبات خفيفة ومنظفات. Al-Qabas Al-Mudee Groceries – Branch 2.">
+<title>تموينات القبس المضيء للمواد الغذائية | فرع ٢</title>
+<meta name="description" content="تموينات القبس المضيء للمواد الغذائية – فرع 2. مواد غذائية، خضار وفواكه، ألبان، مشروبات، وجبات خفيفة ومنظفات.">
 <meta name="theme-color" content="#0d3b2a">
-<meta property="og:title" content="تموينات القبس المضيء | Al-Qabas Al-Mudee Groceries">
-<meta property="og:description" content="بقالتك القريبة لكل احتياجات البيت – Your neighbourhood grocery for everything at home.">
+<meta property="og:title" content="تموينات القبس المضيء للمواد الغذائية – فرع ٢">
+<meta property="og:locale" content="ar_SA">
+<meta property="og:description" content="بقالتك القريبة لكل احتياجات البيت: مواد غذائية، خضار وفواكه، ألبان ومنظفات.">
 <meta property="og:image" content="/storefront.jpg">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -169,12 +170,12 @@ html[dir="ltr"] body{font-size:16.5px}
       <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#124a35"/><path d="M12 18h8l6 22h22l4-14H24" fill="none" stroke="#f5c400" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="29" cy="49" r="4" fill="#f5c400"/><circle cx="45" cy="49" r="4" fill="#f5c400"/></svg>
       <span><b data-i="brand"></b><small data-i="branch"></small></span>
     </a>
-    <nav class="links" aria-label="main">
+    <nav class="links" aria-label="القائمة الرئيسية">
       <a href="#products" data-i="nav_products"></a>
       <a href="#order" data-i="nav_order"></a>
       <a href="#visit" data-i="nav_visit"></a>
     </nav>
-    <button class="lang" id="langBtn" type="button" aria-label="Switch language"></button>
+    <button class="lang" id="langBtn" type="button" aria-label="تغيير اللغة"></button>
   </div>
 </header>
 
@@ -261,7 +262,7 @@ html[dir="ltr"] body{font-size:16.5px}
         <div class="info" id="info"></div>
         <div class="signcard">
           <div class="ar">تموينات القبس المضيء للمواد الغذائية</div>
-          <div class="en">Al-Qabas Al-Mudee Groceries</div>
+          <div class="en" id="signEn" hidden>Al-Qabas Al-Mudee Groceries</div>
           <p data-i="sign_p"></p>
         </div>
       </div>
@@ -368,7 +369,7 @@ const CATS = [
 const $ = s => document.querySelector(s);
 const store = {get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const qs = new URLSearchParams(location.search).get("lang");
-let lang = (qs==="en"||qs==="ar") ? qs : store.get("lang","ar");
+let lang = qs==="en" ? "en" : "ar"; // always opens in Arabic; English only via the button or ?lang=en
 let cat = 0;
 let list = store.get("list",[]); // [{ar,en,q}]
 
@@ -385,7 +386,7 @@ function applyLang(){
   document.querySelectorAll("[data-ph]").forEach(el=>el.placeholder=t(el.dataset.ph));
   $("#langBtn").textContent = t("lang_btn");
   $("#heroImg").alt = t("photo_cap");
-  store.set("lang",lang);
+  $("#signEn").hidden = lang==="ar";
   renderTabs(); renderItems(); renderList(); renderInfo();
 }
 
