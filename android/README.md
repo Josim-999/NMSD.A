@@ -238,6 +238,19 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.2: premium script studio (Claude with live web research)
+
+Settings has a new **Premium script studio** section. With the user's own Anthropic API key (paid per use), every script goes through three passes (`ai/ClaudeStudio.kt`, official `anthropic-java` SDK):
+
+1. **Live research.** Claude Opus 5.5 (or Sonnet 5.5) uses web search (`web_search_20260209`, US location, up to 8 searches) and returns a dated fact sheet. It contains the angle, what is new, a real named story, 8-12 facts in the form `FACT | as-of date | source | URL`, comparisons, myths and 5 hook seeds.
+2. **Writer.** The usual playbook prompt plus studio standards. The writer drafts five hooks privately and keeps the best, then follows a story spine (hook, stakes, real moment, data reveal, twist, payoff, loop). Every number must be sourced.
+3. **Editor and fact-checker.** Every claim is checked against the fact sheet and unsupported ones are cut. The draft is scored on 7 craft points and everything under 9/10 is rewritten.
+
+Other details:
+- Refusals use server-side fallbacks, and `pause_turn` is resumed automatically.
+- If the studio fails (no key, no credit, network), the free chain runs exactly as before.
+- Estimated cost: about US$0.45 a script with Opus 5.5 and $0.25 with Sonnet 5.5, including searches.
+
 ## 3.1: motion library and style rotation (every video looks different)
 
 **Motion library (`render/MotionPlan.kt`), about 115 named techniques**, picked per video by a planner:

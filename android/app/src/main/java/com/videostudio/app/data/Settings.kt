@@ -223,4 +223,18 @@ class Settings(context: Context) {
     var motionHistory: List<String>
         get() = str("motion_history", "").split(',').map { it.trim() }.filter { it.isNotEmpty() }
         set(v) = put("motion_history", v.take(10).joinToString(","))
+
+    /** Premium script studio: the user's own Anthropic key (paid per use). */
+    var anthropicKey: String
+        get() = str("anthropic_key", "")
+        set(v) = put("anthropic_key", v.trim())
+
+    /** Use the premium studio (research, writer, editor) when a key is set. */
+    var premiumScript: Boolean
+        get() = str("premium_script", "true") == "true"
+        set(v) = put("premium_script", v.toString())
+
+    var premiumModel: String
+        get() = str("premium_model", com.videostudio.app.ai.ClaudeStudio.DEFAULT_MODEL)
+        set(v) = put("premium_model", v)
 }

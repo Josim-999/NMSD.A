@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -91,6 +92,22 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                     "Post to all uses the apps on this phone (TikTok, Instagram, YouTube, Facebook, X, Threads, LinkedIn, WhatsApp). " +
                         "You are already signed in there, so there is nothing to connect and no keys. Pick the apps on each video's Video & upload tab."
                 )
+            }
+
+            Section("Premium script studio (best quality, paid)") {
+                Hint("Claude researches the live web for the newest facts, writes the script, then edits and fact-checks it line by line. Paid per script with your own Anthropic key (about US\$0.45 with Opus 5.5, \$0.25 with Sonnet 5.5). If it fails or has no credit, the free writers below take over.")
+                TextButton(onClick = { open("https://platform.claude.com/settings/keys") }) { Text("Get an Anthropic API key") }
+                SecretField("Anthropic API key", s.anthropicKey) { s.anthropicKey = it }
+                Spacer(Modifier.height(6.dp))
+                var premium by remember { mutableStateOf(s.premiumScript) }
+                ToggleRow("Use the premium studio", "When on and a key is set, every script uses live research, writer and editor passes.", premium) { premium = it; s.premiumScript = it }
+                var model by remember { mutableStateOf(s.premiumModel) }
+                for ((id, label) in com.videostudio.app.ai.ClaudeStudio.MODELS) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = model == id, onClick = { model = id; s.premiumModel = id })
+                        Text(label, fontSize = 14.sp)
+                    }
+                }
             }
 
             Section("Gemini (research and script)") {

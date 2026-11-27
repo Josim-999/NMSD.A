@@ -1,6 +1,7 @@
 package com.videostudio.app.work
 
 import com.videostudio.app.compliance.YouTubeCheck
+import com.videostudio.app.ai.ClaudeStudio
 import com.videostudio.app.ai.BackupAi
 import com.videostudio.app.ai.BuiltInWriter
 import com.videostudio.app.ai.ScriptCheck
@@ -62,6 +63,14 @@ class Pipeline(
     fun writeScript(p: Project, feedback: String = "") {
         // Every video is 50-60 s (older projects may still say 30 or 45).
         p.lengthSec = p.lengthSec.coerceIn(Prompts.MIN_SEC, Prompts.MAX_SEC)
+        // Premium studio first (live research, writer, editor/fact-checker); the free chain is the backup.
+        if (settings.premiumScript && settings.anthropicKey.isNotBlank()) {
+            val done = runCatching { studioScript(p, feedback) }.onFailure {
+                if (cancelled()) throw it
+                log("Premium studio failed (${it.message?.take(100)}); using the free writers instead.")
+            }.getOrDefault(false)
+            if (done) return
+        }
         if (p.research && p.researchNotes.isBlank()) {
             step("Researching the topic (Google Search)", null)
             log("Researching with ${settings.researchModel}…")
@@ -136,6 +145,54 @@ class Pipeline(
         store.save(p)
         val words = p.scenes.sumOf { it.say.split(Regex("\\s+")).size }
         log("Script ready with ${reply.model}: ${p.scenes.size} scenes, $words words.")
+    }
+
+    /** The premium three-pass studio. Returns true when the script is ready. */
+    private fun studioScript(p: Project, feedback: String): Boolean {
+        val studio = ClaudeStudio(settings.anthropicKey, settings.premiumModel, notice = log)
+        val name = ClaudeStudio.label(studio.model)
+        // Fresh research every new script (rewrites reuse the sheet they were written from).
+        if (feedback.isBlank() || !p.researchNotes.startsWith(STUDIO_MARK)) {
+            step("Researching the live web", null)
+            val r = studio.research(p)
+            val pages = r.sources.distinctBy { it.second }.take(20).joinToString("\n") { "- ${it.first}: ${it.second}" }
+            p.researchNotes = STUDIO_MARK + "\n" + r.text.trim() + if (pages.isNotBlank()) "\n\nPages read:\n$pages" else ""
+            store.save(p)
+            log("Research done: ${r.sources.size} pages read.")
+        }
+        if (cancelled()) return false
+        step(if (feedback.isBlank()) "Writing the script (premium)" else "Rewriting the script (premium)", null)
+        val current = if (feedback.isBlank()) "" else JSONObject().put("scenes", JSONArray(p.scenes.map { it.toJson() })).toString(1)
+        val prompt = Prompts.script(
+            p, settings.seriesName, settings.seriesPromise, settings.defaultHashtags, feedback, current,
+            stockFootage = settings.pexelsKey.isNotBlank() || settings.pixabayKey.isNotBlank(), take = p.take,
+        )
+        val draft = extractJson(studio.write(prompt).text)
+        if (objects(draft.optJSONArray("scenes")).size < 3) throw IllegalStateException("the draft had no scenes")
+        applyScript(p, draft)
+        val src = { p.sources.map { it.claim + " " + it.url } }
+        var check = ScriptCheck.check(p.scenes, p.lengthSec, research = p.researchNotes, sources = src())
+        log("Draft score: ${check.score}/100.")
+        if (cancelled()) return false
+        step("Editing and fact-checking (premium)", null)
+        runCatching {
+            val edited = extractJson(studio.edit(draft.toString(1), p.researchNotes, check.issues, Prompts.wordRange(p.lengthSec)).text)
+            val scenes = objects(edited.optJSONArray("scenes")).map { Scene.fromJson(it) }.filter { it.say.isNotBlank() }
+            if (scenes.size >= 3) {
+                applyScript(p, edited)
+                check = ScriptCheck.check(p.scenes, p.lengthSec, research = p.researchNotes, sources = src())
+                log("Edited and fact-checked: ${check.score}/100.")
+            } else log("The editor's version was incomplete; keeping the draft.")
+        }.onFailure { log("Editing pass failed (${it.message?.take(80)}); keeping the draft.") }
+        p.writer = "$name studio"
+        ensureLength(p, true)
+        check = ScriptCheck.check(p.scenes, p.lengthSec, research = p.researchNotes, sources = src())
+        p.scriptScore = check.score
+        p.status = Status.SCRIPTED
+        p.error = ""
+        store.save(p)
+        log("Script ready with $name: ${p.scenes.size} scenes, ${words(p)} words, ${p.sources.size} sources.")
+        return true
     }
 
     private fun words(p: Project) = p.scenes.sumOf { it.say.split(Regex("\\s+")).filter { w -> w.isNotBlank() }.size }
@@ -522,6 +579,7 @@ class Pipeline(
 
     companion object {
         const val BUILT_IN = "built-in writer"
+        const val STUDIO_MARK = "[Live research by the premium studio]"
 
         /**
          * A speaking rate ("+4%") that brings [seconds] close to [target], changing the current rate by
