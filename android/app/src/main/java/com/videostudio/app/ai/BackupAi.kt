@@ -36,10 +36,14 @@ data class BackupProvider(
 class BackupAi(
     private val providers: List<BackupProvider>,
     private val notice: (String) -> Unit = {},
+    /** Stop trying more services after this time (ms since epoch). */
+    private val deadline: Long = Long.MAX_VALUE,
 ) {
     private val http = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(3, TimeUnit.MINUTES)
+        .connectTimeout(12, TimeUnit.SECONDS)
+        .readTimeout(50, TimeUnit.SECONDS)
+        // A script answer takes 10-40 s; a service that needs longer is overloaded: skip it.
+        .callTimeout(55, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
@@ -59,6 +63,7 @@ class BackupAi(
         for (p in providers.filter { it.usable }) {
             if (resting(p.id)) continue
             for (model in models(p).take(p.maxModels)) {
+                if (System.currentTimeMillis() > deadline) { notice("Out of time for AI services; finishing without them."); return null }
                 if (resting(p.id + "/" + model)) continue
                 try {
                     notice("Writing with ${p.name} ($model)…")
@@ -70,6 +75,11 @@ class BackupAi(
                     rest(if (e.minutes >= 60) p.id else p.id + "/" + model, e.minutes)
                     problems.add("${p.name}: ${e.message}")
                     if (e.minutes >= 60) break
+                } catch (e: java.io.InterruptedIOException) {
+                    // Too slow (timed out): rest this service for a while so the next script does not wait on it again.
+                    rest(p.id, 20)
+                    problems.add("${p.name} $model: too slow")
+                    break
                 } catch (e: Exception) {
                     problems.add("${p.name} $model: ${e.message}")
                 }

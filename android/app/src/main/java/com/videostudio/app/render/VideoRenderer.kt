@@ -13,6 +13,7 @@ import android.opengl.EGLContext
 import android.opengl.EGLDisplay
 import android.opengl.EGLExt
 import android.opengl.EGLSurface
+import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.opengl.GLUtils
 import android.view.Surface
@@ -22,6 +23,9 @@ import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
+
+/** How frames are drawn: on the graphics chip (fastest), or on the CPU with two threads or one (safe). */
+enum class RenderMode { GPU, TWO_THREADS, ONE_THREAD }
 
 /** Longest one frame may take to draw before the render is stopped (seconds). */
 private const val FRAME_TIMEOUT_S = 240L
@@ -44,9 +48,10 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         audioPlan: AudioMix.Plan,
         out: File,
         cancelled: () -> Boolean,
-        twoThreads: Boolean = true,
+        mode: RenderMode = RenderMode.GPU,
         progress: (Float) -> Unit,
     ) {
+        val twoThreads = mode == RenderMode.TWO_THREADS
         val audio = encodeAudio(audioFile, audioPlan)
         out.parentFile?.mkdirs()
         val part = File(out.parentFile, out.name + ".part")
@@ -77,7 +82,7 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         // Two threads: the painter draws the next frame while this (GL) thread uploads and encodes
         // the current one. Two bitmaps rotate between them (each 8 MB at 1080p). With [twoThreads]
         // off (the safe retry), one bitmap and one thread, exactly like before 3.3.
-        val buffers = if (twoThreads) 2 else 1
+        val buffers = when (mode) { RenderMode.GPU -> 0; RenderMode.TWO_THREADS -> 2; RenderMode.ONE_THREAD -> 1 }
         val pool = java.util.concurrent.ArrayBlockingQueue<Bitmap>(buffers)
         val canvases = HashMap<Bitmap, Canvas>()
         repeat(buffers) { Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { pool.add(it); canvases[it] = Canvas(it) } }
@@ -107,9 +112,15 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
             }
         }, "frame-painter")
         painterThread?.start()
+        // GPU mode: the phone's graphics chip draws each frame (10x+ faster than the CPU), into a
+        // texture that is then encoded with an exact 1/fps timestamp, so quality is unchanged.
+        val gpu = if (mode == RenderMode.GPU) GpuFrames(painter, width, height, scale, fps) else null
         try {
             for (i in 0 until frames) {
                 if (cancelled()) throw RenderError("cancelled")
+                if (gpu != null) {
+                    gpu.frame(i)
+                } else {
                 val bmp: Bitmap
                 if (painterThread == null) {
                     bmp = pool.peek()!!
@@ -123,6 +134,7 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
                 }
                 drawer.draw(bmp)
                 if (painterThread != null) pool.put(bmp)
+                }
                 egl.present(i * 1_000_000_000L / fps)
                 drain(encoder, info, muxer, audio, mux, end = false)
                 if (i % 15 == 0) progress(i.toFloat() / frames)
@@ -132,6 +144,7 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
         } finally {
             stop.set(true)
             pool.clear(); ready.clear()
+            gpu?.release()
             painterThread?.interrupt()
             runCatching { painterThread?.join(5000) }
             canvases.keys.forEach { runCatching { it.recycle() } }
@@ -405,6 +418,121 @@ class VideoRenderer(private val width: Int, private val height: Int, private val
 
         companion object {
             const val EGL_RECORDABLE_ANDROID = 0x3142
+        }
+    }
+
+    /**
+     * Draws frames with a hardware (GPU) canvas into a SurfaceTexture, then copies that texture to the
+     * encoder's surface on this thread's EGL context. Checks a few frames for real picture content;
+     * any problem throws, and the caller renders again on the CPU.
+     */
+    private class GpuFrames(private val painter: ScenePainter, private val w: Int, private val h: Int, private val scale: Float, private val fps: Int) {
+        private val oes = OesDrawer()
+        private val texture = android.graphics.SurfaceTexture(oes.tex).apply { setDefaultBufferSize(w, h) }
+        private val looper = android.os.HandlerThread("gpu-frames").apply { start() }
+        private val available = java.util.concurrent.Semaphore(0)
+        private val input = Surface(texture)
+        private val matrix = FloatArray(16)
+        private val pixel = ByteBuffer.allocateDirect(4).order(ByteOrder.nativeOrder())
+
+        init {
+            texture.setOnFrameAvailableListener({ available.release() }, android.os.Handler(looper.looper))
+        }
+
+        fun frame(i: Int) {
+            val c = input.lockHardwareCanvas()
+            try {
+                c.save()
+                c.scale(scale, scale)
+                painter.draw(c, i.toDouble() / fps, captions = true)
+                c.restore()
+            } finally {
+                input.unlockCanvasAndPost(c)
+            }
+            if (!available.tryAcquire(15, java.util.concurrent.TimeUnit.SECONDS)) throw RenderError("the graphics chip did not deliver frame ${i + 1}")
+            texture.updateTexImage()
+            texture.getTransformMatrix(matrix)
+            oes.draw(matrix, w, h)
+            if (i == 3 || i % 300 == 150) check(i)
+        }
+
+        /** A frame with no picture at all (every sample pure black) means the GPU path is not working here. */
+        private fun check(i: Int) {
+            var content = false
+            for ((fx, fy) in listOf(0.5f to 0.5f, 0.2f to 0.3f, 0.8f to 0.7f, 0.5f to 0.15f, 0.3f to 0.85f)) {
+                pixel.clear()
+                GLES20.glReadPixels((w * fx).toInt(), (h * fy).toInt(), 1, 1, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, pixel)
+                val r = pixel.get(0).toInt() and 255; val g = pixel.get(1).toInt() and 255; val b = pixel.get(2).toInt() and 255
+                if (r + g + b > 0) { content = true; break }
+            }
+            if (!content) throw RenderError("the graphics chip drew an empty frame ${i + 1}")
+        }
+
+        fun release() {
+            runCatching { input.release() }
+            runCatching { texture.release() }
+            runCatching { looper.quitSafely() }
+            runCatching { oes.release() }
+        }
+    }
+
+    /** Draws an external (SurfaceTexture) texture over the whole viewport. */
+    private class OesDrawer {
+        private val program = GLES20.glCreateProgram()
+        val tex: Int
+        private val quad: FloatBuffer = ByteBuffer.allocateDirect(64).order(ByteOrder.nativeOrder()).asFloatBuffer()
+            .put(floatArrayOf(-1f, -1f, 0f, 0f, 1f, -1f, 1f, 0f, -1f, 1f, 0f, 1f, 1f, 1f, 1f, 1f))
+        private val posLoc: Int
+        private val texLoc: Int
+        private val mtxLoc: Int
+
+        init {
+            GLES20.glAttachShader(program, shader(GLES20.GL_VERTEX_SHADER,
+                "uniform mat4 uTexMatrix; attribute vec4 aPos; attribute vec4 aTex; varying vec2 vTex;\nvoid main() { gl_Position = aPos; vTex = (uTexMatrix * aTex).xy; }"))
+            GLES20.glAttachShader(program, shader(GLES20.GL_FRAGMENT_SHADER,
+                "#extension GL_OES_EGL_image_external : require\nprecision mediump float; varying vec2 vTex; uniform samplerExternalOES uTex;\nvoid main() { gl_FragColor = texture2D(uTex, vTex); }"))
+            GLES20.glLinkProgram(program)
+            val linked = IntArray(1)
+            GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linked, 0)
+            if (linked[0] == 0) throw RenderError("GPU shader did not link")
+            posLoc = GLES20.glGetAttribLocation(program, "aPos")
+            texLoc = GLES20.glGetAttribLocation(program, "aTex")
+            mtxLoc = GLES20.glGetUniformLocation(program, "uTexMatrix")
+            val ids = IntArray(1)
+            GLES20.glGenTextures(1, ids, 0)
+            tex = ids[0]
+            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, tex)
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexParameteri(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+        }
+
+        private fun shader(type: Int, src: String): Int {
+            val s = GLES20.glCreateShader(type)
+            GLES20.glShaderSource(s, src)
+            GLES20.glCompileShader(s)
+            return s
+        }
+
+        fun draw(m: FloatArray, w: Int, h: Int) {
+            GLES20.glViewport(0, 0, w, h)
+            GLES20.glUseProgram(program)
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+            GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, tex)
+            GLES20.glUniformMatrix4fv(mtxLoc, 1, false, m, 0)
+            quad.position(0)
+            GLES20.glVertexAttribPointer(posLoc, 2, GLES20.GL_FLOAT, false, 16, quad)
+            GLES20.glEnableVertexAttribArray(posLoc)
+            quad.position(2)
+            GLES20.glVertexAttribPointer(texLoc, 2, GLES20.GL_FLOAT, false, 16, quad)
+            GLES20.glEnableVertexAttribArray(texLoc)
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+        }
+
+        fun release() {
+            GLES20.glDeleteTextures(1, intArrayOf(tex), 0)
+            GLES20.glDeleteProgram(program)
         }
     }
 

@@ -242,4 +242,19 @@ class Settings(context: Context) {
     var backdrops: Boolean
         get() = str("backdrops", "true") == "true"
         set(v) = put("backdrops", v.toString())
+
+    /** Render on the graphics chip (Android 10+); falls back to the CPU by itself. */
+    var gpuRender: Boolean
+        get() = str("gpu_render", "true") == "true"
+        set(v) = put("gpu_render", v.toString())
+
+    /** New videos go straight from the script to the finished video. */
+    var autoMake: Boolean
+        get() = str("auto_make", "true") == "true"
+        set(v) = put("auto_make", v.toString())
+
+    /** Set while a GPU render runs; still set at the next render means the app was killed by it. */
+    var gpuAttempt: Boolean
+        get() = str("gpu_attempt", "false") == "true"
+        set(v) = put("gpu_attempt", v.toString())
 }

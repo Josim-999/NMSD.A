@@ -10,7 +10,8 @@ import java.util.concurrent.TimeUnit
 object Stock {
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(25, TimeUnit.SECONDS)
+        .callTimeout(45, TimeUnit.SECONDS)
         .build()
 
     /** Downloads the best portrait photo for [query] into [out]. Returns the credit line, or null. */

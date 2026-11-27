@@ -88,7 +88,7 @@ object Segmenter {
             var sample = 1
             while (bounds.outWidth / (sample * 2) >= 720) sample *= 2
             val bmp = BitmapFactory.decodeFile(photo.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return false
-            val result = Tasks.await(client.process(InputImage.fromBitmap(bmp, 0)), 40, TimeUnit.SECONDS)
+            val result = Tasks.await(client.process(InputImage.fromBitmap(bmp, 0)), 15, TimeUnit.SECONDS)
             val fg = result.foregroundBitmap ?: return false
             val (coverage, box) = Cutout.measure(fg)
             if (!Cutout.usable(coverage, box)) return false

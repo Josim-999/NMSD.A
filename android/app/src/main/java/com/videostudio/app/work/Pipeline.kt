@@ -37,6 +37,7 @@ import com.videostudio.app.render.SceneMedia
 import com.videostudio.app.render.MotionPlan
 import com.videostudio.app.render.MediaLoad
 import com.videostudio.app.render.RenderGate
+import com.videostudio.app.render.RenderMode
 import com.videostudio.app.render.ScenePainter
 import com.videostudio.app.render.Timeline
 import com.videostudio.app.render.VideoRenderer
@@ -64,6 +65,9 @@ class Pipeline(
     private fun gemini() = Gemini(settings.geminiKey, notice = log, autoSwitch = settings.autoSwitchModels)
 
     fun writeScript(p: Project, feedback: String = "") {
+        // The script step has a time limit: slow or overloaded AI services are skipped, and if none answers in
+        // time the built-in writer finishes at once, so the video is never held up for long.
+        scriptDeadline = System.currentTimeMillis() + SCRIPT_LIMIT_MS
         // Every video is 50-60 s (older projects may still say 30 or 45).
         p.lengthSec = p.lengthSec.coerceIn(Prompts.MIN_SEC, Prompts.MAX_SEC)
         // Premium studio first (live research, writer, editor/fact-checker); the free chain is the backup.
@@ -250,15 +254,19 @@ class Pipeline(
      * Gemini/Gemma model, then Groq, Alibaba Qwen, Mistral, OpenRouter, SiliconFlow, Cloudflare and
      * Pollinations. A used-up service is skipped at once (no waiting) while another one has room.
      */
+    /** When the current script step must stop waiting for AI services. */
+    @Volatile private var scriptDeadline = Long.MAX_VALUE
+
     private fun scriptReply(prompt: String): GeminiReply {
+        if (System.currentTimeMillis() > scriptDeadline) throw GeminiQuotaError("The AI services were too slow right now.")
         val isScript = { t: String -> runCatching { extractJson(t).optJSONArray("scenes")?.length() ?: 0 }.getOrDefault(0) >= 3 }
         val all = BackupAi.all(settings.aiKeys())
         val usable = all.filter { it.usable }
-        val first = BackupAi(usable.filter { it.id in BackupAi.BIG }, notice = log)
-        val rest = BackupAi(usable.filter { it.id !in BackupAi.BIG }, notice = log)
+        val first = BackupAi(usable.filter { it.id in BackupAi.BIG }, notice = log, deadline = scriptDeadline)
+        val rest = BackupAi(usable.filter { it.id !in BackupAi.BIG }, notice = log, deadline = scriptDeadline)
         first.generate(prompt, isScript)?.let { log("Script written by ${it.model}."); return it }
         var quota: GeminiQuotaError? = null
-        if (settings.geminiKey.isNotBlank()) {
+        if (settings.geminiKey.isNotBlank() && System.currentTimeMillis() < scriptDeadline - 20_000) {
             try {
                 // With backups ready, never sit waiting on a Gemini per-minute limit: switch at once.
                 val g = Gemini(settings.geminiKey, notice = log, autoSwitch = settings.autoSwitchModels,
@@ -309,37 +317,12 @@ class Pipeline(
         // Old voice and photo files from an earlier render.
         dir.listFiles()?.filter { it.name.startsWith("voice.") || it.name.startsWith("photo_") || it.name.startsWith("cutout_") }?.forEach { it.delete() }
 
-        val script = p.scenes.joinToString(" ") { it.say.trim() }
-        step("Recording the voice", null)
-        val expressive: VoiceResult? = if (settings.expressiveVoice && settings.geminiKey.isNotBlank()) runCatching {
-            log("Voice: expressive Gemini voice (${settings.expressiveVoiceName})…")
-            GeminiTts.speak(settings.geminiKey, script, settings.expressiveVoiceName, File(dir, "voice.wav"))
-        }.onFailure { log("The expressive voice is not available right now (${it.message?.take(80)}); using the Microsoft voice.") }.getOrNull() else null
-        val voice: VoiceResult = expressive ?: try {
-            log("Voice: ${Voices.find(p.voice).label} (Microsoft online voice)…")
-            val first = EdgeTts.speak(script, p.voice, settings.voiceRate, File(dir, "voice.mp3"))
-            // Fit the chosen length (60 s by default): re-record slightly slower or faster, at most 12%.
-            val fit = fitRate(settings.voiceRate, first.seconds)
-            if (fit != null) {
-                log(String.format("Voice is %.0f s; re-recording at %s to land in 50-60 s.", first.seconds, fit))
-                runCatching { EdgeTts.speak(script, p.voice, fit, File(dir, "voice.mp3")) }.getOrDefault(first)
-            } else first
-        } catch (e: Exception) {
-            log("The Microsoft voice failed (${e.message}). Using the phone's own voice instead.")
-            DeviceTts.speak(context, script, Voices.find(p.voice).locale, Voices.rateFactor(settings.voiceRate), File(dir, "voice.wav"))
-        }
-        p.voiceUsed = voice.voice
-        File(dir, "words.json").writeText(
-            JSONArray(voice.words.map { JSONObject().put("word", it.text).put("start", it.start).put("end", it.end) }).toString()
-        )
-        log(String.format("Voice: %.1f s, %d words.", voice.seconds, voice.words.size))
-        if (cancelled()) return
-
-        // Just under 50 s? Hold the ending (comment question on screen, music playing) for up to 4.5 s.
-        val duration = if (voice.seconds < Prompts.MIN_SEC) minOf(Prompts.MIN_SEC + 0.5, voice.seconds + 4.5) else voice.seconds
-        if (duration > voice.seconds + 0.1) log(String.format("Holding the ending %.1f s so the video reaches %.0f s.", duration - voice.seconds, duration))
-        val timeline = Timeline(p.scenes, voice.words, duration)
-
+        // Phase 1 (online, everything at once): voice, pictures, clips, logos and animated emoji all
+        // download in parallel, with a time limit. Phase 2 (offline): planning and rendering need no internet.
+        val gatherStart = System.currentTimeMillis()
+        step("Getting the voice, pictures, clips and logos", null)
+        // Scene lengths estimated from the words (the voice is recorded at the same time).
+        val est = p.scenes.map { sc -> sc.say.split(Regex("\\s+")).count { it.isNotBlank() } / Prompts.WORDS_PER_SECOND + ScenePainter.TRANSITION + 0.3 }
         // Pictures and logos, matched to the script. Free sources first need no key at all.
         val finder = MediaFinder(File(context.cacheDir, "media"), settings.pexelsKey, log, pixabayKey = settings.pixabayKey)
         val found = java.util.concurrent.ConcurrentHashMap<Int, SceneMedia.Lazy>()
@@ -352,7 +335,6 @@ class Pipeline(
         val brandScenes = p.scenes.withIndex().filter { it.value.type == "logo" || it.value.brand.isNotBlank() }
         // Text scenes get a relevant picture or clip behind the words (darkened so the text stays readable).
         val backdropScenes = if (settings.backdrops) p.scenes.withIndex().filter { it.index > 0 && ScenePainter.wantsBackdrop(it.value.type) } else emptyList()
-        if (photoScenes.isNotEmpty() || brandScenes.isNotEmpty() || backdropScenes.isNotEmpty()) step("Finding pictures, clips and logos", null)
         val clips = java.util.concurrent.atomic.AtomicInteger()
         val pictures = java.util.concurrent.atomic.AtomicInteger()
         val backdrops = java.util.concurrent.atomic.AtomicInteger()
@@ -374,8 +356,7 @@ class Pipeline(
         for ((i, scene) in photoScenes) jobs += pool.submit {
             if (cancelled()) return@submit
             val query = scene.query.ifBlank { scene.text }
-            val span = timeline.spans[i]
-            val seconds = (span.end - span.start) + ScenePainter.TRANSITION
+            val seconds = est[i]
             if (stock && scene.library.isBlank() && clipFor(i, query, seconds)) { clips.incrementAndGet(); return@submit }
             val f = File(dir, "photo_$i.jpg")
             val hit = runCatching { finder.photo(query, scene.wiki, f, scene.library) }.getOrNull() ?: return@submit
@@ -415,8 +396,7 @@ class Pipeline(
             if (cancelled()) return@submit
             val query = scene.query.ifBlank { MediaFinder.keywords(scene.text.ifBlank { scene.say }, p.topic) }
             if (query.isBlank()) return@submit
-            val span = timeline.spans[i]
-            val seconds = (span.end - span.start) + ScenePainter.TRANSITION
+            val seconds = est[i]
             if (stock && clipFor(i, query, seconds)) { backdrops.incrementAndGet(); return@submit }
             val f = File(dir, "photo_$i.jpg")
             runCatching { finder.photo(query, "", f) }.getOrNull()?.let { hit ->
@@ -435,15 +415,58 @@ class Pipeline(
                 if (logo != null) synchronized(logos) { logos[i] = logo }
             }
         }
+        // Animated emoji too, in the same go.
+        val animatedFound = java.util.concurrent.ConcurrentHashMap<String, com.airbnb.lottie.LottieComposition>()
+        val emojis = (p.scenes.map { it.emoji.trim() } + "💬" + "💡").filter { it.isNotBlank() }.distinct()
+        for (e in emojis) jobs += pool.submit { AnimatedEmoji.load(e, File(context.cacheDir, "emoji"))?.let { animatedFound[e] = it } }
         pool.shutdown()
-        for (j in jobs) runCatching { j.get(90, java.util.concurrent.TimeUnit.SECONDS) }
+
+        val script = p.scenes.joinToString(" ") { it.say.trim() }
+        step("Recording the voice", null)
+        val expressive: VoiceResult? = if (settings.expressiveVoice && settings.geminiKey.isNotBlank()) runCatching {
+            log("Voice: expressive Gemini voice (${settings.expressiveVoiceName})…")
+            GeminiTts.speak(settings.geminiKey, script, settings.expressiveVoiceName, File(dir, "voice.wav"))
+        }.onFailure { log("The expressive voice is not available right now (${it.message?.take(80)}); using the Microsoft voice.") }.getOrNull() else null
+        val voice: VoiceResult = expressive ?: try {
+            log("Voice: ${Voices.find(p.voice).label} (Microsoft online voice)…")
+            val first = EdgeTts.speak(script, p.voice, settings.voiceRate, File(dir, "voice.mp3"))
+            // Fit the chosen length (60 s by default): re-record slightly slower or faster, at most 12%.
+            val fit = fitRate(settings.voiceRate, first.seconds)
+            if (fit != null) {
+                log(String.format("Voice is %.0f s; re-recording at %s to land in 50-60 s.", first.seconds, fit))
+                runCatching { EdgeTts.speak(script, p.voice, fit, File(dir, "voice.mp3")) }.getOrDefault(first)
+            } else first
+        } catch (e: Exception) {
+            log("The Microsoft voice failed (${e.message}). Using the phone's own voice instead.")
+            DeviceTts.speak(context, script, Voices.find(p.voice).locale, Voices.rateFactor(settings.voiceRate), File(dir, "voice.wav"))
+        }
+        p.voiceUsed = voice.voice
+        File(dir, "words.json").writeText(
+            JSONArray(voice.words.map { JSONObject().put("word", it.text).put("start", it.start).put("end", it.end) }).toString()
+        )
+        log(String.format("Voice: %.1f s, %d words.", voice.seconds, voice.words.size))
+        if (cancelled()) return
+
+        // Just under 50 s? Hold the ending (comment question on screen, music playing) for up to 4.5 s.
+        val duration = if (voice.seconds < Prompts.MIN_SEC) minOf(Prompts.MIN_SEC + 0.5, voice.seconds + 4.5) else voice.seconds
+        if (duration > voice.seconds + 0.1) log(String.format("Holding the ending %.1f s so the video reaches %.0f s.", duration - voice.seconds, duration))
+        val timeline = Timeline(p.scenes, voice.words, duration)
+
+
+        // Wait for the downloads, but never longer than the time limit: whatever is not here by then is
+        // left out (the scene uses clean type or its photo), so a slow site never holds the video up.
+        val deadline = gatherStart + GATHER_LIMIT_MS
+        for (j in jobs) runCatching { j.get((deadline - System.currentTimeMillis()).coerceAtLeast(1), java.util.concurrent.TimeUnit.MILLISECONDS) }
         pool.shutdownNow()
+        log(String.format("Downloads done in %d s. Everything from here works offline.", (System.currentTimeMillis() - gatherStart) / 1000))
         if (cancelled()) return
         val media = LinkedHashMap<Int, SceneMedia.Lazy>().apply { found.keys.sorted().forEach { put(it, found.getValue(it)) } }
-        if (credits.isNotEmpty()) File(dir, "credits.txt").writeText(credits.joinToString("\n"))
+        // Frozen copies: a download that finishes after the time limit can no longer change what the render uses.
+        val logosFinal: Map<Int, Logo> = synchronized(logos) { LinkedHashMap(logos) }
+        if (credits.isNotEmpty()) File(dir, "credits.txt").writeText(synchronized(credits) { credits.joinToString("\n") })
         if (photoScenes.isNotEmpty()) log("Pictures: ${clips.get()} video clip(s), ${pictures.get()} photo(s) for ${photoScenes.size} photo scene(s).")
         if (backdropScenes.isNotEmpty()) log("Backgrounds: ${backdrops.get()} of ${backdropScenes.size} talking scenes got a matching picture or clip.")
-        if (brandScenes.isNotEmpty()) log("Logos: ${logos.size} of ${brandScenes.size} brand scene(s).")
+        if (brandScenes.isNotEmpty()) log("Logos: ${logosFinal.size} of ${brandScenes.size} brand scene(s).")
 
         // A look of its own for every video (captions, transitions, background), different from the last one.
         if (p.style < 0) {
@@ -510,8 +533,7 @@ class Pipeline(
         val pulses = if (p.mood in setOf("dramatic", "energetic", "")) listOf(0.6, 1.4).filter { it < (timeline.spans.firstOrNull()?.end ?: 0.0) } else emptyList()
 
         // Animated emoji (Noto, free): the fire flickers, the bulb glows.
-        val emojis = (p.scenes.map { it.emoji.trim() } + "💬" + "💡").filter { it.isNotBlank() }.distinct()
-        val animated = emojis.mapNotNull { e -> AnimatedEmoji.load(e, File(context.cacheDir, "emoji"))?.let { e to it } }.toMap()
+        val animated = HashMap(animatedFound)
         if (animated.isNotEmpty()) credits.add(AnimatedEmoji.CREDIT)
         // Pop-out photos: cut the subject out on the phone, so the headline can sit behind it.
         val cutouts = HashMap<Int, Cutout>()
@@ -522,14 +544,14 @@ class Pipeline(
             val out = File(dir, "cutout_$i.png")
             if (Segmenter.cut(context, f, out)) Cutout.load(out)?.let { cutouts[i] = it }
         }
-        if (credits.isNotEmpty()) File(dir, "credits.txt").writeText(credits.joinToString("\n"))
+        if (credits.isNotEmpty()) File(dir, "credits.txt").writeText(synchronized(credits) { credits.joinToString("\n") })
         log("Motion: ${animated.size} animated emoji, ${cutouts.size} pop-out photo(s).")
 
         val motion = MotionPlan(p.id.hashCode(), p.scenes.map { it.type.lowercase(Locale.ROOT) }, look, settings.motionHistory)
         settings.motionHistory = listOf(motion.signature) + settings.motionHistory
         log("Motion plan: ${motion.describe()}")
         fun newPainter() = ScenePainter(
-            context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media, logos, look, emphasisTimes,
+            context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media, logosFinal, look, emphasisTimes,
             animated, cutouts, stutter12 = settings.stutter12, motionPlan = motion,
         )
         var painter = newPainter()
@@ -558,19 +580,34 @@ class Pipeline(
             // One render at a time on the phone: it is much faster than several sharing it.
             if (!RenderGate.acquire(RenderGate.render, cancelled) { step("Waiting for the video before it to finish rendering", null); log("Another video is rendering; this one starts right after it.") }) return
             try {
-                step("Rendering the video", 0f)
-                try {
-                    renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled) { step("Rendering the video", it) }
-                } catch (e: Throwable) {
-                    if (cancelled()) throw e
-                    // Never give up on the first problem: free memory and render again on one thread,
-                    // at the same quality (the way every version before 3.3 rendered).
-                    log("Render problem (${(e.message ?: e.javaClass.simpleName).take(90)}). Freeing memory and rendering again in safe mode…")
-                    runCatching { painter.release() }
-                    System.gc()
-                    painter = newPainter()
-                    step("Rendering the video (safe mode)", 0f)
-                    renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled, twoThreads = false) { step("Rendering the video (safe mode)", it) }
+                // Fastest first: the graphics chip (Android 10+), then the CPU with two threads, then one
+                // thread. Every mode makes the same video; a problem in one moves to the next.
+                if (settings.gpuAttempt) {
+                    // The last GPU render never finished (the app was closed by it): this phone renders on the CPU from now on.
+                    settings.gpuAttempt = false
+                    settings.gpuRender = false
+                    log("The graphics-chip render did not finish last time, so this phone now renders on the CPU (Settings can switch it back).")
+                }
+                val modes = (if (android.os.Build.VERSION.SDK_INT >= 29 && settings.gpuRender) listOf(RenderMode.GPU) else emptyList()) +
+                    listOf(RenderMode.TWO_THREADS, RenderMode.ONE_THREAD)
+                for ((n, mode) in modes.withIndex()) {
+                    val label = when (mode) { RenderMode.GPU -> "Rendering the video (graphics chip)"; RenderMode.TWO_THREADS -> "Rendering the video"; RenderMode.ONE_THREAD -> "Rendering the video (safe mode)" }
+                    step(label, 0f)
+                    val t0 = System.currentTimeMillis()
+                    if (mode == RenderMode.GPU) settings.gpuAttempt = true
+                    try {
+                        renderer.render(painter, timeline.duration, voice.audio, audioPlan, p.video(store.root), cancelled, mode) { step(label, it) }
+                        settings.gpuAttempt = false
+                        log(String.format("Rendered on the %s in %d s.", if (mode == RenderMode.GPU) "graphics chip" else "CPU", (System.currentTimeMillis() - t0) / 1000))
+                        break
+                    } catch (e: Throwable) {
+                        settings.gpuAttempt = false
+                        if (cancelled() || n == modes.lastIndex) throw e
+                        log("Render problem (${(e.message ?: e.javaClass.simpleName).take(90)}); trying again a safer way…")
+                        runCatching { painter.release() }
+                        System.gc()
+                        painter = newPainter()
+                    }
                 }
             } finally {
                 RenderGate.render.release()
@@ -631,6 +668,10 @@ class Pipeline(
 
     companion object {
         const val BUILT_IN = "built-in writer"
+        /** Longest the online step (voice, pictures, clips, logos) may take. */
+        const val GATHER_LIMIT_MS = 75_000L
+        /** Longest the free AI services get to write a script before the built-in writer takes over. */
+        const val SCRIPT_LIMIT_MS = 150_000L
         const val STUDIO_MARK = "[Live research by the premium studio]"
 
         /**

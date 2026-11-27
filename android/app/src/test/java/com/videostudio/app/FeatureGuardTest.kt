@@ -124,9 +124,27 @@ class FeatureGuardTest {
         for (heavy in listOf("com.anthropic", "jackson", "opentelemetry", "kotlin-reflect")) assertTrue("no $heavy dependency", heavy !in gradle)
         assertTrue(File("src/main/AndroidManifest.xml").readText().contains("android:largeHeap=\"true\""))
         val renderer = File("src/main/java/com/videostudio/app/render/VideoRenderer.kt").readText()
-        assertTrue(renderer.contains("val buffers = if (twoThreads) 2 else 1"))
+        assertTrue("at most two frame buffers", renderer.contains("RenderMode.GPU -> 0; RenderMode.TWO_THREADS -> 2; RenderMode.ONE_THREAD -> 1"))
         val pipeline = File("src/main/java/com/videostudio/app/work/Pipeline.kt").readText()
         assertTrue(pipeline.contains("MediaLoad.fit(f)"))
-        assertTrue(pipeline.contains("twoThreads = false"))
+        assertTrue("safe one-thread retry is always the last resort", pipeline.contains("RenderMode.ONE_THREAD)") && pipeline.contains("painter = newPainter()"))
+    }
+
+    @Test fun fastOneTapPipelineRules() {
+        // 3.7: one tap -> online step with a time limit -> offline render on the graphics chip.
+        assertTrue(settings.autoMake)
+        assertTrue(settings.gpuRender)
+        val pipeline = File("src/main/java/com/videostudio/app/work/Pipeline.kt").readText()
+        assertTrue("downloads have a time limit", pipeline.contains("GATHER_LIMIT_MS = 75_000L"))
+        assertTrue("script step has a time limit", pipeline.contains("SCRIPT_LIMIT_MS = 150_000L"))
+        assertTrue("voice records while pictures download", pipeline.indexOf("jobs += pool.submit") < pipeline.indexOf("EdgeTts.speak("))
+        assertTrue("GPU first, then CPU two threads, then one", pipeline.contains("listOf(RenderMode.GPU)") && pipeline.contains("listOf(RenderMode.TWO_THREADS, RenderMode.ONE_THREAD)"))
+        val renderer = File("src/main/java/com/videostudio/app/render/VideoRenderer.kt").readText()
+        assertTrue("GPU frames keep exact timestamps (EGL present)", renderer.contains("lockHardwareCanvas") && renderer.contains("egl.present(i * 1_000_000_000L / fps)"))
+        assertTrue("GPU output is checked for real pictures", renderer.contains("drew an empty frame"))
+        for (f in listOf("ai/BackupAi.kt", "ai/Gemini.kt", "ai/MediaFinder.kt", "ai/Stock.kt"))
+            assertTrue("$f has a call time limit", File("src/main/java/com/videostudio/app/$f").readText().contains("callTimeout("))
+        assertTrue(File("src/main/java/com/videostudio/app/ui/NewVideoScreen.kt").readText().contains("it.render(q)"))
+        assertTrue("a GPU render that kills the app switches that phone to the CPU", pipeline.contains("settings.gpuAttempt = true") && pipeline.contains("settings.gpuRender = false"))
     }
 }

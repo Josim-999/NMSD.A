@@ -193,7 +193,12 @@ fun NewVideoScreen(app: App, onBack: () -> Unit, onCreated: (String) -> Unit, on
                     s.language = language
                     s.voice = voice
                     s.palette = palette
-                    app.jobs.start(p.id, "script") { it.writeScript(p) }
+                    // One tap: script, then straight on to the finished video (Settings → "Make the video right after the script").
+                    val auto = s.autoMake
+                    app.jobs.start(p.id, "script") {
+                        it.writeScript(p)
+                        if (auto) app.store.get(p.id)?.takeIf { q -> q.scenes.isNotEmpty() }?.let { q -> it.render(q) }
+                    }
                     onCreated(p.id)
                 },
                 enabled = topic.isNotBlank() && s.geminiKey.isNotBlank(),

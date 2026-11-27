@@ -238,6 +238,18 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.7: one tap, online first, then offline and fast
+
+- **Where the time went** (10-60 min):
+  - free AI services were allowed up to 3-5 min each, and the chain tries about 10, so when they were overloaded the script alone could take 30+ min
+  - each picture download could wait 45-60 s
+  - the voice and the pictures happened one after another
+  - every frame was drawn on the CPU
+- **One tap:** on New video, the script is followed straight away by the voice, pictures and the finished video (Settings → "Make the video right after the script").
+- **Online step, then offline:** the voice, pictures, clips, logos and animated emoji all download at the same time, with a 75 s limit. After "Downloads done… works offline", the planning and rendering need no internet, so you can go offline.
+- **Script time limit:** free AIs get 150 s in total and 55 s each. A slow service is rested for 20 min, so the next script doesn't wait on it. Then the built-in writer finishes at once.
+- **GPU rendering (Android 10+):** frames are drawn by the graphics chip into a texture, then encoded with exact 1/30 s timestamps, so the bitrate and quality are the same as before. A content check catches any phone where this doesn't work, and the render switches automatically to the CPU (two threads, then one).
+
 ## 3.6: renders never stall, app light again
 
 - **Cause of "frame ... did not finish drawing":** memory. Background photos were decoded at up to 2160x3840 (~33 MB each), with slideshows of three, clip frames and three frame buffers. One render could need ~250+ MB, over a phone's limit, so the phone spent minutes freeing memory on a single frame.

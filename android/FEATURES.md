@@ -16,6 +16,8 @@ change, ask the owner first (with options), then update this file and the test i
 - Keep the app light: no heavy SDKs or libraries that change the Kotlin runtime (the 3.2 Claude SDK added ~10 MB and broke renders). Talk to AI services over plain HTTPS.
 - Never decode video or large media while rendering; prepare it before. Pictures are capped to the 1080x1920 frame.
 - One render at a time; a failed render retries itself once in safe mode before showing an error.
+- One tap makes the whole video. All internet work happens first, in parallel, with time limits; after that the video finishes even offline.
+- Speed target: script within ~2.5 min, downloads within 75 s, render on the graphics chip; never lower the quality to go faster.
 
 ## Script
 | Feature | Since | Where |
@@ -85,3 +87,9 @@ change, ask the owner first (with options), then update this file and the test i
 | Automatic safe-mode retry (fresh painter, one thread, same quality) before any render error | 3.6 | `Pipeline.render` |
 | Every build renders a full 60 s video frame by frame on two threads (classic and glass) and checks frame times | 3.6 | `RenderSafetyTest` |
 | Total making time shown in the log ("whole video 1 min 52 s") | 3.6 | `Pipeline.render` |
+| One tap: New video goes from script straight to the finished video (Settings toggle, on) | 3.7 | `NewVideoScreen`, Settings `autoMake` |
+| Online step first, all in parallel with a 75 s limit (voice + pictures + clips + logos + animated emoji); then everything works offline | 3.7 | `Pipeline.render`, `GATHER_LIMIT_MS` |
+| Script step time limit 150 s; slow AI services skipped and rested 20 min; then the built-in writer | 3.7 | `Pipeline.scriptReply`, `BackupAi` |
+| GPU rendering (Android 10+): hardware canvas into a texture, exact 1/fps timestamps, content check, automatic CPU fallback | 3.7 | `VideoRenderer.GpuFrames`, `RenderMode` |
+| Network call limits: free AIs 55 s, Gemini 100 s, pictures 30 s, stock clips 45 s; pop-out cutouts 15 s | 3.7 | ai/*, `Cutout` |
+| Crash guard: a GPU render that never finished switches that phone to CPU rendering automatically | 3.7 | Settings `gpuAttempt`, Pipeline |

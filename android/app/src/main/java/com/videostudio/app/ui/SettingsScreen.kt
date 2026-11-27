@@ -217,6 +217,14 @@ fun SettingsScreen(app: App, onBack: () -> Unit) {
                 ToggleRow("Smooth motion (60 fps)", "Silkier animations and transitions. Rendering takes about twice as long.", smooth) {
                     smooth = it; s.smooth60 = it
                 }
+                var autoMake by remember { mutableStateOf(s.autoMake) }
+                ToggleRow("Make the video right after the script", "One tap on New video: the script, voice, pictures and the finished video, without waiting for you in between.", autoMake) {
+                    autoMake = it; s.autoMake = it
+                }
+                var gpu by remember { mutableStateOf(s.gpuRender) }
+                ToggleRow("Fast rendering on the graphics chip", "Draws the video on the phone's graphics chip (Android 10+), many times faster, same quality. If it ever fails, the app renders the normal way by itself.", gpu) {
+                    gpu = it; s.gpuRender = it
+                }
                 var backdrops by remember { mutableStateOf(s.backdrops) }
                 ToggleRow("Pictures behind talking scenes", "Each talking scene shows a matching photo or clip behind the words, toned so the text stays easy to read.", backdrops) {
                     backdrops = it; s.backdrops = it

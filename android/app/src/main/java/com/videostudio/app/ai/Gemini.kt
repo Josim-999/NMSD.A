@@ -39,7 +39,8 @@ class Gemini(
 ) {
     private val http = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.MINUTES)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .callTimeout(100, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
