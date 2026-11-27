@@ -12,7 +12,7 @@ import android.content.Context
  */
 object Migrations {
     /** Version of the stored data this app writes. 1 = Video Studio 1.0 to 1.3. */
-    const val CURRENT = 1
+    const val CURRENT = 2
 
     fun run(context: Context, store: ProjectStore) {
         val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -25,7 +25,11 @@ object Migrations {
                 .remove("social_names").remove("social_targets")
                 .apply()
         }
-        // Future steps go here: if (from < 2) { ... }
+        if (from < 2) {
+            // 3.1: every video gets a different look and colour palette: all looks and Auto palette.
+            prefs.edit().putString("look_mode", "mix").putString("palette", "auto").apply()
+        }
+        // Future steps go here: if (from < 3) { ... }
         store.reload()
         prefs.edit().putInt("data_version", CURRENT).apply()
     }

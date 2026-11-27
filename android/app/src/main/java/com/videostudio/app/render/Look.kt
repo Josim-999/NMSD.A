@@ -40,6 +40,37 @@ data class Look(val captions: Int, val transition: Int, val background: Int) {
             return Look(i % CAPTIONS, (i / CAPTIONS) % TRANSITIONS, i / (CAPTIONS * TRANSITIONS))
         }
 
+        /** The family a look belongs to: its background (soft-light, grid, aurora, glass, paper, kinetic). */
+        fun family(id: Int) = of(id).background
+
+        /**
+         * A look for a new video that never repeats recent ones:
+         * - the background family is the one used LEAST recently (all 6 families come round before any repeats);
+         * - captions and transition differ from the last video;
+         * - the exact look is not one of the recent ones ([history], newest first).
+         */
+        fun pickFresh(seed: Int, history: List<Int>, mode: String = "mix"): Int {
+            val recent = history.filter { it in 0 until COUNT }
+            val families = (0 until BACKGROUNDS).filter { b ->
+                when (mode) {
+                    "glass" -> b == GLASS; "paper" -> b == PAPER; "kinetic" -> b == KINETIC
+                    "classic" -> b < GLASS
+                    else -> true
+                }
+            }
+            // Least recently used family: never used first, else the one whose last use is oldest.
+            val lastUse = families.associateWith { f -> recent.indexOfFirst { family(it) == f }.let { if (it < 0) Int.MAX_VALUE else it } }
+            val oldest = lastUse.values.maxOrNull() ?: 0
+            val candidates = families.filter { lastUse[it] == oldest }
+            val fam = candidates[Math.floorMod(seed, candidates.size)]
+            val prev = recent.firstOrNull()?.let { of(it) }
+            val options = (0 until COUNT).map { of(it) }.filter { l ->
+                l.background == fam && l.id !in recent &&
+                    (prev == null || (l.captions != prev.captions && l.transition != prev.transition))
+            }.ifEmpty { (0 until COUNT).map { of(it) }.filter { it.background == fam && it.id != recent.firstOrNull() } }
+            return options[Math.floorMod(seed / 7, options.size)].id
+        }
+
         /** A look for a new video: every part differs from [last] (when there is one); [seed] picks among them. */
         fun pick(seed: Int, last: Int, mode: String = "mix"): Int {
             val prev = if (last in 0 until COUNT) of(last) else null

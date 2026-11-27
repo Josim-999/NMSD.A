@@ -84,7 +84,7 @@ class Settings(context: Context) {
         set(v) = put("series_promise", v)
 
     var palette: String
-        get() = str("palette", "electric")
+        get() = str("palette", "auto")
         set(v) = put("palette", v)
 
     var quality: String
@@ -208,4 +208,19 @@ class Settings(context: Context) {
     var expressiveVoiceName: String
         get() = str("expressive_voice_name", "Puck")
         set(v) = put("expressive_voice_name", v)
+
+    /** The looks of the last videos, newest first (so no look repeats soon). */
+    var styleHistory: List<Int>
+        get() = str("style_history", "").split(',').mapNotNull { it.trim().toIntOrNull() }
+        set(v) = put("style_history", v.take(12).joinToString(","))
+
+    /** The colour palettes of the last videos, newest first. */
+    var paletteHistory: List<String>
+        get() = str("palette_history", "").split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        set(v) = put("palette_history", v.take(8).joinToString(","))
+
+    /** The motion plans (motif:caption) of the last videos, newest first. */
+    var motionHistory: List<String>
+        get() = str("motion_history", "").split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        set(v) = put("motion_history", v.take(10).joinToString(","))
 }

@@ -35,6 +35,16 @@ object Palettes {
 
     fun find(id: String) = all.firstOrNull { it.id == id } ?: all.first()
 
+    /** "Auto": a different colour palette every video, the least recently used one ([history] newest first). */
+    const val AUTO = "auto"
+
+    fun pickFresh(seed: Int, history: List<String>): String {
+        val lastUse = all.associate { p -> p.id to history.indexOf(p.id).let { if (it < 0) Int.MAX_VALUE else it } }
+        val oldest = lastUse.values.maxOrNull() ?: 0
+        val candidates = all.filter { lastUse[it.id] == oldest }
+        return candidates[Math.floorMod(seed, candidates.size)].id
+    }
+
     /** Liquid-glass light theme: pastel mesh, charcoal text, purple → coral accents. */
     val GLASS_LIGHT = Palette(
         "glass", "Glass light", Color.rgb(247, 245, 251), Color.rgb(239, 234, 248),

@@ -238,6 +238,32 @@ Every look now opens the way top Shorts do:
 - **Guarantee:** if a script is still short, the AI is asked once more. Then keyless Wikipedia fact scenes are added before the ending, and finally a short recap scene.
 - The voice is re-recorded slower or faster (at most ±12 points) when it lands outside 50-60 s. A video just under 50 s holds its ending (comment question on screen, music playing) for up to 4.5 s.
 
+## 3.1: motion library and style rotation (every video looks different)
+
+**Motion library (`render/MotionPlan.kt`), about 115 named techniques**, picked per video by a planner:
+
+| Group | Count | Examples |
+|---|---|---|
+| Text entrances (per line) | 20 | slide up/down/left/right, slam, giant zoom-out, pop, typewriter, mask reveals, split-open, 3D flips, elastic, bounce drop, glitch-in, tracking-in, rotate-in |
+| Transitions between scenes | 21 | 3D push-blur, slide-up, whip-pan, iris, swipes, zoom-blur, dip-to-black, white flash, doors (2), blinds, clock wipe, diagonal wipe, corner circle, glitch cut, cube rotate, card flip, slide-over, spin-zoom, ink drop |
+| Emphasis hits (on key words) | 15 | zoom punch, shake, colour flash, glow pulse, sparkle burst, shine sweep, jelly, wiggle, ring burst, speed lines, starburst, mini confetti, screen bounce, RGB flash, letterbox slam |
+| Background motifs (per video) | 12 | starfield, drifting particles, bokeh, moving stripes, halftone, pulse rings, topographic lines, light sweep, wave lines, floating shapes, scanlines, light leaks |
+| Scene overlays | 11 | corner brackets, sparkles, lens flare, floating shapes, timer ring, arrow pointer, highlight ring, light-leak flash, scan band, orbiting dots, confetti |
+| Camera moves | 10 | push-in, pull-out, pans, dutch tilt, handheld, orbit sway, crash zoom, float bob, rotate-settle |
+| Caption styles | 8 | chip, colour pop, boxed, glow, karaoke fill, bounce word, glass, marker |
+| Data graphics | 12 | bars, donut (shares ~100%), line graph (years), counter, progress ring, list, steps, myth vs fact, timeline, tier list, map, document |
+| Background families | 6 | soft light, grid, aurora, liquid glass, paper sketch, kinetic type |
+
+**Rules**
+- Scene 1 is always still and readable on its first frame (the feed preview).
+- No technique repeats on two scenes in a row, and inside a video the least-used option is picked first.
+- Every third cut uses the look's signature transition.
+- Busy scenes (charts, maps, documents, photos) get no overlay, and data scenes keep their own motion.
+- Every emphasis word gets a different hit (all 14 rotate before one comes back).
+- Across videos, the background motif and caption style rotate least-recently-used (`motion_history`).
+- Look rotation: the background family is least-recently-used, so every 6 videos use all 6 families. No look repeats within the last 12, and the caption style and transition always change from the previous video.
+- Palette "Auto" (the new default) rotates through all 8 palettes before one repeats.
+
 ## 3.0: playbook upgrade (script, motion, voice, sound)
 
 - **Script:**

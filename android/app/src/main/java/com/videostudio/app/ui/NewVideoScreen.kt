@@ -139,7 +139,16 @@ fun NewVideoScreen(app: App, onBack: () -> Unit, onCreated: (String) -> Unit, on
                 }
             }
             Section("Look") {
+                Hint("Auto: a different colour palette every video (recommended). Or pick one to fix it for this video.")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { palette = Palettes.AUTO }) {
+                        Box(
+                            Modifier.size(48.dp).clip(CircleShape)
+                                .background(Brush.sweepGradient(Palettes.all.map { Color(it.accent) }))
+                                .border(if (palette == Palettes.AUTO) 3.dp else 1.dp, if (palette == Palettes.AUTO) Accent else Surface2, CircleShape),
+                        )
+                        Text("Auto", color = if (palette == Palettes.AUTO) Accent else Muted, style = androidx.compose.material3.MaterialTheme.typography.labelSmall)
+                    }
                     for (pal in Palettes.all) {
                         val selected = pal.id == palette
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { palette = pal.id }) {

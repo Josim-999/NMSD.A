@@ -249,8 +249,10 @@ private fun ScriptTab(app: App, p: Project, job: JobState?, toVideo: () -> Unit)
     }
     TextButton(enabled = !busy, onClick = {
         val fresh = app.store.get(p.id) ?: p
-        fresh.style = com.videostudio.app.render.Look.pick((System.nanoTime() % 100000).toInt(), fresh.style.takeIf { it >= 0 } ?: app.settings.lastStyle, app.settings.lookMode)
+        val hist = listOfNotNull(fresh.style.takeIf { it >= 0 }) + app.settings.styleHistory
+        fresh.style = com.videostudio.app.render.Look.pickFresh((System.nanoTime() % 100000).toInt(), hist, app.settings.lookMode)
         app.settings.lastStyle = fresh.style
+        app.settings.styleHistory = listOf(fresh.style) + app.settings.styleHistory
         app.store.save(fresh)
     }) { Text("Shuffle look (then make the video again)") }
 

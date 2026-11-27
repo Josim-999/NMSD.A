@@ -50,7 +50,13 @@ class ScenePainter(
     private val cutouts: Map<Int, Cutout> = emptyMap(),
     /** Animate graphics at 12 fps inside the video (handmade, documentary feel). */
     stutter12: Boolean = false,
+    /** Which motion techniques each scene uses; made from the scenes when not given. */
+    motionPlan: MotionPlan? = null,
 ) {
+    private val motion: MotionPlan = motionPlan ?: MotionPlan(scenes.joinToString { it.say }.hashCode(), scenes.map { it.type.lowercase(Locale.ROOT) }, look)
+    /** The scene being drawn and its local time (for text entrances). */
+    private var curScene = -1
+    private var curLt = 0.0
     private val stutter = stutter12 || look.paper
     private val world: WorldMap? by lazy { WorldMap.load(context.applicationContext) }
     private val appContext = context.applicationContext
@@ -192,9 +198,16 @@ class ScenePainter(
         val h = layout.height.toFloat()
         val faded = alpha < 0.99f
         if (faded) c.saveLayerAlpha(-W, -h / 2 - 40, W, h / 2 + 40, (alpha * 255).toInt())
+        val ent = if (curScene <= 0) 0 else motion.entrance.getOrElse(curScene) { 0 }
         for (i in 0 until layout.lineCount) {
             val lw = layout.getLineWidth(i)
+            val ep = if (ent == 0) 1f else clamp((curLt - 0.04 - i * 0.07) / ENTRANCE_DUR).toFloat()
+            if (ent != 0 && ep <= 0f && ent != 8) continue
             c.save()
+            if (ent != 0 && ep < 1f) {
+                val lineMidY = (layout.getLineTop(i) + layout.getLineBottom(i)) / 2f - h / 2f
+                if (!entranceTransform(c, ent, ep, lw, lineMidY, (layout.getLineBottom(i) - layout.getLineTop(i)).toFloat())) { c.restore(); continue }
+            }
             c.translate(-lw / 2 - layout.getLineLeft(i), -h / 2)
             // Clip to this line only: neighbouring lines must not bleed in. Extra room above the
             // first and below the last line keeps shadows and descenders whole.
@@ -254,11 +267,13 @@ class ScenePainter(
         val span = timeline.sceneAt(t)
         manageMedia(span.index, t - span.start)
         val lt = t - span.start
+        motifLayer(c, t)
         hookBackdrop(c, t)
         // Impact shake in the opening (and on early punch words).
         val (sx, sy) = shake(t)
         c.save()
         c.translate(sx, sy)
+        emphasisTransform(c, t)
         if (t in GLITCH_A || (timeline.spans.size > 1 && t - timeline.spans[1].start in GLITCH_CUT)) glitch(c, span.index, lt, span.end - span.start, t)
         if (span.index > 0 && lt < TRANSITION) {
             val k = outCubic(lt / TRANSITION).toFloat()
@@ -266,7 +281,8 @@ class ScenePainter(
             val pt = t - prev.start
             val pd = prev.end - prev.start
             val cd = span.end - span.start
-            when (look.transition) {
+            when (motion.transition.getOrElse(span.index) { look.transition }) {
+                in 4..20 -> moreTransitions(c, motion.transition[span.index], k, prev.index, pt, pd, span.index, lt, cd, t)
                 1 -> { // slide-up: the new scene pushes the old one up
                     drawScene(c, prev.index, pt, pd, t, alpha = 1f - 0.6f * k, scale = 1f, dy = -H * 0.45f * k)
                     drawScene(c, span.index, lt, cd, t, alpha = 1f, scale = 1f, dy = H * 0.45f * (1 - k))
@@ -310,6 +326,7 @@ class ScenePainter(
             c.restore()
         }
         c.restore()
+        emphasisOverlay(c, t)
         hookOverlay(c, t)
         palette = paletteFor(span.index)
         chrome(c, t, span.index)
@@ -365,6 +382,9 @@ class ScenePainter(
         c.saveLayerAlpha(0f, 0f, W, H, (alpha * 255).toInt())
         c.translate(dx, dy)
         c.scale(scale * drift, scale * drift, W / 2, H * 0.42f)
+        cameraMove(c, motion.camera.getOrElse(index) { 0 }, lt, dur)
+        val savedScene = curScene; val savedLt = curLt
+        curScene = index; curLt = lt
         val type = scene.type.lowercase(Locale.ROOT)
         if (look.kinetic && type in KINETIC_TYPES) kineticScene(c, index, lt)
         else when (type) {
@@ -387,6 +407,8 @@ class ScenePainter(
             else -> statement(c, scene, lt)
         }
         badge(c, scene, index, lt)
+        sceneOverlay(c, motion.overlay.getOrElse(index) { 0 }, lt, dur)
+        curScene = savedScene; curLt = savedLt
         c.restore()
         palette = savedPalette
     }
@@ -510,7 +532,7 @@ class ScenePainter(
      */
     private fun captions(c: Canvas, t: Double) {
         val g = timeline.captionAt(t) ?: return
-        val style = look.captions
+        val style = motion.captionVariant.takeIf { it in 0..5 } ?: look.captions
         val pop = outBack((t - g.start) / 0.18).toFloat()
         tp.typeface = display
         tp.textSize = if (style == 1) 86f else 82f
@@ -562,6 +584,26 @@ class ScenePainter(
                     tp.style = Paint.Style.FILL
                     tp.color = if (active) hot else Color.WHITE
                     c.drawText(word, x, 0f, tp)
+                }
+                4 -> { // karaoke fill: each word fills with colour from left to right as it is spoken
+                    outline(c, word, x)
+                    tp.style = Paint.Style.FILL
+                    tp.color = Color.WHITE
+                    c.drawText(word, x, 0f, tp)
+                    val f = when { t >= nextStart -> 1f; active -> clamp((t - start) / (nextStart - start).coerceAtLeast(0.05)).toFloat(); else -> 0f }
+                    if (f > 0f) {
+                        c.save(); c.clipRect(x - 4f, -size * 1.2f, x + widths[i] * f, size * 0.5f)
+                        tp.color = hot; c.drawText(word, x, 0f, tp); c.restore()
+                    }
+                }
+                5 -> { // bounce word: the spoken word jumps up and lands
+                    val jump = if (active) (-0.35f * size * sin(Math.PI * clamp((t - start) / 0.28)).toFloat()) else 0f
+                    c.save(); c.translate(0f, jump)
+                    outline(c, word, x)
+                    tp.style = Paint.Style.FILL
+                    tp.color = if (active) hot else Color.WHITE
+                    c.drawText(word, x, 0f, tp)
+                    c.restore()
                 }
                 else -> {
                     tp.style = Paint.Style.FILL
@@ -1048,6 +1090,9 @@ class ScenePainter(
         val parsed = s.items.take(5).map { parseItem(it) }
         val values = parsed.mapNotNull { it.second }
         if (values.size < 2) { list(c, s, lt, dur, numbered = false); return }
+        // Variants: years on the labels -> line graph; shares adding up to ~100% -> donut.
+        if (parsed.size >= 3 && parsed.all { Regex("\\b(1[5-9]|20)\\d\\d\\b").containsMatchIn(it.first) }) { lineGraph(c, s, parsed, lt, dur); return }
+        if (parsed.size in 2..5 && values.all { it in 0.0..100.0 } && values.sum() in 85.0..115.0) { donut(c, s, parsed, lt, dur); return }
         var top = ZONE_TOP + 20f
         if (s.text.isNotBlank()) {
             val title = block("charttitle", upper(s.text), display, 80f, zoneW, 200f, palette.accent)
@@ -1382,6 +1427,352 @@ class ScenePainter(
                 }
             }
         }
+    }
+
+    // ---------------- Motion library: entrances, cameras, overlays, transitions, motifs, emphasis ----------------
+
+    /**
+     * Text entrance for one line of a block (progress [p] 0..1), in coordinates centred on the block.
+     * Returns false when the line should not be drawn yet.
+     */
+    private fun entranceTransform(c: Canvas, kind: Int, p: Float, lw: Float, midY: Float, lh: Float): Boolean {
+        val e = outCubic(p.toDouble()).toFloat()
+        val b = outBack(p.toDouble()).toFloat()
+        when (kind) {
+            1 -> c.translate(0f, 90f * (1 - e))                                  // slide-up
+            2 -> c.translate(0f, -90f * (1 - e))                                 // slide-down
+            3 -> c.translate(260f * (1 - e), 0f)                                 // slide-in-right
+            4 -> c.translate(-260f * (1 - e), 0f)                                // slide-in-left
+            5 -> { val sc = 2.2f - 1.2f * b; c.scale(sc, sc, 0f, midY) }          // slam
+            6 -> { val sc = 4f - 3f * e; c.scale(sc, sc, 0f, midY) }              // giant-zoom-out
+            7 -> { val sc = spring(p.toDouble()).toFloat(); c.scale(sc, sc, 0f, midY) } // pop
+            8 -> c.clipRect(-lw / 2 - 20f, -10000f, -lw / 2 + (lw + 40f) * p, 10000f) // typewriter
+            9 -> { c.clipRect(-10000f, midY - lh / 2 - 10f, 10000f, midY + lh / 2 + 30f); c.translate(0f, lh * (1 - e)) } // mask-reveal-up
+            10 -> { c.clipRect(-lw / 2 - 20f, -10000f, -lw / 2 + (lw + 40f) * e, 10000f); c.translate(-60f * (1 - e), 0f) } // mask-reveal-left
+            11 -> c.clipRect(-10000f, midY - lh * e / 2 - 4f, 10000f, midY + lh * e / 2 + 20f) // split-open
+            12 -> { cam.save(); cam.rotateX(90f * (1 - e)); cam.getMatrix(camMatrix); cam.restore()
+                    camMatrix.preTranslate(0f, -midY); camMatrix.postTranslate(0f, midY); c.concat(camMatrix) } // flip-x
+            13 -> { cam.save(); cam.rotateY(90f * (1 - e)); cam.getMatrix(camMatrix); cam.restore(); c.concat(camMatrix) } // flip-y
+            14 -> { val sp = spring(p.toDouble()).toFloat(); c.scale(1.6f - 0.6f * sp, 0.4f + 0.6f * sp, 0f, midY) } // elastic
+            15 -> { val y = -300f * (1 - bounceOut(p)); c.translate(0f, y) }      // bounce-drop
+            16 -> { c.translate(0f, 18f * (1 - e)); if (p < 0.5f) c.scale(1.04f, 1.04f, 0f, midY) } // blur-in (ghosting via alpha below)
+            17 -> { if (p < 0.6f) c.translate(((sin(p * 90.0) * 40) * (1 - p)).toFloat(), 0f) } // glitch-in
+            18 -> c.scale(1.45f - 0.45f * e, 1f, 0f, midY)                       // tracking-in
+            19 -> { c.rotate(-24f * (1 - b), 0f, midY); val sc = 0.6f + 0.4f * b; c.scale(sc, sc, 0f, midY) } // rotate-in
+        }
+        return true
+    }
+
+    private fun bounceOut(p: Float): Float {
+        val x = p.coerceIn(0f, 1f)
+        return when {
+            x < 1 / 2.75f -> 7.5625f * x * x
+            x < 2 / 2.75f -> { val y = x - 1.5f / 2.75f; 7.5625f * y * y + 0.75f }
+            x < 2.5 / 2.75f -> { val y = x - 2.25f / 2.75f; 7.5625f * y * y + 0.9375f }
+            else -> { val y = x - 2.625f / 2.75f; 7.5625f * y * y + 0.984375f }
+        }
+    }
+
+    /** Per-scene camera move on top of the slow push-in. */
+    private fun cameraMove(c: Canvas, kind: Int, lt: Double, dur: Double) {
+        val p = clamp(lt / dur).toFloat()
+        when (kind) {
+            1 -> { val sc = 1.07f - 0.07f * p; c.scale(sc, sc, W / 2, H * 0.45f) }                  // pull-out
+            2 -> c.translate(40f - 80f * p, 0f)                                                     // pan-left
+            3 -> c.translate(-40f + 80f * p, 0f)                                                    // pan-right
+            4 -> c.rotate(2.5f * outCubic(lt / 0.5).toFloat(), W / 2, H * 0.45f)                     // dutch-tilt
+            5 -> c.translate((6 * sin(lt * 2.3) + 3 * sin(lt * 5.1)).toFloat(), (5 * cos(lt * 1.9) + 2 * sin(lt * 4.3)).toFloat()) // handheld
+            6 -> { cam.save(); cam.rotateY((6 * sin(lt * 0.9)).toFloat()); cam.getMatrix(camMatrix); cam.restore()
+                   camMatrix.preTranslate(-W / 2, -H * 0.45f); camMatrix.postTranslate(W / 2, H * 0.45f); c.concat(camMatrix) } // orbit-sway
+            7 -> { val sc = 1f + 0.22f * (1f - outCubic(lt / 0.22).toFloat()); c.scale(sc, sc, W / 2, H * 0.45f) } // crash-zoom
+            8 -> c.translate(0f, (10 * sin(lt * 2.0)).toFloat())                                    // float-bob
+            9 -> c.rotate(4f * (1f - outCubic(lt / 0.5).toFloat()), W / 2, H * 0.45f)                // rotate-settle
+        }
+    }
+
+    /** Decorative overlay for a scene (drawn with the scene, so it moves with transitions). */
+    private fun sceneOverlay(c: Canvas, kind: Int, lt: Double, dur: Double) {
+        if (kind == 0) return
+        val a = clamp(lt / 0.3).toFloat()
+        val col = palette.accent
+        stroke.shader = null; fill.shader = null
+        when (kind) {
+            1 -> { // corner brackets that snap in
+                val k = outBack(lt / 0.4).toFloat(); val m = 70f + 30f * (1 - k); val len = 90f
+                stroke.strokeWidth = 8f; stroke.color = withAlpha(col, (230 * a).toInt())
+                for ((x, y, sx, sy) in listOf(floatArrayOf(m, ZONE_TOP - 40f, 1f, 1f), floatArrayOf(W - m, ZONE_TOP - 40f, -1f, 1f), floatArrayOf(m, ZONE_BOTTOM + 20f, 1f, -1f), floatArrayOf(W - m, ZONE_BOTTOM + 20f, -1f, -1f)).map { it.toList() }) {
+                    c.drawLine(x, y, x + len * sx, y, stroke); c.drawLine(x, y, x, y + len * sy, stroke)
+                }
+            }
+            2 -> for (i in 0 until 9) { // sparkles twinkling around the centre
+                val ang = i * 0.7 + lt * 0.4; val r = 330f + 60f * sin(i * 1.7).toFloat()
+                val tw = (0.5 + 0.5 * sin(lt * 5 + i)).toFloat()
+                star(c, W / 2 + (r * cos(ang)).toFloat(), zoneMid + (r * sin(ang)).toFloat() * 1.2f, 10f + 14f * tw, withAlpha(palette.accent2, (220 * a * tw).toInt()))
+            }
+            3 -> { // lens flare sweeping once
+                val x = -300f + (W + 600f) * clamp((lt - 0.2) / 0.9).toFloat()
+                fill.shader = RadialGradient(x, ZONE_TOP + 100f, 260f, intArrayOf(Color.argb(120, 255, 255, 255), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(x, ZONE_TOP + 100f, 260f, fill); fill.shader = null
+                fill.color = Color.argb(60, 255, 255, 255); c.drawRect(x - 4f, 0f, x + 4f, H, fill)
+            }
+            4 -> for (i in 0 until 6) { // floating outline shapes
+                val x = W * ((i * 0.37f + 0.1f) % 1f); val y = H * 0.2f + ((lt * 30 + i * 260) % (H * 0.7)).toFloat()
+                stroke.strokeWidth = 5f; stroke.color = withAlpha(if (i % 2 == 0) col else palette.accent2, (110 * a).toInt())
+                c.save(); c.rotate((lt * 40 + i * 50).toFloat(), x, y)
+                if (i % 3 == 0) c.drawRect(x - 26f, y - 26f, x + 26f, y + 26f, stroke) else if (i % 3 == 1) c.drawCircle(x, y, 26f, stroke)
+                else { path.reset(); path.moveTo(x, y - 30f); path.lineTo(x + 28f, y + 22f); path.lineTo(x - 28f, y + 22f); path.close(); c.drawPath(path, stroke) }
+                c.restore()
+            }
+            5 -> { // timer ring counting the scene down, top right
+                val cx = W - 120f; val cy = 200f
+                stroke.strokeWidth = 10f; stroke.color = withAlpha(palette.text, (60 * a).toInt()); c.drawCircle(cx, cy, 40f, stroke)
+                stroke.color = withAlpha(col, (255 * a).toInt()); rect.set(cx - 40f, cy - 40f, cx + 40f, cy + 40f)
+                c.drawArc(rect, -90f, 360f * clamp(lt / dur).toFloat(), false, stroke)
+            }
+            6 -> { // arrow pointer bobbing towards the content
+                val y = zoneMid + 260f; val x = 150f + (12 * sin(lt * 6)).toFloat()
+                fill.color = withAlpha(palette.accent2, (240 * a).toInt())
+                path.reset(); path.moveTo(x + 70f, y); path.lineTo(x, y - 40f); path.lineTo(x, y - 16f); path.lineTo(x - 60f, y - 16f)
+                path.lineTo(x - 60f, y + 16f); path.lineTo(x, y + 16f); path.lineTo(x, y + 40f); path.close()
+                c.save(); c.rotate(180f, x, y); c.drawPath(path, fill); c.restore()
+            }
+            7 -> { // highlight ring pulsing behind the content
+                val ph = ((lt * 0.8) % 1.0).toFloat()
+                stroke.strokeWidth = 6f; stroke.color = withAlpha(col, (150 * (1 - ph) * a).toInt())
+                c.drawCircle(W / 2, zoneMid, 300f + 160f * ph, stroke)
+            }
+            8 -> if (lt < 0.6) { // light leak flash at the start
+                val k = (1 - lt / 0.6).toFloat()
+                fill.shader = RadialGradient(0f, 0f, 1100f, intArrayOf(Color.argb((150 * k).toInt(), 255, 170, 80), 0), null, Shader.TileMode.CLAMP)
+                c.drawCircle(0f, 0f, 1100f, fill); fill.shader = null
+            }
+            9 -> { // scan band moving down
+                val y = ((lt * 500) % (H + 200)).toFloat() - 100f
+                fill.shader = LinearGradient(0f, y - 80f, 0f, y + 80f, intArrayOf(0, withAlpha(col, (60 * a).toInt()), 0), null, Shader.TileMode.CLAMP)
+                c.drawRect(0f, y - 80f, W, y + 80f, fill); fill.shader = null
+            }
+            10 -> for (i in 0 until 3) { // dots orbiting the centre
+                val ang = lt * 1.6 + i * 2.09
+                fill.color = withAlpha(if (i == 0) col else palette.accent2, (230 * a).toInt())
+                c.drawCircle(W / 2 + (380 * cos(ang)).toFloat(), zoneMid + (160 * sin(ang)).toFloat(), 14f, fill)
+            }
+            11 -> if (lt < 1.2) for (i in 0 until 18) { // mini confetti from the top
+                val x = W * ((i * 0.53f + 0.05f) % 1f); val y = -40f + (lt * (600 + i * 25)).toFloat() + (120 * lt * lt).toFloat()
+                fill.color = withAlpha(if (i % 2 == 0) col else palette.accent2, (230 * (1 - lt / 1.2)).toInt())
+                c.save(); c.rotate((lt * 300 + i * 40).toFloat(), x, y); c.drawRect(x - 10f, y - 5f, x + 10f, y + 5f, fill); c.restore()
+            }
+        }
+    }
+
+    private fun star(c: Canvas, x: Float, y: Float, r: Float, color: Int) {
+        fill.shader = null; fill.color = color
+        path.reset()
+        for (i in 0 until 8) {
+            val ang = Math.PI / 4 * i; val rr = if (i % 2 == 0) r else r * 0.28f
+            val px = x + (rr * cos(ang)).toFloat(); val py = y + (rr * sin(ang)).toFloat()
+            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+        }
+        path.close(); c.drawPath(path, fill)
+    }
+
+    /** Transitions 4-20 of the library (0-3 are drawn inline). */
+    private fun moreTransitions(c: Canvas, kind: Int, k: Float, pi: Int, pt: Double, pd: Double, ci: Int, lt: Double, cd: Double, t: Double) {
+        fun prev(alpha: Float = 1f, scale: Float = 1f, dx: Float = 0f, dy: Float = 0f) = drawScene(c, pi, pt, pd, t, alpha, scale, dy, dx)
+        fun cur(alpha: Float = 1f, scale: Float = 1f, dx: Float = 0f, dy: Float = 0f) = drawScene(c, ci, lt, cd, t, alpha, scale, dy, dx)
+        fun curOnBackground() { background(c, t); motifLayer(c, t); cur() }
+        when (kind) {
+            4 -> { prev(dx = -W * k); cur(dx = W * (1 - k)) }                                     // swipe-left
+            5 -> { prev(dx = W * k); cur(dx = -W * (1 - k)) }                                     // swipe-right
+            6 -> { prev(alpha = 1 - k, scale = 1f - 0.4f * k); for (g in 1 downTo 0) cur(alpha = k * (if (g == 0) 1f else 0.3f), scale = 1.3f - 0.3f * k + 0.05f * g) } // zoom-blur-out
+            7 -> { if (k < 0.5f) prev() else cur(); fill.shader = null; fill.color = Color.argb((255 * (1 - kotlin.math.abs(k - 0.5f) * 2)).toInt(), 0, 0, 0); c.drawRect(0f, 0f, W, H, fill) } // dip-to-black
+            8 -> { cur(); fill.shader = null; fill.color = Color.argb((235 * (1 - k)).toInt(), 255, 255, 255); c.drawRect(0f, 0f, W, H, fill) } // flash-white
+            9 -> { cur(); c.save(); c.clipRect(0f, 0f, W / 2, H); c.translate(-W / 2 * k, 0f); background(c, t); prev(); c.restore()
+                   c.save(); c.clipRect(W / 2, 0f, W, H); c.translate(W / 2 * k, 0f); background(c, t); prev(); c.restore() } // doors-vertical
+            10 -> { cur(); c.save(); c.clipRect(0f, 0f, W, H / 2); c.translate(0f, -H / 2 * k); background(c, t); prev(); c.restore()
+                    c.save(); c.clipRect(0f, H / 2, W, H); c.translate(0f, H / 2 * k); background(c, t); prev(); c.restore() } // doors-horizontal
+            11 -> { cur(); val n = 9; val band = H / n
+                    for (i in 0 until n) { c.save(); c.clipRect(0f, i * band, W, i * band + band * (1 - k)); background(c, t); prev(); c.restore() } } // blinds
+            12 -> { prev(); c.save(); path.reset(); path.moveTo(W / 2, H / 2); path.arcTo(RectF(-H, -H / 2, W + H, H * 1.5f), -90f, 360f * k); path.close(); c.clipPath(path); curOnBackground(); c.restore() } // clock-wipe
+            13 -> { prev(); c.save(); path.reset(); val x = -W + (W * 3) * k; path.moveTo(x - H * 0.4f, 0f); path.lineTo(x - W * 2, 0f); path.lineTo(x - W * 2, H); path.lineTo(x - H * 0.4f - H * 0.4f, H); path.close(); c.clipPath(path); curOnBackground(); c.restore() } // diagonal-wipe
+            14 -> { prev(); c.save(); path.reset(); path.addCircle(W, H, 40f + k * (H * 1.2f), Path.Direction.CW); c.clipPath(path); curOnBackground(); c.restore() } // corner-circle
+            15 -> { val bands = 7; val bh = H / bands
+                    for (i in 0 until bands) { c.save(); c.clipRect(0f, i * bh, W, (i + 1) * bh); val off = ((sin(i * 12.9 + k * 30) * 80) * (1 - kotlin.math.abs(k - 0.5f) * 2)).toFloat()
+                        c.translate(off, 0f); if (k < 0.5f) prev() else cur(); c.restore() } } // glitch-cut
+            16 -> { c.save(); cam.save(); cam.rotateY(-90f * k); cam.getMatrix(camMatrix); cam.restore(); camMatrix.preTranslate(-W, -H / 2); camMatrix.postTranslate(W, H / 2); c.concat(camMatrix); prev(); c.restore()
+                    c.save(); cam.save(); cam.rotateY(90f * (1 - k)); cam.getMatrix(camMatrix); cam.restore(); camMatrix.preTranslate(0f, -H / 2); camMatrix.postTranslate(0f, H / 2); c.concat(camMatrix); cur(); c.restore() } // cube-rotate
+            17 -> { c.save(); cam.save(); cam.rotateY(if (k < 0.5f) 180f * k else -180f * (1 - k)); cam.getMatrix(camMatrix); cam.restore(); camMatrix.preTranslate(-W / 2, -H / 2); camMatrix.postTranslate(W / 2, H / 2); c.concat(camMatrix)
+                    if (k < 0.5f) prev() else cur(); c.restore() } // card-flip
+            18 -> { prev(scale = 1f - 0.08f * k); fill.shader = null; fill.color = Color.argb((120 * k).toInt(), 0, 0, 0); c.drawRect(0f, 0f, W, H, fill)
+                    c.save(); c.translate(0f, H * (1 - k)); shadowPaint.color = Color.argb(140, 0, 0, 0); c.drawRect(0f, -30f, W, 30f, shadowPaint); c.clipRect(0f, 0f, W, H); background(c, t); cur(); c.restore() } // slide-over
+            19 -> { c.save(); c.rotate(90f * k, W / 2, H / 2); prev(alpha = 1 - k, scale = 1f - 0.7f * k); c.restore()
+                    c.save(); c.rotate(-90f * (1 - k), W / 2, H / 2); cur(alpha = k, scale = 0.3f + 0.7f * k); c.restore() } // spin-zoom
+            20 -> { prev(); c.save(); path.reset(); val r = 40f + k * H
+                    for (i in 0..36) { val ang = i * Math.PI * 2 / 36; val rr = r * (1 + 0.08f * sin(i * 3.1 + k * 6).toFloat())
+                        val x = W / 2 + (rr * cos(ang)).toFloat(); val y = H * 0.45f + (rr * sin(ang)).toFloat(); if (i == 0) path.moveTo(x, y) else path.lineTo(x, y) }
+                    path.close(); c.clipPath(path); curOnBackground(); c.restore() } // ink-drop
+        }
+    }
+
+    /** The video's background motif, softly over the background. */
+    private fun motifLayer(c: Canvas, t: Double) {
+        val m = motion.motif
+        if (m == 0) return
+        val light = luminance(palette.text) < 0.4
+        val base = if (light) palette.accent else Color.WHITE
+        fun col(a: Int) = withAlpha(base, if (light) (a * 0.8).toInt() else a)
+        stroke.shader = null; fill.shader = null
+        when (m) {
+            1 -> for (i in 0 until 70) { val x = (i * 157 % 1080).toFloat(); val y = (i * 263 % 1920).toFloat(); val tw = (0.5 + 0.5 * sin(t * 2 + i)).toFloat()
+                    fill.color = col((90 * tw).toInt()); c.drawCircle(x, y, 2f + 2f * tw, fill) } // starfield
+            2 -> for (i in 0 until 40) { val x = (i * 211 % 1080).toFloat() + (20 * sin(t + i)).toFloat(); val y = H - ((t * (40 + i % 7 * 12) + i * 97) % (H + 40)).toFloat()
+                    fill.color = col(60); c.drawCircle(x, y, 4f + i % 4, fill) } // drifting particles
+            3 -> for (i in 0 until 9) { val x = (i * 389 % 1080).toFloat() + (40 * sin(t * 0.3 + i)).toFloat(); val y = (i * 541 % 1920).toFloat()
+                    fill.shader = RadialGradient(x, y, 110f + i * 12, intArrayOf(withAlpha(if (i % 2 == 0) palette.accent else palette.accent2, 45), 0), null, Shader.TileMode.CLAMP)
+                    c.drawCircle(x, y, 110f + i * 12, fill); fill.shader = null } // bokeh
+            4 -> { stroke.strokeWidth = 34f; stroke.color = col(14); val off = ((t * 60) % 160).toFloat()
+                    var x = -H + off; while (x < W) { c.drawLine(x, H, x + H, 0f, stroke); x += 160f } } // moving stripes
+            5 -> { var y = 0f; while (y < H) { var x = if ((y / 46).toInt() % 2 == 0) 0f else 23f; val r = 2f + 5f * (y / H)
+                    while (x < W) { fill.color = col(30); c.drawCircle(x, y, r, fill); x += 46f }; y += 46f } } // halftone
+            6 -> for (i in 0 until 5) { val ph = ((t * 0.25 + i / 5.0) % 1.0).toFloat(); stroke.strokeWidth = 3f; stroke.color = col((50 * (1 - ph)).toInt())
+                    c.drawCircle(W / 2, H * 0.45f, 120f + ph * 1100f, stroke) } // pulse rings
+            7 -> for (j in 0 until 14) { path.reset(); var x = 0f; val baseY = j * 150f + (t * 8 % 150).toFloat()
+                    while (x <= W) { val y = baseY + 30f * sin(x / 180.0 + j * 0.8 + t * 0.2).toFloat(); if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y); x += 30f }
+                    stroke.strokeWidth = 2f; stroke.color = col(28); c.drawPath(path, stroke) } // topographic
+            8 -> { val x = ((t * 180) % (W + 1200)).toFloat() - 600f
+                    fill.shader = LinearGradient(x - 300f, 0f, x + 300f, 0f, intArrayOf(0, col(40), 0), null, Shader.TileMode.CLAMP)
+                    c.save(); c.rotate(-20f, W / 2, H / 2); c.drawRect(x - 300f, -400f, x + 300f, H + 400f, fill); c.restore(); fill.shader = null } // light sweep
+            9 -> for (j in 0 until 4) { path.reset(); var x = 0f; val baseY = H * (0.62f + j * 0.08f)
+                    while (x <= W) { val y = baseY + 26f * sin(x / 150.0 + t * (1.0 + j * 0.3)).toFloat(); if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y); x += 24f }
+                    stroke.strokeWidth = 3f; stroke.color = col(40 - j * 6); c.drawPath(path, stroke) } // wave lines
+            10 -> for (i in 0 until 7) { val x = (i * 173 % 1000 + 40).toFloat(); val y = (i * 311 % 1800 + 60).toFloat() + (30 * sin(t * 0.6 + i)).toFloat()
+                    stroke.strokeWidth = 4f; stroke.color = col(40); c.save(); c.rotate((t * 15 + i * 40).toFloat(), x, y)
+                    if (i % 2 == 0) c.drawRect(x - 34f, y - 34f, x + 34f, y + 34f, stroke) else c.drawCircle(x, y, 32f, stroke); c.restore() } // floating shapes
+            11 -> { fill.color = col(16); var y = (t * 30 % 8).toFloat(); while (y < H) { c.drawRect(0f, y, W, y + 2f, fill); y += 8f } } // scanlines
+            12 -> for ((i, xy) in listOf(0f to 0f, W to H, W to 0f).withIndex()) { val pulse = (0.6 + 0.4 * sin(t * 0.8 + i * 2)).toFloat()
+                    fill.shader = RadialGradient(xy.first, xy.second, 700f, intArrayOf(Color.argb((50 * pulse).toInt(), 255, 150, 60), 0), null, Shader.TileMode.CLAMP)
+                    c.drawCircle(xy.first, xy.second, 700f, fill); fill.shader = null } // light leaks
+        }
+    }
+
+    /** Which emphasis word is landing now: its index and how long ago (s), or null. */
+    private fun activeEmphasis(t: Double): Pair<Int, Double>? {
+        emphasisTimes.forEachIndexed { i, e -> val x = t - e; if (x in 0.0..0.6) return i to x }
+        return null
+    }
+
+    /** Emphasis hits that move the whole frame (shake, jelly, wiggle, bounce). */
+    private fun emphasisTransform(c: Canvas, t: Double) {
+        val (n, x) = activeEmphasis(t) ?: return
+        if (timeline.spans.isNotEmpty() && t < (timeline.spans.first().end)) return // the hook has its own intro
+        val d = kotlin.math.exp(-x * 7).toFloat()
+        when (motion.emphasis(n)) {
+            1 -> c.translate((18 * d * sin(x * 90)).toFloat(), (12 * d * cos(x * 70)).toFloat())
+            6 -> { val j = (0.06 * d * sin(x * 40)).toFloat(); c.scale(1 + j, 1 - j, W / 2, H * 0.45f) }
+            7 -> c.rotate((3 * d * sin(x * 35)).toFloat(), W / 2, H * 0.45f)
+            12 -> c.translate(0f, (-40 * d * kotlin.math.abs(sin(x * 18))).toFloat())
+        }
+    }
+
+    /** Emphasis hits drawn over the frame. */
+    private fun emphasisOverlay(c: Canvas, t: Double) {
+        val (n, x) = activeEmphasis(t) ?: return
+        if (timeline.spans.isNotEmpty() && t < (timeline.spans.first().end)) return
+        val k = (x / 0.6).toFloat(); val a = 1f - k
+        val cy = zoneMid
+        fill.shader = null; stroke.shader = null
+        when (motion.emphasis(n)) {
+            2 -> { fill.color = withAlpha(palette.accent, (70 * a).toInt()); c.drawRect(0f, 0f, W, H, fill) } // colour flash
+            3 -> { fill.shader = RadialGradient(W / 2, cy, 700f, intArrayOf(withAlpha(palette.accent, (110 * a).toInt()), 0), null, Shader.TileMode.CLAMP); c.drawCircle(W / 2, cy, 700f, fill); fill.shader = null } // glow pulse
+            4 -> for (i in 0 until 12) { val ang = i * Math.PI / 6; val r = 120f + 420f * outCubic(k.toDouble()).toFloat()
+                    star(c, W / 2 + (r * cos(ang)).toFloat(), cy + (r * sin(ang)).toFloat(), 18f * a + 4f, withAlpha(palette.accent2, (255 * a).toInt())) } // sparkle burst
+            5 -> { val xx = -400f + (W + 800f) * k; fill.shader = LinearGradient(xx - 160f, 0f, xx + 160f, 0f, intArrayOf(0, Color.argb(110, 255, 255, 255), 0), null, Shader.TileMode.CLAMP)
+                    c.save(); c.rotate(-25f, W / 2, cy); c.drawRect(xx - 160f, -300f, xx + 160f, H + 300f, fill); c.restore(); fill.shader = null } // shine sweep
+            8 -> { stroke.strokeWidth = 18f * a + 2f; stroke.color = withAlpha(palette.accent2, (230 * a).toInt()); c.drawCircle(W / 2, cy, 140f + 700f * outCubic(k.toDouble()).toFloat(), stroke) } // ring burst
+            9 -> for (i in 0 until 28) { val ang = i * Math.PI * 2 / 28; val r0 = 520f + 80f * (i % 3); val r1 = r0 + 260f * a
+                    stroke.strokeWidth = 5f; stroke.color = withAlpha(Color.WHITE, (120 * a).toInt())
+                    c.drawLine(W / 2 + (r0 * cos(ang)).toFloat(), cy + (r0 * sin(ang)).toFloat(), W / 2 + (r1 * cos(ang)).toFloat(), cy + (r1 * sin(ang)).toFloat(), stroke) } // speed lines
+            10 -> { c.save(); c.rotate((x * 60).toFloat(), W / 2, cy); for (i in 0 until 12) { path.reset(); val a0 = Math.toRadians(i * 30.0); val a1 = Math.toRadians(i * 30.0 + 12)
+                    path.moveTo(W / 2, cy); path.lineTo(W / 2 + (1400 * cos(a0)).toFloat(), cy + (1400 * sin(a0)).toFloat()); path.lineTo(W / 2 + (1400 * cos(a1)).toFloat(), cy + (1400 * sin(a1)).toFloat()); path.close()
+                    fill.color = withAlpha(palette.accent, (55 * a).toInt()); c.drawPath(path, fill) }; c.restore() } // starburst
+            11 -> for (i in 0 until 16) { val ang = i * Math.PI / 8; val r = 500f * outCubic(k.toDouble()).toFloat()
+                    fill.color = withAlpha(if (i % 2 == 0) palette.accent else palette.accent2, (255 * a).toInt())
+                    c.drawRect(W / 2 + (r * cos(ang)).toFloat() - 9f, cy + (r * sin(ang)).toFloat() + 200 * k * k - 5f, W / 2 + (r * cos(ang)).toFloat() + 9f, cy + (r * sin(ang)).toFloat() + 200 * k * k + 5f, fill) } // mini confetti
+            13 -> if (x < 0.12) { fill.color = Color.argb(60, 255, 0, 60); c.drawRect(0f, 0f, W, H, fill); fill.color = Color.argb(40, 0, 220, 255); c.drawRect(14f, 0f, W + 14f, H, fill) } // rgb flash
+            14 -> { val bar = 150f * (if (k < 0.2f) k / 0.2f else 1f) * a; fill.color = Color.BLACK; c.drawRect(0f, 0f, W, bar, fill); c.drawRect(0f, H - bar, W, H, fill) } // letterbox slam
+        }
+    }
+
+    // ---------------- Chart variants ----------------
+
+    private fun chartTitle(c: Canvas, s: Scene, lt: Double): Float {
+        var top = ZONE_TOP + 20f
+        if (s.text.isNotBlank()) {
+            val title = block("charttitle", upper(s.text), display, 80f, zoneW, 200f, palette.accent)
+            drawBlock(c, title, W / 2, top + title.height / 2f, outCubic(lt / 0.3).toFloat())
+            top += title.height + 50f
+        }
+        return top
+    }
+
+    /** Shares that add up to about 100%: a donut that sweeps in segment by segment. */
+    private fun donut(c: Canvas, s: Scene, parsed: List<Pair<String, Double?>>, lt: Double, dur: Double) {
+        val top = chartTitle(c, s, lt)
+        val values = parsed.map { it.second ?: 0.0 }
+        val total = values.sum().coerceAtLeast(1e-6)
+        val r = 215f; val cx = W / 2; val cy = top + r + 20f
+        val colors = listOf(palette.accent, palette.accent2, Color.rgb(124, 255, 107), Color.rgb(255, 138, 0), Color.rgb(179, 136, 255))
+        val sweep = outCubic(lt / 1.2).toFloat()
+        stroke.shader = null; stroke.strokeWidth = 90f; stroke.strokeCap = Paint.Cap.BUTT
+        rect.set(cx - r, cy - r, cx + r, cy + r)
+        var start = -90f
+        values.forEachIndexed { i, v ->
+            val ang = (360f * (v / total).toFloat()) * sweep
+            stroke.color = colors[i % colors.size]
+            c.drawArc(rect, start, ang - 2f, false, stroke)
+            start += ang
+        }
+        stroke.strokeCap = Paint.Cap.ROUND
+        var y = cy + r + 95f
+        parsed.forEachIndexed { i, (label, v) ->
+            val a = clamp((lt - 0.4 - i * 0.15) / 0.3).toFloat()
+            fill.shader = null; fill.color = withAlpha(colors[i % colors.size], (255 * a).toInt())
+            c.drawRoundRect(SIDE, y - 34f, SIDE + 44f, y + 10f, 10f, 10f, fill)
+            tp.typeface = bold; tp.textSize = 46f; tp.color = withAlpha(palette.text, (255 * a).toInt()); tp.textAlign = Paint.Align.LEFT
+            c.drawText(TextUtils.ellipsize("$label  ${String.format(Locale.US, "%.0f%%", v ?: 0.0)}", tp, zoneW - 70f, TextUtils.TruncateAt.END).toString(), SIDE + 66f, y, tp)
+            y += 64f
+        }
+    }
+
+    /** Values over the years: a line that draws itself, with dots and the last value called out. */
+    private fun lineGraph(c: Canvas, s: Scene, parsed: List<Pair<String, Double?>>, lt: Double, dur: Double) {
+        val top = chartTitle(c, s, lt)
+        val values = parsed.map { it.second ?: 0.0 }
+        val minV = minOf(0.0, values.minOrNull() ?: 0.0); val maxV = (values.maxOrNull() ?: 1.0).coerceAtLeast(minV + 1e-6)
+        val l = SIDE; val r = W - SIDE; val t0 = top + 40f; val b = ZONE_BOTTOM - 80f
+        stroke.shader = null; stroke.strokeWidth = 2f; stroke.color = withAlpha(palette.text, 50)
+        for (i in 0..3) { val y = b - (b - t0) * i / 3f; c.drawLine(l, y, r, y, stroke) }
+        val pts = values.mapIndexed { i, v -> floatArrayOf(l + (r - l) * i / (values.size - 1).toFloat(), b - ((v - minV) / (maxV - minV)).toFloat() * (b - t0)) }
+        val prog = outCubic(lt / 1.4).toFloat() * (pts.size - 1)
+        path.reset(); path.moveTo(pts[0][0], pts[0][1])
+        for (i in 1 until pts.size) {
+            val f = (prog - (i - 1)).coerceIn(0f, 1f); if (f <= 0f) break
+            path.lineTo(pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f)
+        }
+        stroke.strokeWidth = 12f; stroke.color = palette.accent; c.drawPath(path, stroke)
+        tp.typeface = bold; tp.textSize = 38f; tp.textAlign = Paint.Align.CENTER
+        pts.forEachIndexed { i, p ->
+            if (prog < i - 0.05f) return@forEachIndexed
+            fill.shader = null; fill.color = palette.accent2; c.drawCircle(p[0], p[1], 16f, fill)
+            tp.color = palette.text
+            c.drawText(Regex("\\b(1[5-9]|20)\\d\\d\\b").find(parsed[i].first)?.value ?: parsed[i].first.take(6), p[0], b + 56f, tp)
+        }
+        if (prog >= pts.size - 1.05f) {
+            val last = pts.last(); val v = values.last()
+            val txt = if (v % 1.0 == 0.0) String.format(Locale.US, "%,d", v.toLong()) else String.format(Locale.US, "%.1f", v)
+            tp.textSize = 64f; tp.color = palette.accent2; tp.typeface = black
+            c.drawText(txt, last[0] - 40f, last[1] - 40f, tp)
+        }
+        tp.textAlign = Paint.Align.LEFT
     }
 
     // ---------------- Paper sketch look ----------------
@@ -2039,6 +2430,9 @@ class ScenePainter(
 
         /** Glass micro-event times (seconds into the scene); the sound mix puts a click on each. */
         const val HOOK_CLICK = 0.75
+        /** How long a text entrance takes, in seconds. */
+        const val ENTRANCE_DUR = 0.42
+
         /** When the map pin drops (the sound mix adds a click). */
         const val MAP_PIN = 1.35
 

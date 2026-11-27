@@ -32,6 +32,7 @@ import com.videostudio.app.render.AudioMix
 import com.videostudio.app.render.Look
 import com.videostudio.app.render.Palettes
 import com.videostudio.app.render.SceneMedia
+import com.videostudio.app.render.MotionPlan
 import com.videostudio.app.render.ScenePainter
 import com.videostudio.app.render.Timeline
 import com.videostudio.app.render.VideoRenderer
@@ -45,6 +46,7 @@ import com.videostudio.app.voice.Word
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.Locale
 
 /** The steps of making a video. Each runs inside a job; [log] and [step] feed the screen. */
 class Pipeline(
@@ -352,11 +354,19 @@ class Pipeline(
 
         // A look of its own for every video (captions, transitions, background), different from the last one.
         if (p.style < 0) {
-            p.style = Look.pick(p.id.hashCode(), settings.lastStyle, settings.lookMode)
+            val history = settings.styleHistory.ifEmpty { listOfNotNull(settings.lastStyle.takeIf { it >= 0 }) }
+            p.style = Look.pickFresh(p.id.hashCode(), history, settings.lookMode)
             settings.lastStyle = p.style
+            settings.styleHistory = listOf(p.style) + history
             store.save(p)
         }
         val look = Look.of(p.style)
+        // Colour palette: Auto picks the least recently used one, so the colours change every video too.
+        if (p.palette == Palettes.AUTO || p.palette.isBlank()) {
+            p.palette = Palettes.pickFresh(p.id.hashCode() / 3, settings.paletteHistory)
+            settings.paletteHistory = listOf(p.palette) + settings.paletteHistory
+            store.save(p)
+        }
         log("Style: ${look.description}${if (p.mood.isNotBlank()) ", ${p.mood} music" else ""}.")
 
         // Emphasis words: when each is spoken (zoom punch, coloured caption, hit sound).
@@ -422,9 +432,12 @@ class Pipeline(
         if (credits.isNotEmpty()) File(dir, "credits.txt").writeText(credits.joinToString("\n"))
         log("Motion: ${animated.size} animated emoji, ${cutouts.size} pop-out photo(s).")
 
+        val motion = MotionPlan(p.id.hashCode(), p.scenes.map { it.type.lowercase(Locale.ROOT) }, look, settings.motionHistory)
+        settings.motionHistory = listOf(motion.signature) + settings.motionHistory
+        log("Motion plan: ${motion.describe()}")
         val painter = ScenePainter(
             context, p.scenes, timeline, Palettes.find(p.palette), settings.seriesName, media, logos, look, emphasisTimes,
-            animated, cutouts, stutter12 = settings.stutter12,
+            animated, cutouts, stutter12 = settings.stutter12, motionPlan = motion,
         )
         val (w, h) = if (settings.quality == "720") 720 to 1280 else 1080 to 1920
         val fps = if (settings.smooth60) 60 else 30
